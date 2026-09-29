@@ -1,0 +1,2306 @@
+[
+  {
+    "id": "D365BusinessCentral",
+    "label": "Business Central",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/BusinessCentral_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/api\\.businesscentral\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/business-central/",
+    "description": "Business Central catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/business-central/)."
+  },
+  {
+    "id": "D365Commerce",
+    "label": "Commerce",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/Commerce_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.cloud\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/commerce/overview",
+    "description": "Commerce catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/commerce/overview)."
+  },
+  {
+    "id": "D365ContactCenter",
+    "label": "Contact Center",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/ContactCenter_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.crm[0-9]*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/contact-center/overview",
+    "description": "Contact Center catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/contact-center/overview)."
+  },
+  {
+    "id": "D365CustomerInsights",
+    "label": "Customer Insights",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/CustomerInsights_scalable.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/customer-insights/overview",
+    "description": "Customer Insights catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/customer-insights/overview)."
+  },
+  {
+    "id": "D365CustomerService",
+    "label": "Customer Service",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/CustomerServices_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.crm[0-9]*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/customer-service/",
+    "description": "Customer Service catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/customer-service/)."
+  },
+  {
+    "id": "D365CustomerVoice",
+    "label": "Customer Voice",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/CustomerVoice_scalable.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/customer-voice/help-hub",
+    "description": "Customer Voice catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/customer-voice/help-hub)."
+  },
+  {
+    "id": "Dynamics365",
+    "label": "Dynamics 365",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/Dynamics365_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/get-started/intro-crossapp-index",
+    "description": "Dynamics 365 catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/get-started/intro-crossapp-index)."
+  },
+  {
+    "id": "D365FieldService",
+    "label": "Field Service",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/FieldService_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.crm[0-9]*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/field-service/overview",
+    "description": "Field Service catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/field-service/overview)."
+  },
+  {
+    "id": "D365Finance",
+    "label": "Finance",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/Finance_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.cloud\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/finance/",
+    "description": "Finance catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/finance/)."
+  },
+  {
+    "id": "D365FinanceOperations",
+    "label": "Finance and Operations",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/FinanceOperations_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.cloud\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/fin-ops/",
+    "description": "Finance and Operations catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/fin-ops/)."
+  },
+  {
+    "id": "D365HumanResources",
+    "label": "Human Resources",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/HumanResources_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.cloud\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/human-resources/",
+    "description": "Human Resources catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/human-resources/)."
+  },
+  {
+    "id": "D365IntelligentOrderManagement",
+    "label": "Intelligent Order Management",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/IntelligentOrderManagement_scalable.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/intelligent-order-management",
+    "description": "Intelligent Order Management catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/intelligent-order-management)."
+  },
+  {
+    "id": "D365ProjectOperations",
+    "label": "Project Operations",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/ProjectOperations_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.crm[0-9]*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/project-operations/",
+    "description": "Project Operations catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/project-operations/)."
+  },
+  {
+    "id": "D365Sales",
+    "label": "Sales",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/Sales_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.crm[0-9]*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/sales/overview",
+    "description": "Sales catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/sales/overview)."
+  },
+  {
+    "id": "D365SalesInsights",
+    "label": "Sales Insights",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/SalesInsights_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.crm[0-9]*\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/sales/overview",
+    "description": "Sales Insights catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/sales/overview)."
+  },
+  {
+    "id": "D365SupplyChainManagement",
+    "label": "Supply Chain Management",
+    "category": "Dynamics 365 / Workload",
+    "catalogSource": "Dynamics 365",
+    "icon": "dynamics365/SupplyChainManagement_scalable.svg",
+    "endpointRegex": "^https?:\\/\\/.*\\.cloud\\.dynamics\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".dynamics.com"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/dynamics365/supply-chain/",
+    "description": "Supply Chain Management catalog entry from Dynamics 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/dynamics365/supply-chain/)."
+  },
+  {
+    "id": "m365_copilot",
+    "label": "Microsoft 365 Copilot",
+    "category": "Microsoft 365 / AI assistant",
+    "documentationUrl": "https://learn.microsoft.com/en-us/copilot/microsoft-365/microsoft-365-copilot-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/apps.svg",
+    "description": "Microsoft 365 Copilot catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/copilot/microsoft-365/microsoft-365-copilot-overview)."
+  },
+  {
+    "id": "m365_graph",
+    "label": "Microsoft Graph",
+    "category": "Microsoft 365 / API platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/graph/overview",
+    "endpointRegex": "^https?:\\/\\/graph\\.microsoft\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "graph.microsoft.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/graph.svg",
+    "description": "Microsoft Graph catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/graph/overview)."
+  },
+  {
+    "id": "m365_defender_for_cloud_apps",
+    "label": "Microsoft Defender for Cloud Apps",
+    "category": "Microsoft 365 / Cloud app security",
+    "documentationUrl": "https://learn.microsoft.com/en-us/defender-cloud-apps/what-is-defender-for-cloud-apps",
+    "endpointRegex": "^https?:\\/\\/.*\\.portal\\.cloudappsecurity\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".portal.cloudappsecurity.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Microsoft Defender for Cloud Apps catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/defender-cloud-apps/what-is-defender-for-cloud-apps)."
+  },
+  {
+    "id": "m365_windows_365",
+    "label": "Windows 365",
+    "category": "Microsoft 365 / Cloud PC",
+    "documentationUrl": "https://learn.microsoft.com/en-us/windows-365/overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/desktop.svg",
+    "description": "Windows 365 catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/windows-365/overview)."
+  },
+  {
+    "id": "m365_universal_print",
+    "label": "Universal Print",
+    "category": "Microsoft 365 / Cloud printing",
+    "documentationUrl": "https://learn.microsoft.com/en-us/universal-print/fundamentals/universal-print-whatis",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/print.svg",
+    "description": "Universal Print catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/universal-print/fundamentals/universal-print-whatis)."
+  },
+  {
+    "id": "m365_whiteboard",
+    "label": "Microsoft Whiteboard",
+    "category": "Microsoft 365 / Collaborative canvas",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoft-365/whiteboard/whiteboard-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/edit.svg",
+    "description": "Microsoft Whiteboard catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoft-365/whiteboard/whiteboard-overview)."
+  },
+  {
+    "id": "m365_loop",
+    "label": "Microsoft Loop",
+    "category": "Microsoft 365 / Collaborative workspaces",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoft-365/loop/loop-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/edit.svg",
+    "description": "Microsoft Loop catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoft-365/loop/loop-overview)."
+  },
+  {
+    "id": "m365_viva_engage",
+    "label": "Viva Engage",
+    "category": "Microsoft 365 / Communities and social",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/engage/overview",
+    "endpointRegex": "^https?:\\/\\/(.*\\.yammer\\.com|.*\\.yammerusercontent\\.com|.*\\.assets-yammer\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".yammer.com",
+      ".yammerusercontent.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/teams.svg",
+    "description": "Viva Engage catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/engage/overview)."
+  },
+  {
+    "id": "m365_purview",
+    "label": "Microsoft Purview",
+    "category": "Microsoft 365 / Compliance and governance",
+    "documentationUrl": "https://learn.microsoft.com/en-us/purview/purview",
+    "endpointRegex": "^https?:\\/\\/(purview\\.microsoft\\.com|compliance\\.microsoft\\.com|security\\.microsoft\\.com|protection\\.office\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "purview.microsoft.com",
+      "compliance.microsoft.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/purview.svg",
+    "description": "Microsoft Purview catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/purview/purview)."
+  },
+  {
+    "id": "m365_sharepoint_online",
+    "label": "SharePoint in Microsoft 365",
+    "category": "Microsoft 365 / Content collaboration",
+    "documentationUrl": "https://learn.microsoft.com/en-us/sharepoint/introduction",
+    "endpointRegex": "^https?:\\/\\/(.*\\.sharepoint\\.com|.*\\.sharepointonline\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".sharepoint.com",
+      ".sharepointonline.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/sharepoint.svg",
+    "description": "SharePoint in Microsoft 365 catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/sharepoint/introduction)."
+  },
+  {
+    "id": "m365_apps",
+    "label": "Microsoft 365 Apps",
+    "category": "Microsoft 365 / Desktop productivity",
+    "documentationUrl": "https://learn.microsoft.com/en-us/office365/servicedescriptions/office-applications-service-description/office-applications-service-description",
+    "endpointRegex": "^https?:\\/\\/(.*\\.officeapps\\.live\\.com|.*\\.online\\.office\\.com|officecdn\\.microsoft\\.com|officeclient\\.microsoft\\.com|config\\.office\\.com|.*\\.office\\.com|www\\.microsoft365\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "officecdn.microsoft.com",
+      "officeclient.microsoft.com",
+      "config.office.com",
+      ".office.com",
+      "www.microsoft365.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/apps.svg",
+    "description": "Microsoft 365 Apps catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/office365/servicedescriptions/office-applications-service-description/office-applications-service-description)."
+  },
+  {
+    "id": "m365_intune",
+    "label": "Microsoft Intune",
+    "category": "Microsoft 365 / Device management",
+    "documentationUrl": "https://learn.microsoft.com/en-us/intune/fundamentals/what-is-intune",
+    "endpointRegex": "^https?:\\/\\/(.*\\.manage\\.microsoft\\.com|manage\\.microsoft\\.com|.*\\.dm\\.microsoft\\.com|EnterpriseEnrollment\\.manage\\.microsoft\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "manage.microsoft.com",
+      ".dm.microsoft.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/intune.svg",
+    "description": "Microsoft Intune catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/intune/fundamentals/what-is-intune)."
+  },
+  {
+    "id": "m365_defender_for_office_365",
+    "label": "Microsoft Defender for Office 365",
+    "category": "Microsoft 365 / Email and collaboration security",
+    "documentationUrl": "https://learn.microsoft.com/en-us/defender-office-365/mdo-about",
+    "endpointRegex": "^https?:\\/\\/(security\\.microsoft\\.com|defender\\.microsoft\\.com|protection\\.office\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "security.microsoft.com",
+      "defender.microsoft.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Microsoft Defender for Office 365 catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/defender-office-365/mdo-about)."
+  },
+  {
+    "id": "m365_exchange_archiving",
+    "label": "Exchange Online Archiving",
+    "category": "Microsoft 365 / Email archiving",
+    "documentationUrl": "https://learn.microsoft.com/en-us/office365/servicedescriptions/exchange-online-archiving-service-description/exchange-online-archiving-service-description",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/mail.svg",
+    "description": "Exchange Online Archiving catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/office365/servicedescriptions/exchange-online-archiving-service-description/exchange-online-archiving-service-description)."
+  },
+  {
+    "id": "m365_exchange_protection",
+    "label": "Exchange Online Protection",
+    "category": "Microsoft 365 / Email protection",
+    "documentationUrl": "https://learn.microsoft.com/en-us/office365/servicedescriptions/exchange-online-protection-service-description/exchange-online-protection-service-description",
+    "endpointRegex": "^https?:\\/\\/(.*\\.protection\\.outlook\\.com|.*\\.mail\\.protection\\.outlook\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".protection.outlook.com",
+      ".mail.protection.outlook.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Exchange Online Protection catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/office365/servicedescriptions/exchange-online-protection-service-description/exchange-online-protection-service-description)."
+  },
+  {
+    "id": "m365_viva_connections",
+    "label": "Viva Connections",
+    "category": "Microsoft 365 / Employee communications and intranet",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/connections/viva-connections-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Viva Connections catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/connections/viva-connections-overview)."
+  },
+  {
+    "id": "m365_viva",
+    "label": "Microsoft Viva",
+    "category": "Microsoft 365 / Employee experience platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/microsoft-viva-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Microsoft Viva catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/microsoft-viva-overview)."
+  },
+  {
+    "id": "m365_viva_glint",
+    "label": "Viva Glint",
+    "category": "Microsoft 365 / Employee feedback",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/glint/introduction-viva-glint",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Viva Glint catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/glint/introduction-viva-glint)."
+  },
+  {
+    "id": "m365_viva_pulse",
+    "label": "Viva Pulse",
+    "category": "Microsoft 365 / Employee feedback",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/pulse/introduction-to-viva-pulse",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Viva Pulse catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/pulse/introduction-to-viva-pulse)."
+  },
+  {
+    "id": "m365_defender_for_endpoint",
+    "label": "Microsoft Defender for Endpoint",
+    "category": "Microsoft 365 / Endpoint security",
+    "documentationUrl": "https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Microsoft Defender for Endpoint catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-endpoint)."
+  },
+  {
+    "id": "m365_stream",
+    "label": "Microsoft Stream",
+    "category": "Microsoft 365 / Enterprise video",
+    "documentationUrl": "https://learn.microsoft.com/en-us/stream/streamnew/streamnew",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/video.svg",
+    "description": "Microsoft Stream catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/stream/streamnew/streamnew)."
+  },
+  {
+    "id": "m365_forms",
+    "label": "Microsoft Forms",
+    "category": "Microsoft 365 / Forms and surveys",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoft-365/admin/manage/set-up-microsoft-forms",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/form.svg",
+    "description": "Microsoft Forms catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoft-365/admin/manage/set-up-microsoft-forms)."
+  },
+  {
+    "id": "m365_entra_id",
+    "label": "Microsoft Entra ID",
+    "category": "Microsoft 365 / Identity and access",
+    "documentationUrl": "https://learn.microsoft.com/en-us/entra/fundamentals/what-is-entra",
+    "endpointRegex": "^https?:\\/\\/(login\\.microsoftonline\\.com|graph\\.windows\\.net|login\\.windows\\.net|login\\.microsoft\\.com|.*\\.msauth\\.net|.*\\.msftauth\\.net|enterpriseregistration\\.windows\\.net)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "login.microsoftonline.com",
+      "graph.windows.net",
+      "enterpriseregistration.windows.net"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/entra.svg",
+    "description": "Microsoft Entra ID catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/entra/fundamentals/what-is-entra)."
+  },
+  {
+    "id": "m365_defender_for_identity",
+    "label": "Microsoft Defender for Identity",
+    "category": "Microsoft 365 / Identity security",
+    "documentationUrl": "https://learn.microsoft.com/en-us/defender-for-identity/what-is",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Microsoft Defender for Identity catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/defender-for-identity/what-is)."
+  },
+  {
+    "id": "m365_viva_amplify",
+    "label": "Viva Amplify",
+    "category": "Microsoft 365 / Internal communications",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/amplify/overview-viva-amplify",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Viva Amplify catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/amplify/overview-viva-amplify)."
+  },
+  {
+    "id": "m365_viva_learning",
+    "label": "Viva Learning",
+    "category": "Microsoft 365 / Learning and knowledge",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/learning/overview-viva-learning",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Viva Learning catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/learning/overview-viva-learning)."
+  },
+  {
+    "id": "m365_lists",
+    "label": "Microsoft Lists",
+    "category": "Microsoft 365 / List collaboration",
+    "documentationUrl": "https://support.microsoft.com/office/get-started-with-microsoft-lists-10e2e923-4a82-4e22-8fcb-71a6c485fcf3",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/task.svg",
+    "description": "Microsoft Lists catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://support.microsoft.com/office/get-started-with-microsoft-lists-10e2e923-4a82-4e22-8fcb-71a6c485fcf3)."
+  },
+  {
+    "id": "m365_exchange_online",
+    "label": "Exchange Online",
+    "category": "Microsoft 365 / Mail and calendaring",
+    "documentationUrl": "https://learn.microsoft.com/en-us/exchange/exchange-online",
+    "endpointRegex": "^https?:\\/\\/(outlook\\.cloud\\.microsoft|outlook\\.office\\.com|outlook\\.office365\\.com|smtp\\.office365\\.com|.*\\.protection\\.outlook\\.com|.*\\.mail\\.protection\\.outlook\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "outlook.office.com",
+      "smtp.office365.com",
+      ".protection.outlook.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/mail.svg",
+    "description": "Exchange Online catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/exchange/exchange-online)."
+  },
+  {
+    "id": "m365_teams",
+    "label": "Microsoft Teams",
+    "category": "Microsoft 365 / Meetings and chat",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoftteams/teams-overview",
+    "endpointRegex": "^https?:\\/\\/(.*\\.teams\\.cloud\\.microsoft|.*\\.teams\\.microsoft\\.com|teams\\.cloud\\.microsoft|teams\\.microsoft\\.com|.*\\.lync\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".teams.microsoft.com",
+      ".teams.cloud.microsoft",
+      ".lync.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/teams.svg",
+    "description": "Microsoft Teams catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoftteams/teams-overview)."
+  },
+  {
+    "id": "m365_onedrive",
+    "label": "OneDrive",
+    "category": "Microsoft 365 / Personal storage",
+    "documentationUrl": "https://learn.microsoft.com/en-us/sharepoint/onedrive-overview",
+    "endpointRegex": "^https?:\\/\\/(.*\\.sharepoint\\.com|storage\\.live\\.com|admin\\.onedrive\\.com|officeclient\\.microsoft\\.com|g\\.live\\.com|oneclient\\.sfx\\.ms)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".sharepoint.com",
+      "storage.live.com",
+      "admin.onedrive.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/cloud.svg",
+    "description": "OneDrive catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/sharepoint/onedrive-overview)."
+  },
+  {
+    "id": "m365_todo",
+    "label": "Microsoft To Do",
+    "category": "Microsoft 365 / Personal task management",
+    "documentationUrl": "https://support.microsoft.com/todo",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/check.svg",
+    "description": "Microsoft To Do catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://support.microsoft.com/todo)."
+  },
+  {
+    "id": "m365_sway",
+    "label": "Microsoft Sway",
+    "category": "Microsoft 365 / Presentations",
+    "documentationUrl": "https://support.microsoft.com/office/getting-started-with-sway-2076c468-63f4-4a89-ae5f-424796714a8a",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/sway.svg",
+    "description": "Microsoft Sway catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://support.microsoft.com/office/getting-started-with-sway-2076c468-63f4-4a89-ae5f-424796714a8a)."
+  },
+  {
+    "id": "m365_priva",
+    "label": "Microsoft Priva",
+    "category": "Microsoft 365 / Privacy management",
+    "documentationUrl": "https://learn.microsoft.com/en-us/privacy/priva/priva-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Microsoft Priva catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/privacy/priva/priva-overview)."
+  },
+  {
+    "id": "m365_project",
+    "label": "Microsoft Project",
+    "category": "Microsoft 365 / Project management",
+    "documentationUrl": "https://learn.microsoft.com/en-us/project-for-the-web/project-management-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/project.svg",
+    "description": "Microsoft Project catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/project-for-the-web/project-management-overview)."
+  },
+  {
+    "id": "m365_bookings",
+    "label": "Microsoft Bookings",
+    "category": "Microsoft 365 / Scheduling",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoft-365/bookings/bookings-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/calendar.svg",
+    "description": "Microsoft Bookings catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoft-365/bookings/bookings-overview)."
+  },
+  {
+    "id": "m365_defender_xdr",
+    "label": "Microsoft Defender XDR",
+    "category": "Microsoft 365 / Security operations",
+    "documentationUrl": "https://learn.microsoft.com/en-us/defender-xdr/microsoft-365-defender",
+    "endpointRegex": "^https?:\\/\\/(security\\.microsoft\\.com|defender\\.microsoft\\.com|protection\\.office\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      "security.microsoft.com",
+      "defender.microsoft.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/security.svg",
+    "description": "Microsoft Defender XDR catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/defender-xdr/microsoft-365-defender)."
+  },
+  {
+    "id": "m365_planner",
+    "label": "Microsoft Planner",
+    "category": "Microsoft 365 / Task management",
+    "documentationUrl": "https://learn.microsoft.com/en-us/planner/planner-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/planner.svg",
+    "description": "Microsoft Planner catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/planner/planner-overview)."
+  },
+  {
+    "id": "m365_clipchamp",
+    "label": "Microsoft Clipchamp",
+    "category": "Microsoft 365 / Video creation",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoft-365/clipchamp/overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/video.svg",
+    "description": "Microsoft Clipchamp catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoft-365/clipchamp/overview)."
+  },
+  {
+    "id": "m365_office_for_the_web",
+    "label": "Office for the web",
+    "category": "Microsoft 365 / Web productivity",
+    "documentationUrl": "https://learn.microsoft.com/en-us/office365/servicedescriptions/office-online-service-description/office-online-service-description",
+    "endpointRegex": "^https?:\\/\\/(.*\\.officeapps\\.live\\.com|.*\\.online\\.office\\.com|office\\.live\\.com|.*\\.office\\.com|www\\.microsoft365\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".officeapps.live.com",
+      ".online.office.com",
+      "office.live.com",
+      ".office.com",
+      "www.microsoft365.com"
+    ],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/apps.svg",
+    "description": "Office for the web catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/office365/servicedescriptions/office-online-service-description/office-online-service-description)."
+  },
+  {
+    "id": "m365_viva_insights",
+    "label": "Viva Insights",
+    "category": "Microsoft 365 / Workplace analytics",
+    "documentationUrl": "https://learn.microsoft.com/en-us/viva/insights/introduction",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft 365",
+    "icon": "m365/people.svg",
+    "description": "Viva Insights catalog entry from Microsoft 365. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/viva/insights/introduction)."
+  },
+  {
+    "id": "azure.ai.search",
+    "label": "Azure AI Search",
+    "category": "Azure / AI + machine learning",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10044-icon-service-Cognitive-Search.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.search\\.windows\\.net(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".search.windows.net"
+    ],
+    "resourceProviders": [
+      "Microsoft.Search/searchServices"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/search/search-get-started-text",
+    "description": "Azure AI Search catalog entry from Microsoft Azure. Resource provider: Microsoft.Search/searchServices. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/search/search-get-started-text)."
+  },
+  {
+    "id": "azure.ai.services-account",
+    "label": "Azure AI services account",
+    "category": "Azure / AI + machine learning",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10162-icon-service-Cognitive-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.CognitiveServices/accounts",
+      "Microsoft.CognitiveServices/accounts/projects",
+      "Microsoft.BotService/botServices",
+      "Microsoft.VideoIndexer/accounts",
+      "Microsoft.MachineLearningServices/workspaces"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure AI services account catalog entry from Microsoft Azure. Resource providers: Microsoft.CognitiveServices/accounts, Microsoft.CognitiveServices/accounts/projects, Microsoft.BotService/botServices, Microsoft.VideoIndexer/accounts, Microsoft.MachineLearningServices/workspaces. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ai.video-indexer",
+    "label": "Azure AI Video Indexer",
+    "category": "Azure / AI + machine learning",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/01800-icon-service-Azure-Video-Indexer.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.VideoIndexer/accounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure AI Video Indexer catalog entry from Microsoft Azure. Resource provider: Microsoft.VideoIndexer/accounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ai.machine-learning-workspace",
+    "label": "Azure Machine Learning workspace",
+    "category": "Azure / AI + machine learning",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/038470510-icon-service-Azure-Machine-Learning.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.MachineLearningServices/workspaces"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Machine Learning workspace catalog entry from Microsoft Azure. Resource provider: Microsoft.MachineLearningServices/workspaces. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ai.openai",
+    "label": "Azure OpenAI Service",
+    "category": "Azure / AI + machine learning",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/03438-icon-service-Azure-OpenAI.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.openai\\.azure\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".openai.azure.com"
+    ],
+    "resourceProviders": [
+      "Microsoft.CognitiveServices/accounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/developer/ai/how-to/switching-endpoints",
+    "description": "Azure OpenAI Service catalog entry from Microsoft Azure. Resource provider: Microsoft.CognitiveServices/accounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/developer/ai/how-to/switching-endpoints)."
+  },
+  {
+    "id": "azure.ai.bot-service",
+    "label": "Bot Service",
+    "category": "Azure / AI + machine learning",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10165-icon-service-Bot-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.BotService/botServices"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Bot Service catalog entry from Microsoft Azure. Resource provider: Microsoft.BotService/botServices. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.analysis-services",
+    "label": "Azure Analysis Services server",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10148-icon-service-Analysis-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.AnalysisServices/servers"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Analysis Services server catalog entry from Microsoft Azure. Resource provider: Microsoft.AnalysisServices/servers. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.data-explorer",
+    "label": "Azure Data Explorer cluster",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10145-icon-service-Azure-Data-Explorer-Clusters.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Kusto/clusters",
+      "Microsoft.Kusto/clusters/databases"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Data Explorer cluster catalog entry from Microsoft Azure. Resource providers: Microsoft.Kusto/clusters, Microsoft.Kusto/clusters/databases. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.data-factory",
+    "label": "Azure Data Factory",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10126-icon-service-Data-Factories.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DataFactory/factories"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Data Factory catalog entry from Microsoft Azure. Resource provider: Microsoft.DataFactory/factories. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.databricks-workspace",
+    "label": "Azure Databricks workspace",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10787-icon-service-Azure-Databricks.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Databricks/workspaces",
+      "Microsoft.Databricks/workspaces/accessConnectors"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Databricks workspace catalog entry from Microsoft Azure. Resource providers: Microsoft.Databricks/workspaces, Microsoft.Databricks/workspaces/accessConnectors. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.digital-twins",
+    "label": "Azure Digital Twins instance",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/01030-icon-service-Digital-Twins.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DigitalTwins/digitalTwinsInstances"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Digital Twins instance catalog entry from Microsoft Azure. Resource provider: Microsoft.DigitalTwins/digitalTwinsInstances. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.synapse",
+    "label": "Azure Synapse Analytics workspace",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00606-icon-service-Azure-Synapse-Analytics.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Synapse/workspaces",
+      "Microsoft.Synapse/workspaces/sqlPools",
+      "Microsoft.Synapse/workspaces/bigDataPools",
+      "Microsoft.Synapse/privateLinkHubs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Synapse Analytics workspace catalog entry from Microsoft Azure. Resource providers: Microsoft.Synapse/workspaces, Microsoft.Synapse/workspaces/sqlPools, Microsoft.Synapse/workspaces/bigDataPools, Microsoft.Synapse/privateLinkHubs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.data-lake-store",
+    "label": "Data Lake Store account",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10150-icon-service-Data-Lake-Store-Gen1.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DataLakeStore/accounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Data Lake Store account catalog entry from Microsoft Azure. Resource provider: Microsoft.DataLakeStore/accounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.messaging.event-grid",
+    "label": "Event Grid",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10206-icon-service-Event-Grid-Topics.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.EventGrid/domains",
+      "Microsoft.EventGrid/namespaces",
+      "Microsoft.EventGrid/eventSubscriptions",
+      "Microsoft.EventGrid/domains/topics",
+      "Microsoft.EventGrid/systemTopics"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Event Grid catalog entry from Microsoft Azure. Resource providers: Microsoft.EventGrid/domains, Microsoft.EventGrid/namespaces, Microsoft.EventGrid/eventSubscriptions, Microsoft.EventGrid/domains/topics, Microsoft.EventGrid/systemTopics. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.messaging.event-hubs",
+    "label": "Event Hubs",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00039-icon-service-Event-Hubs.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.servicebus\\.windows\\.net(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".servicebus.windows.net"
+    ],
+    "resourceProviders": [
+      "Microsoft.EventHub/namespaces",
+      "Microsoft.EventHub/namespaces/eventHubs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Event Hubs catalog entry from Microsoft Azure. Resource providers: Microsoft.EventHub/namespaces, Microsoft.EventHub/namespaces/eventHubs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.fabric-capacity",
+    "label": "Fabric Capacity",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/fabric_24_color.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Fabric/capacities"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Fabric Capacity catalog entry from Microsoft Azure. Resource provider: Microsoft.Fabric/capacities. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.hdinsight",
+    "label": "HDInsight cluster",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10142-icon-service-HD-Insight-Clusters.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.HDInsight/clusters"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "HDInsight cluster catalog entry from Microsoft Azure. Resource provider: Microsoft.HDInsight/clusters. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.power-bi-embedded",
+    "label": "Power BI Embedded",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/03332-icon-service-Power-BI-Embedded.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.PowerBIDedicated/capacities"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Power BI Embedded catalog entry from Microsoft Azure. Resource provider: Microsoft.PowerBIDedicated/capacities. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.stream-analytics",
+    "label": "Stream Analytics cluster",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00042-icon-service-Stream-Analytics-Jobs.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.StreamAnalytics/cluster"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Stream Analytics cluster catalog entry from Microsoft Azure. Resource provider: Microsoft.StreamAnalytics/cluster. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.analytics.time-series-insights",
+    "label": "Time Series Insights environment",
+    "category": "Azure / Analytics",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10181-icon-service-Time-Series-Insights-Environments.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.TimeSeriesInsights/environments"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Time Series Insights environment catalog entry from Microsoft Azure. Resource provider: Microsoft.TimeSeriesInsights/environments. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.app-service-app",
+    "label": "App Service app",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10035-icon-service-App-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Web/sites"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "App Service app catalog entry from Microsoft Azure. Resource provider: Microsoft.Web/sites. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.app-service-environment",
+    "label": "App Service environment",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10047-icon-service-App-Service-Environments.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Web/hostingEnvironments"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "App Service environment catalog entry from Microsoft Azure. Resource provider: Microsoft.Web/hostingEnvironments. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.app-service-plan",
+    "label": "App Service plan",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00046-icon-service-App-Service-Plans.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Web/serverFarms"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "App Service plan catalog entry from Microsoft Azure. Resource provider: Microsoft.Web/serverFarms. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.load-testing",
+    "label": "Azure Load Testing instance",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02423-icon-service-Load-Testing.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.LoadTestService/loadTests"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Load Testing instance catalog entry from Microsoft Azure. Resource provider: Microsoft.LoadTestService/loadTests. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.batch-account",
+    "label": "Batch account",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10031-icon-service-Batch-Accounts.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Batch/batchAccounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Batch account catalog entry from Microsoft Azure. Resource provider: Microsoft.Batch/batchAccounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.communication.services",
+    "label": "Communication Services",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00968-icon-service-Azure-Communication-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Communication/communicationServices"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Communication Services catalog entry from Microsoft Azure. Resource provider: Microsoft.Communication/communicationServices. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.notification-hubs",
+    "label": "Notification Hubs",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10045-icon-service-Notification-Hubs.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.NotificationHubs/namespaces",
+      "Microsoft.NotificationHubs/namespaces/notificationHubs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Notification Hubs catalog entry from Microsoft Azure. Resource providers: Microsoft.NotificationHubs/namespaces, Microsoft.NotificationHubs/namespaces/notificationHubs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.static-web-app",
+    "label": "Static Web App",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/01007-icon-service-Static-Apps.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Web/staticSites"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Static Web App catalog entry from Microsoft Azure. Resource provider: Microsoft.Web/staticSites. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.vm",
+    "label": "Virtual machine",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10021-icon-service-Virtual-Machine.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Compute/virtualMachines",
+      "Microsoft.Compute/virtualMachineScaleSets"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual machine catalog entry from Microsoft Azure. Resource providers: Microsoft.Compute/virtualMachines, Microsoft.Compute/virtualMachineScaleSets. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.compute.vm-infra",
+    "label": "Virtual machine infrastructure",
+    "category": "Azure / Compute",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10021-icon-service-Virtual-Machine.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Compute/availabilitySets",
+      "Microsoft.Compute/cloudServices",
+      "Microsoft.Compute/diskEncryptionSets",
+      "Microsoft.Compute/disks",
+      "Microsoft.Compute/galleries",
+      "Microsoft.VirtualMachineImages/imageTemplates",
+      "Microsoft.Compute/proximityPlacementGroups",
+      "Microsoft.Compute/restorePointCollections",
+      "Microsoft.Compute/snapshots",
+      "Microsoft.Maintenance/maintenanceConfigurations",
+      "Microsoft.Storage/storageAccounts",
+      "Microsoft.Compute/sshPublicKeys"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual machine infrastructure catalog entry from Microsoft Azure. Resource providers: Microsoft.Compute/availabilitySets, Microsoft.Compute/cloudServices, Microsoft.Compute/diskEncryptionSets, Microsoft.Compute/disks, Microsoft.Compute/galleries, Microsoft.VirtualMachineImages/imageTemplates, Microsoft.Compute/proximityPlacementGroups, Microsoft.Compute/restorePointCollections, Microsoft.Compute/snapshots, Microsoft.Maintenance/maintenanceConfigurations, Microsoft.Storage/storageAccounts, Microsoft.Compute/sshPublicKeys. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.containers.aks",
+    "label": "AKS cluster",
+    "category": "Azure / Containers",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10023-icon-service-Kubernetes-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.ContainerService/managedClusters",
+      "Microsoft.ContainerService/managedClusters/agentPools"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "AKS cluster catalog entry from Microsoft Azure. Resource providers: Microsoft.ContainerService/managedClusters, Microsoft.ContainerService/managedClusters/agentPools. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.containers.container-apps",
+    "label": "Container Apps",
+    "category": "Azure / Containers",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02989-icon-service-Container-Apps-Environments.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.App/containerApps",
+      "Microsoft.App/managedEnvironments",
+      "Microsoft.App/jobs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Container Apps catalog entry from Microsoft Azure. Resource providers: Microsoft.App/containerApps, Microsoft.App/managedEnvironments, Microsoft.App/jobs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.containers.container-instance",
+    "label": "Container instance",
+    "category": "Azure / Containers",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10104-icon-service-Container-Instances.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.ContainerInstance/containerGroups"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Container instance catalog entry from Microsoft Azure. Resource provider: Microsoft.ContainerInstance/containerGroups. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.containers.container-registry",
+    "label": "Container registry",
+    "category": "Azure / Containers",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10105-icon-service-Container-Registries.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.ContainerRegistry/registries"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Container registry catalog entry from Microsoft Azure. Resource provider: Microsoft.ContainerRegistry/registries. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.containers.service-fabric",
+    "label": "Service Fabric cluster",
+    "category": "Azure / Containers",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02370-icon-service-Managed-Service-Fabric.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.ServiceFabric/clusters",
+      "Microsoft.ServiceFabric/managedClusters"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Service Fabric cluster catalog entry from Microsoft Azure. Resource providers: Microsoft.ServiceFabric/clusters, Microsoft.ServiceFabric/managedClusters. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.databases.cosmos-db",
+    "label": "Azure Cosmos DB",
+    "category": "Azure / Databases",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10121-icon-service-Azure-Cosmos-DB.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.documents\\.azure\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".documents.azure.com"
+    ],
+    "resourceProviders": [
+      "Microsoft.DocumentDB/databaseAccounts",
+      "Microsoft.DocumentDB/databaseAccounts/sqlDatabases"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-manage-database-account",
+    "description": "Azure Cosmos DB catalog entry from Microsoft Azure. Resource providers: Microsoft.DocumentDB/databaseAccounts, Microsoft.DocumentDB/databaseAccounts/sqlDatabases. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-manage-database-account)."
+  },
+  {
+    "id": "azure.databases.cosmos-db-postgresql",
+    "label": "Azure Cosmos DB for PostgreSQL",
+    "category": "Azure / Databases",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10121-icon-service-Azure-Cosmos-DB.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DBforPostgreSQL/serverGroupsv2"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Cosmos DB for PostgreSQL catalog entry from Microsoft Azure. Resource provider: Microsoft.DBforPostgreSQL/serverGroupsv2. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.databases.mysql",
+    "label": "Azure Database for MySQL",
+    "category": "Azure / Databases",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10122-icon-service-Azure-Database-MySQL-Server.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DBforMySQL/servers"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Database for MySQL catalog entry from Microsoft Azure. Resource provider: Microsoft.DBforMySQL/servers. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.databases.postgresql-flexible",
+    "label": "Azure Database for PostgreSQL - Flexible Server",
+    "category": "Azure / Databases",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10131-icon-service-Azure-Database-PostgreSQL-Server.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DBforPostgreSQL/flexibleServers"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Database for PostgreSQL - Flexible Server catalog entry from Microsoft Azure. Resource provider: Microsoft.DBforPostgreSQL/flexibleServers. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.databases.managed-redis",
+    "label": "Azure Managed Redis",
+    "category": "Azure / Databases",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/03675-icon-service-Azure-Managed-Redis.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Cache/RedisEnterprise"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Managed Redis catalog entry from Microsoft Azure. Resource provider: Microsoft.Cache/RedisEnterprise. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.databases.sql",
+    "label": "Azure SQL",
+    "category": "Azure / Databases",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02390-icon-service-Azure-SQL.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Sql/servers",
+      "Microsoft.Sql/servers/databases",
+      "Microsoft.Sql/servers/elasticpool",
+      "Microsoft.Sql/servers/jobAgents",
+      "Microsoft.Sql/managedInstances"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure SQL catalog entry from Microsoft Azure. Resource providers: Microsoft.Sql/servers, Microsoft.Sql/servers/databases, Microsoft.Sql/servers/elasticpool, Microsoft.Sql/servers/jobAgents, Microsoft.Sql/managedInstances. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.devtools.app-configuration",
+    "label": "App Configuration store",
+    "category": "Azure / Developer tools",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10219-icon-service-App-Configuration.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.azconfig\\.io(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".azconfig.io"
+    ],
+    "resourceProviders": [
+      "Microsoft.AppConfiguration/configurationStores"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/azure-app-configuration/rest-api",
+    "description": "App Configuration store catalog entry from Microsoft Azure. Resource provider: Microsoft.AppConfiguration/configurationStores. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/azure-app-configuration/rest-api)."
+  },
+  {
+    "id": "azure.devtools.maps",
+    "label": "Maps account",
+    "category": "Azure / Developer tools",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10185-icon-service-Azure-Maps-Accounts.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Maps/accounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Maps account catalog entry from Microsoft Azure. Resource provider: Microsoft.Maps/accounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.devtools.signalr",
+    "label": "SignalR Service",
+    "category": "Azure / Developer tools",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10052-icon-service-SignalR.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.SignalRService/SignalR"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "SignalR Service catalog entry from Microsoft Azure. Resource provider: Microsoft.SignalRService/SignalR. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.devtools.webpubsub",
+    "label": "Web PubSub",
+    "category": "Azure / Developer tools",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02987-icon-service-pubsub.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.SignalRService/webPubSub"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Web PubSub catalog entry from Microsoft Azure. Resource provider: Microsoft.SignalRService/webPubSub. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.devops.managed-grafana",
+    "label": "Azure Managed Grafana",
+    "category": "Azure / DevOps",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02905-icon-service-Azure-Managed-Grafana.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Dashboard/grafana"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Managed Grafana catalog entry from Microsoft Azure. Resource provider: Microsoft.Dashboard/grafana. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.devops.managed-devops-pools",
+    "label": "Managed DevOps Pools",
+    "category": "Azure / DevOps",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/03393-icon-service-Managed-DevOps-Pools.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DevOpsInfrastructure/pools"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Managed DevOps Pools catalog entry from Microsoft Azure. Resource provider: Microsoft.DevOpsInfrastructure/pools. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.hybrid.arc",
+    "label": "Azure Arc",
+    "category": "Azure / Hybrid + multicloud",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00756-icon-service-Azure-Arc.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.HybridCompute/machines",
+      "Microsoft.Kubernetes/connectedClusters",
+      "Microsoft.HybridCompute/privateLinkScopes",
+      "Microsoft.HybridCompute/gateways"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Arc catalog entry from Microsoft Azure. Resource providers: Microsoft.HybridCompute/machines, Microsoft.Kubernetes/connectedClusters, Microsoft.HybridCompute/privateLinkScopes, Microsoft.HybridCompute/gateways. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.integration.api-management",
+    "label": "API Management service",
+    "category": "Azure / Integration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10042-icon-service-API-Management-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.ApiManagement/service"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "API Management service catalog entry from Microsoft Azure. Resource provider: Microsoft.ApiManagement/service. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.integration.integration-account",
+    "label": "Integration account",
+    "category": "Azure / Integration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10218-icon-service-Integration-Accounts.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Logic/integrationAccounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Integration account catalog entry from Microsoft Azure. Resource provider: Microsoft.Logic/integrationAccounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.integration.logic-app",
+    "label": "Logic App",
+    "category": "Azure / Integration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02631-icon-service-Logic-Apps.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Logic/workflows"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Logic App catalog entry from Microsoft Azure. Resource provider: Microsoft.Logic/workflows. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.integration.service-bus",
+    "label": "Service Bus",
+    "category": "Azure / Integration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10836-icon-service-Azure-Service-Bus.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.servicebus\\.windows\\.net(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".servicebus.windows.net"
+    ],
+    "resourceProviders": [
+      "Microsoft.ServiceBus/namespaces",
+      "Microsoft.ServiceBus/namespaces/queues",
+      "Microsoft.ServiceBus/namespaces/topics",
+      "Microsoft.ServiceBus/namespaces/topics/subscriptions"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/rest/api/servicebus/addressing-and-protocol",
+    "description": "Service Bus catalog entry from Microsoft Azure. Resource providers: Microsoft.ServiceBus/namespaces, Microsoft.ServiceBus/namespaces/queues, Microsoft.ServiceBus/namespaces/topics, Microsoft.ServiceBus/namespaces/topics/subscriptions. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/rest/api/servicebus/addressing-and-protocol)."
+  },
+  {
+    "id": "azure.iot.dps",
+    "label": "Device Provisioning Service",
+    "category": "Azure / IoT",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10369-icon-service-Device-Provisioning-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Devices/provisioningServices",
+      "Microsoft.Devices/provisioningServices/certificates"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Device Provisioning Service catalog entry from Microsoft Azure. Resource providers: Microsoft.Devices/provisioningServices, Microsoft.Devices/provisioningServices/certificates. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.iot.hub",
+    "label": "IoT Hub",
+    "category": "Azure / IoT",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10182-icon-service-IoT-Hub.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Devices/IotHubs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "IoT Hub catalog entry from Microsoft Azure. Resource provider: Microsoft.Devices/IotHubs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ops.application-insights",
+    "label": "Application Insights",
+    "category": "Azure / Management and governance",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00012-icon-service-Application-Insights.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Insights/components"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Application Insights catalog entry from Microsoft Azure. Resource provider: Microsoft.Insights/components. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ops.automation-account",
+    "label": "Automation account",
+    "category": "Azure / Management and governance",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00022-icon-service-Automation-Accounts.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Automation/automationAccounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Automation account catalog entry from Microsoft Azure. Resource provider: Microsoft.Automation/automationAccounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ops.monitoring",
+    "label": "Azure Monitor",
+    "category": "Azure / Management and governance",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00001-icon-service-Monitor.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Insights/actionGroups",
+      "Microsoft.Insights/dataCollectionRules",
+      "Microsoft.Insights/dataCollectionEndpoints",
+      "Microsoft.AlertsManagement/actionRules"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Monitor catalog entry from Microsoft Azure. Resource providers: Microsoft.Insights/actionGroups, Microsoft.Insights/dataCollectionRules, Microsoft.Insights/dataCollectionEndpoints, Microsoft.AlertsManagement/actionRules. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ops.control-plane",
+    "label": "Control plane resources",
+    "category": "Azure / Management and governance",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10001-icon-service-All-Resources.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Resources/resourceGroups",
+      "Microsoft.Management/managementGroups",
+      "Microsoft.Authorization/policyDefinitions",
+      "Microsoft.Resources/templateSpecs",
+      "Microsoft.Resources/deploymentScripts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Control plane resources catalog entry from Microsoft Azure. Resource providers: Microsoft.Resources/resourceGroups, Microsoft.Management/managementGroups, Microsoft.Authorization/policyDefinitions, Microsoft.Resources/templateSpecs, Microsoft.Resources/deploymentScripts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ops.log-analytics",
+    "label": "Log Analytics workspace",
+    "category": "Azure / Management and governance",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00009-icon-service-Log-Analytics-Workspaces.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.OperationalInsights/workspaces",
+      "Microsoft.OperationalInsights/querypacks"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Log Analytics workspace catalog entry from Microsoft Azure. Resource providers: Microsoft.OperationalInsights/workspaces, Microsoft.OperationalInsights/querypacks. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.ops.purview",
+    "label": "Microsoft Purview instance",
+    "category": "Azure / Management and governance",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10216-icon-service-Azure-Data-Catalog.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Purview/accounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Microsoft Purview instance catalog entry from Microsoft Azure. Resource provider: Microsoft.Purview/accounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.migration.migrate-project",
+    "label": "Azure Migrate project",
+    "category": "Azure / Migration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10281-icon-service-Azure-Migrate.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Migrate/assessmentProjects"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Migrate project catalog entry from Microsoft Azure. Resource provider: Microsoft.Migrate/assessmentProjects. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.migration.dms",
+    "label": "Database Migration Service instance",
+    "category": "Azure / Migration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10133-icon-service-Azure-Database-Migration-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DataMigration/services"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Database Migration Service instance catalog entry from Microsoft Azure. Resource provider: Microsoft.DataMigration/services. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.migration.recovery-services-vault",
+    "label": "Recovery Services vault",
+    "category": "Azure / Migration",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00017-icon-service-Recovery-Services-Vaults.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.RecoveryServices/vaults"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Recovery Services vault catalog entry from Microsoft Azure. Resource provider: Microsoft.RecoveryServices/vaults. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.application-gateway",
+    "label": "Application gateway",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10076-icon-service-Application-Gateways.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/applicationGateways"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Application gateway catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/applicationGateways. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.application-security-group",
+    "label": "Application security group",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10244-icon-service-Application-Security-Groups.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/applicationSecurityGroups"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Application security group catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/applicationSecurityGroups. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.azure-enclave",
+    "label": "Azure Enclave",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/03394-icon-service-Azure-Enclaves.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Mission/communities",
+      "Microsoft.Mission/communities/communityEndpoints",
+      "Microsoft.Mission/communities/dedicatedHubs",
+      "Microsoft.Mission/communities/transitHubs",
+      "Microsoft.Mission/virtualEnclaves",
+      "Microsoft.Mission/virtualEnclaves/enclaveEndpoints",
+      "Microsoft.Mission/enclaveConnections",
+      "Microsoft.Mission/virtualEnclaves/workloads"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Enclave catalog entry from Microsoft Azure. Resource providers: Microsoft.Mission/communities, Microsoft.Mission/communities/communityEndpoints, Microsoft.Mission/communities/dedicatedHubs, Microsoft.Mission/communities/transitHubs, Microsoft.Mission/virtualEnclaves, Microsoft.Mission/virtualEnclaves/enclaveEndpoints, Microsoft.Mission/enclaveConnections, Microsoft.Mission/virtualEnclaves/workloads. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.delivery",
+    "label": "Delivery services",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10073-icon-service-Front-Door-and-CDN-Profiles.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Cdn/profiles",
+      "Microsoft.Cdn/profiles/endpoints",
+      "Microsoft.Cdn/profiles/afdEndpoints",
+      "Microsoft.Network/frontDoors",
+      "Microsoft.Network/frontdoorWebApplicationFirewallPolicies",
+      "Microsoft.Network/trafficManagerProfiles",
+      "Microsoft.Network/loadBalancers",
+      "Microsoft.Network/publicIPAddresses"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Delivery services catalog entry from Microsoft Azure. Resource providers: Microsoft.Cdn/profiles, Microsoft.Cdn/profiles/endpoints, Microsoft.Cdn/profiles/afdEndpoints, Microsoft.Network/frontDoors, Microsoft.Network/frontdoorWebApplicationFirewallPolicies, Microsoft.Network/trafficManagerProfiles, Microsoft.Network/loadBalancers, Microsoft.Network/publicIPAddresses. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.dns",
+    "label": "DNS",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10064-icon-service-DNS-Zones.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/dnsZones",
+      "Microsoft.Network/privateDnsZones",
+      "Microsoft.Network/dnsForwardingRulesets",
+      "Microsoft.Network/dnsResolvers",
+      "Microsoft.Network/dnsResolvers/inboundEndpoints",
+      "Microsoft.Network/dnsResolvers/outboundEndpoints"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "DNS catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/dnsZones, Microsoft.Network/privateDnsZones, Microsoft.Network/dnsForwardingRulesets, Microsoft.Network/dnsResolvers, Microsoft.Network/dnsResolvers/inboundEndpoints, Microsoft.Network/dnsResolvers/outboundEndpoints. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.expressroute",
+    "label": "ExpressRoute",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10079-icon-service-ExpressRoute-Circuits.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/expressRouteCircuits",
+      "Microsoft.Network/expressRoutePorts",
+      "Microsoft.Network/virtualNetworkGateways"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "ExpressRoute catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/expressRouteCircuits, Microsoft.Network/expressRoutePorts, Microsoft.Network/virtualNetworkGateways. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.firewall",
+    "label": "Firewall",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10084-icon-service-Firewalls.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/azureFirewalls",
+      "Microsoft.Network/firewallPolicies"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Firewall catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/azureFirewalls, Microsoft.Network/firewallPolicies. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.local-network-gateway",
+    "label": "Local network gateway",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10077-icon-service-Local-Network-Gateways.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/localNetworkGateways"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Local network gateway catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/localNetworkGateways. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.nat-gateway",
+    "label": "NAT gateway",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10310-icon-service-NAT.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/natGateways"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "NAT gateway catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/natGateways. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.network-interface",
+    "label": "Network interface",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10080-icon-service-Network-Interfaces.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/networkInterfaces"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Network interface catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/networkInterfaces. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.network-security",
+    "label": "Network security",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/03650-icon-service-Network-Security-Hub.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/networkSecurityPerimeters",
+      "Microsoft.Network/networkSecurityGroups",
+      "Microsoft.Network/networkSecurityGroups/securityRules",
+      "Microsoft.Network/privateEndpoints",
+      "Microsoft.Network/privateLinkServices",
+      "Microsoft.Network/bastionHosts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Network security catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/networkSecurityPerimeters, Microsoft.Network/networkSecurityGroups, Microsoft.Network/networkSecurityGroups/securityRules, Microsoft.Network/privateEndpoints, Microsoft.Network/privateLinkServices, Microsoft.Network/bastionHosts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.network-watcher",
+    "label": "Network Watcher",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10066-icon-service-Network-Watcher.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/networkWatchers"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Network Watcher catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/networkWatchers. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.public-ip",
+    "label": "Public IP",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10069-icon-service-Public-IP-Addresses.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/publicIPAddresses",
+      "Microsoft.Network/publicIPPrefixes"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Public IP catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/publicIPAddresses, Microsoft.Network/publicIPPrefixes. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.route",
+    "label": "Route resources",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10082-icon-service-Route-Tables.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/routeFilters",
+      "Microsoft.Network/routeTables",
+      "Microsoft.Network/routeTables/routes",
+      "Microsoft.Network/virtualHubs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Route resources catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/routeFilters, Microsoft.Network/routeTables, Microsoft.Network/routeTables/routes, Microsoft.Network/virtualHubs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.service-endpoint-policy",
+    "label": "Service endpoint policy",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10085-icon-service-Service-Endpoint-Policies.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/serviceEndPointPolicies"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Service endpoint policy catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/serviceEndPointPolicies. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.network.virtual-network",
+    "label": "Virtual network",
+    "category": "Azure / Networking",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10061-icon-service-Virtual-Networks.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/virtualNetworks",
+      "Microsoft.Network/virtualNetworks/subnets",
+      "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+      "Microsoft.Network/networkManagers",
+      "Microsoft.Network/virtualWans",
+      "Microsoft.Network/virtualHubs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual network catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/virtualNetworks, Microsoft.Network/virtualNetworks/subnets, Microsoft.Network/virtualNetworks/virtualNetworkPeerings, Microsoft.Network/networkManagers, Microsoft.Network/virtualWans, Microsoft.Network/virtualHubs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.security.bastion",
+    "label": "Azure Bastion",
+    "category": "Azure / Security",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02422-icon-service-Bastions.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/bastionHosts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Azure Bastion catalog entry from Microsoft Azure. Resource provider: Microsoft.Network/bastionHosts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.security.managed-hsm",
+    "label": "Key Vault Managed HSM",
+    "category": "Azure / Security",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02322-icon-service-Dedicated-HSM.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9-]{3,24}\\.managedhsm\\.azure\\.net(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".managedhsm.azure.net"
+    ],
+    "resourceProviders": [
+      "Microsoft.KeyVault/managedHSMs"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates",
+    "description": "Key Vault Managed HSM catalog entry from Microsoft Azure. Resource provider: Microsoft.KeyVault/managedHSMs. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates)."
+  },
+  {
+    "id": "azure.security.managed-identity",
+    "label": "Managed identity",
+    "category": "Azure / Security",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10227-icon-service-Managed-Identities.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.ManagedIdentity/userAssignedIdentities"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Managed identity catalog entry from Microsoft Azure. Resource provider: Microsoft.ManagedIdentity/userAssignedIdentities. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.security.ssh-key",
+    "label": "SSH key",
+    "category": "Azure / Security",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00412-icon-service-SSH-Keys.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Compute/sshPublicKeys"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "SSH key catalog entry from Microsoft Azure. Resource provider: Microsoft.Compute/sshPublicKeys. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.security.vpn",
+    "label": "VPN Gateway",
+    "category": "Azure / Security",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10063-icon-service-Virtual-Network-Gateways.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/vpnGateways",
+      "Microsoft.Network/vpnGateways/vpnConnections",
+      "Microsoft.Network/vpnGateways/vpnSites"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "VPN Gateway catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/vpnGateways, Microsoft.Network/vpnGateways/vpnConnections, Microsoft.Network/vpnGateways/vpnSites. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.security.waf",
+    "label": "Web Application Firewall policy",
+    "category": "Azure / Security",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10362-icon-service-Web-Application-Firewall-Policies(WAF).svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Network/firewallPolicies",
+      "Microsoft.Network/firewallPolicies/ruleGroups"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Web Application Firewall policy catalog entry from Microsoft Azure. Resource providers: Microsoft.Network/firewallPolicies, Microsoft.Network/firewallPolicies/ruleGroups. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.storage.backup-vault",
+    "label": "Backup Vault",
+    "category": "Azure / Storage",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/02361-icon-service-Backup-Vault.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DataProtection/resourceGuards",
+      "Microsoft.DataProtection/backupVaults",
+      "Microsoft.DataProtection/backupVaults/backupPolicies"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Backup Vault catalog entry from Microsoft Azure. Resource providers: Microsoft.DataProtection/resourceGuards, Microsoft.DataProtection/backupVaults, Microsoft.DataProtection/backupVaults/backupPolicies. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.storage.file-share",
+    "label": "File share",
+    "category": "Azure / Storage",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10400-icon-service-Azure-Fileshares.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.Storage/storageAccounts/fileServices/shares"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "File share catalog entry from Microsoft Azure. Resource provider: Microsoft.Storage/storageAccounts/fileServices/shares. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.storage.storage-account",
+    "label": "Storage account",
+    "category": "Azure / Storage",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10086-icon-service-Storage-Accounts.svg",
+    "endpointRegex": "^https?:\\/\\/[a-z0-9]{3,24}\\.blob\\.core\\.windows\\.net(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".blob.core.windows.net",
+      ".file.core.windows.net",
+      ".queue.core.windows.net",
+      ".table.core.windows.net"
+    ],
+    "resourceProviders": [
+      "Microsoft.Storage/storageAccounts"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction",
+    "description": "Storage account catalog entry from Microsoft Azure. Resource provider: Microsoft.Storage/storageAccounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction)."
+  },
+  {
+    "id": "azure.storage.storage-sync",
+    "label": "Storage Sync Service",
+    "category": "Azure / Storage",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/10093-icon-service-Storage-Sync-Services.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.StorageSync/storageSyncServices"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Storage Sync Service catalog entry from Microsoft Azure. Resource provider: Microsoft.StorageSync/storageSyncServices. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.vdi.application-group",
+    "label": "Virtual desktop application group",
+    "category": "Azure / Virtual desktop infrastructure",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00329-icon-service-Application-Group.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DesktopVirtualization/applicationGroups"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual desktop application group catalog entry from Microsoft Azure. Resource provider: Microsoft.DesktopVirtualization/applicationGroups. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.vdi.host-pool",
+    "label": "Virtual desktop host pool",
+    "category": "Azure / Virtual desktop infrastructure",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00328-icon-service-Host-Pools.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DesktopVirtualization/hostPools"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual desktop host pool catalog entry from Microsoft Azure. Resource provider: Microsoft.DesktopVirtualization/hostPools. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.vdi.scaling-plan",
+    "label": "Virtual desktop scaling plan",
+    "category": "Azure / Virtual desktop infrastructure",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00327-icon-service-Azure-Virtual-Desktop.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DesktopVirtualization/scalingPlans"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual desktop scaling plan catalog entry from Microsoft Azure. Resource provider: Microsoft.DesktopVirtualization/scalingPlans. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "azure.vdi.workspace",
+    "label": "Virtual desktop workspace",
+    "category": "Azure / Virtual desktop infrastructure",
+    "catalogSource": "Microsoft Azure",
+    "icon": "azure/00327-icon-service-Azure-Virtual-Desktop.svg",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "resourceProviders": [
+      "Microsoft.DesktopVirtualization/workspaces"
+    ],
+    "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+    "description": "Virtual desktop workspace catalog entry from Microsoft Azure. Resource provider: Microsoft.DesktopVirtualization/workspaces. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+  },
+  {
+    "id": "PowerBI",
+    "label": "Power BI",
+    "category": "Microsoft Fabric / Analytics",
+    "documentationUrl": "https://learn.microsoft.com/en-us/power-bi/fundamentals/power-bi-overview",
+    "endpointRegex": "^https?:\\/\\/(.*\\.powerbi\\.com|api\\.powerbi\\.com|.*\\.analysis\\.windows\\.net|.*\\.pbidedicated\\.windows\\.net)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".powerbi.com",
+      "api.powerbi.com",
+      ".analysis.windows.net"
+    ],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/powerbi.svg",
+    "description": "Power BI catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/power-bi/fundamentals/power-bi-overview)."
+  },
+  {
+    "id": "MicrosoftFabric",
+    "label": "Microsoft Fabric",
+    "category": "Microsoft Fabric / Analytics platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/fundamentals/microsoft-fabric-overview",
+    "endpointRegex": "^https?:\\/\\/(.*\\.fabric\\.microsoft\\.com|api\\.fabric\\.microsoft\\.com|.*\\.onelake\\.(?:dfs|blob)\\.fabric\\.microsoft\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".fabric.microsoft.com",
+      "api.fabric.microsoft.com",
+      ".onelake.dfs.fabric.microsoft.com"
+    ],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/fabric.svg",
+    "description": "Microsoft Fabric catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/fundamentals/microsoft-fabric-overview)."
+  },
+  {
+    "id": "FabricDataEngineering",
+    "label": "Fabric Data Engineering",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/data-engineering/data-engineering-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/engineering.svg",
+    "description": "Fabric Data Engineering catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/data-engineering/data-engineering-overview)."
+  },
+  {
+    "id": "FabricDataFactory",
+    "label": "Fabric Data Factory",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/data-factory/data-factory-overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/factory.svg",
+    "description": "Fabric Data Factory catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/data-factory/data-factory-overview)."
+  },
+  {
+    "id": "FabricDataScience",
+    "label": "Fabric Data Science",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/data-science/overview/",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/science.svg",
+    "description": "Fabric Data Science catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/data-science/overview/)."
+  },
+  {
+    "id": "FabricDataWarehouse",
+    "label": "Fabric Data Warehouse",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/data-warehouse/overview",
+    "endpointRegex": "^https?:\\/\\/.*\\.datawarehouse\\.fabric\\.microsoft\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".datawarehouse.fabric.microsoft.com"
+    ],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/warehouse.svg",
+    "description": "Fabric Data Warehouse catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/data-warehouse/overview)."
+  },
+  {
+    "id": "FabricDatabases",
+    "label": "Fabric Databases",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/database/",
+    "endpointRegex": "^https?:\\/\\/.*\\.database\\.fabric\\.microsoft\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".database.fabric.microsoft.com"
+    ],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/databases.svg",
+    "description": "Fabric Databases catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/database/)."
+  },
+  {
+    "id": "FabricRealTimeIntelligence",
+    "label": "Fabric Real-Time Intelligence",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/real-time-intelligence/overview",
+    "endpointRegex": "^https?:\\/\\/.*\\.kusto\\.fabric\\.microsoft\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".kusto.fabric.microsoft.com"
+    ],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/realtime.svg",
+    "description": "Fabric Real-Time Intelligence catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/real-time-intelligence/overview)."
+  },
+  {
+    "id": "FabricOneLake",
+    "label": "OneLake",
+    "category": "Microsoft Fabric / Fabric workload",
+    "documentationUrl": "https://learn.microsoft.com/en-us/fabric/onelake/onelake-overview",
+    "endpointRegex": "^https?:\\/\\/.*\\.onelake\\.(?:dfs|blob)\\.fabric\\.microsoft\\.com(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".onelake.dfs.fabric.microsoft.com",
+      ".onelake.blob.fabric.microsoft.com"
+    ],
+    "catalogSource": "Microsoft Fabric",
+    "icon": "fabric/onelake.svg",
+    "description": "OneLake catalog entry from Microsoft Fabric. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/fabric/onelake/onelake-overview)."
+  },
+  {
+    "id": "AIBuilder",
+    "label": "AI Builder",
+    "category": "Power Platform / Power Platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/ai-builder/overview",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Power Platform",
+    "icon": "power-platform/aibuilder.svg",
+    "description": "AI Builder catalog entry from Power Platform. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/ai-builder/overview)."
+  },
+  {
+    "id": "Agent365",
+    "label": "Microsoft Agent 365",
+    "category": "Power Platform / Power Platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/microsoft-agent-365/",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "catalogSource": "Power Platform",
+    "icon": "power-platform/agent365.svg",
+    "description": "Microsoft Agent 365 catalog entry from Power Platform. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/microsoft-agent-365/)."
+  },
+  {
+    "id": "OnPremisesGateway",
+    "label": "On-premises data gateway",
+    "category": "Power Platform / Power Platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/data-integration/gateway/service-gateway-onprem",
+    "endpointRegex": "^https?:\\/\\/(.*\\.servicebus\\.windows\\.net|gatewayadminportal\\.azure\\.com|.*\\.frontend\\.clouddatahub\\.net)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".servicebus.windows.net",
+      "gatewayadminportal.azure.com"
+    ],
+    "catalogSource": "Power Platform",
+    "icon": "power-platform/gateway.svg",
+    "description": "On-premises data gateway catalog entry from Power Platform. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/data-integration/gateway/service-gateway-onprem)."
+  },
+  {
+    "id": "PowerApps",
+    "label": "Power Apps",
+    "category": "Power Platform / Power Platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/power-apps/",
+    "endpointRegex": "^https?:\\/\\/(.*\\.powerapps\\.com|.*\\.api\\.powerplatform\\.com|.*\\.powerplatform\\.com|.*\\.crm[0-9]*\\.dynamics\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".powerapps.com",
+      ".api.powerplatform.com",
+      ".powerplatform.com"
+    ],
+    "catalogSource": "Power Platform",
+    "icon": "power-platform/powerapps.svg",
+    "description": "Power Apps catalog entry from Power Platform. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/power-apps/)."
+  },
+  {
+    "id": "PowerAutomate",
+    "label": "Power Automate",
+    "category": "Power Platform / Power Platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/power-automate/",
+    "endpointRegex": "^https?:\\/\\/(.*\\.flow\\.microsoft\\.com|.*\\.powerautomate\\.com|.*\\.logic\\.azure\\.com|.*\\.azure-apim\\.net|.*\\.azure-apihub\\.net)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".flow.microsoft.com",
+      ".powerautomate.com",
+      ".logic.azure.com"
+    ],
+    "catalogSource": "Power Platform",
+    "icon": "power-platform/powerautomate.svg",
+    "description": "Power Automate catalog entry from Power Platform. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/power-automate/)."
+  },
+  {
+    "id": "PowerPages",
+    "label": "Power Pages",
+    "category": "Power Platform / Power Platform",
+    "documentationUrl": "https://learn.microsoft.com/en-us/power-pages/",
+    "endpointRegex": "^https?:\\/\\/(.*\\.powerappsportals\\.com|.*\\.powerpages\\.microsoft\\.com)(?::\\d+)?(?:\\/.*)?$",
+    "templateHints": [
+      ".powerappsportals.com",
+      ".powerpages.microsoft.com"
+    ],
+    "catalogSource": "Power Platform",
+    "icon": "power-platform/powerpages.svg",
+    "description": "Power Pages catalog entry from Power Platform. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/power-pages/)."
+  }
+]

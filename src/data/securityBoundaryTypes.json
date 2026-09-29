@@ -1,0 +1,27 @@
+[
+  {
+    "id": "IFrame",
+    "label": "IFrame",
+    "description": "An embedded browser iframe acts as the trust boundary. Cross-origin messaging is constrained by browser sandboxing and postMessage origin checks."
+  },
+  {
+    "id": "Csp",
+    "label": "CSP",
+    "description": "Content Security Policy. Browser-enforced restrictions on script execution, frame ancestors, and resource origins. See [CSP reference](https://developer.mozilla.org/docs/Web/HTTP/CSP)."
+  },
+  {
+    "id": "Azure",
+    "label": "Azure",
+    "description": "Azure-tenant or Azure-subscription-scoped boundary using VNet isolation, Private Link, RBAC, and Azure Policy."
+  },
+  {
+    "id": "UserBrowser",
+    "label": "User browser",
+    "description": "The user's browser process itself is the boundary — content and data within the page are subject to the same-origin policy and end-user device security."
+  },
+  {
+    "id": "UserTenantTrust",
+    "label": "User Tenant Trust Boundary",
+    "description": "Trust boundary between the end user and their tenant — separates user-controlled context (identity, device, session) from tenant-controlled resources, policies, and data governance."
+  }
+]

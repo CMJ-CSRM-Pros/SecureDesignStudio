@@ -1,0 +1,66 @@
+{
+  "format": "secure-design-studio-library",
+  "apiVersion": 1,
+  "id": "example",
+  "name": "Example review library",
+  "version": "1.0.0",
+  "dependencies": [],
+  "overrides": [{ "key": "classifications/default", "from": "core" }],
+  "catalogs": {
+    "authentication": [{
+      "id": "ExampleProof",
+      "label": "Example proof",
+      "description": "Synthetic owner-defined method. This description does not establish security guarantees."
+    }],
+    "classifications": {
+      "id": "example-classifications",
+      "name": "Example classifications",
+      "revision": "1.0.0",
+      "defaultId": "ExamplePublic",
+      "classifications": [
+        { "id": "ExamplePublic", "label": "Example public", "disabled": false },
+        { "id": "ExampleRestricted", "label": "Example restricted", "disabled": false }
+      ]
+    },
+    "nodes": [{
+      "id": "ExampleService",
+      "label": "Example service",
+      "definition": {
+        "serviceTreeId": "",
+        "endpointRegex": "^https://example\\.invalid/",
+        "allowedAuthMethods": [{ "id": "ExampleProof", "status": "Allowed" }],
+        "allowedDataTypes": [{ "id": "*", "retention": "*", "action": "Allow" }],
+        "description": "Synthetic node policy for local testing only.",
+        "defaultPrivacyBoundary": "ExamplePrivacy"
+      }
+    }],
+    "taxonomy": [
+      { "kind": "tenant", "id": "ExampleTenant", "label": "Example tenant" },
+      { "kind": "privacyBoundary", "id": "ExamplePrivacy", "label": "Example privacy perimeter" },
+      { "kind": "securityBoundary", "id": "ExampleSecurity", "label": "Example trust perimeter" },
+      { "kind": "deviation", "id": "ExampleEvidence", "label": "Example evidence" }
+    ]
+  },
+  "fields": [
+    { "id": "example.owner", "target": "node", "storage": "metadata", "label": "Example owner ID", "description": "Synthetic ownership identifier. Use a GUID." },
+    { "id": "example.approval", "target": "edge", "storage": "metadata", "label": "Example approval reference" }
+  ],
+  "rules": [
+    { "id": "Example_owner_required", "target": "node", "fieldId": "example.owner", "check": "required", "title": "Example owner is missing", "description": "Set the Example owner ID in node properties." },
+    { "id": "Example_owner_guid", "target": "node", "fieldId": "example.owner", "check": "guid", "title": "Example owner must be a GUID", "description": "Replace the synthetic owner ID with a valid GUID." }
+  ],
+  "help": [{
+    "id": "endpoint-import.instructions",
+    "title": "Example endpoint guidance",
+    "text": "Synthetic example only. Import one endpoint per line, such as https://example.invalid/service. This package does not fetch endpoints or contact a service."
+  }, {
+    "id": "endpoint-import.example",
+    "title": "Example endpoint list",
+    "text": "https://example.invalid/service\nhttps://example.invalid/other"
+  }, {
+    "id": "analysis.deprecated-auth-guidance",
+    "title": "Example deprecated authentication guidance",
+    "text": "Synthetic guidance for deprecated target-policy methods. No policy decision is changed.",
+    "url": "https://example.invalid/deprecated-auth"
+  }]
+}

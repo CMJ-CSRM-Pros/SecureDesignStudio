@@ -1,0 +1,47 @@
+{
+  "name": "secure-design-studio",
+  "private": true,
+  "version": "0.1.46",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "setup:ai": "node scripts/configure-local-ai.mjs",
+    "dev:ai": "npm run setup:ai && npm --prefix api run build && concurrently --kill-others --names web,api-build,api \"vite --mode ai\" \"npm --prefix api run watch\" \"npm --prefix api run start\"",
+    "build": "tsc -b && vite build && cross-env BUILD_SINGLE_FILE=1 vite build",
+    "build:multi": "tsc -b && vite build",
+    "build:single": "tsc -b && cross-env BUILD_SINGLE_FILE=1 vite build",
+    "preview": "vite preview",
+    "test:browser": "node --test tests/browser/contracts.test.mjs",
+    "test:regression": "node --test --test-name-pattern=regression: tests/browser/contracts.test.mjs",
+    "test:usability": "node --test --test-name-pattern=usability: tests/browser/contracts.test.mjs",
+    "test:browser:unit": "node --test tests/browser/harness.test.mjs",
+    "test:libraries:browser": "node --test tests/browser/libraries-configured.test.mjs",
+    "test:libraries:production": "node --test tests/browser/libraries-production.test.mjs",
+    "test:runtime": "node --test tests/authentication/*.test.mjs",
+    "test:authentication:production": "node --test tests/browser/authentication-production.test.mjs",
+    "test:assistant:production": "node --test tests/browser/assistant-production.test.mjs",
+    "test:authentication": "npm run test:runtime"
+  },
+  "dependencies": {
+    "@azure/web-pubsub-client": "^1.0.1",
+    "@xyflow/react": "^12.3.5",
+    "fflate": "^0.8.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "y-indexeddb": "^9.0.12",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "6.0.3",
+    "@xmldom/xmldom": "^0.9.12",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "playwright-core": "1.62.1",
+    "typescript": "^5.6.3",
+    "vite": "8.1.4",
+    "vite-plugin-singlefile": "^2.3.3"
+  },
+  "license": "MIT"
+}

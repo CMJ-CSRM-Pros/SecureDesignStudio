@@ -1,0 +1,761 @@
+import assert from "node:assert/strict";
+import { after, before, test } from "node:test";
+import { autosaveKey, modelFixture, unavailableIssueFixture, unavailableCatalogFixture, catalogSnapshotFixture, catalogReferenceSnapshot } from "./fixture.mjs";
+import { startHarness, until } from "./harness.mjs";
+import { registerAuthenticationContracts } from "./authentication-contracts.mjs";
+import { registerAssistantLayoutContracts } from "./assistant-layout-contracts.mjs";
+import { registerClassificationContracts } from "./classification-contracts.mjs";
+import { registerClassificationEditorContracts } from "./classification-editor-contracts.mjs";
+import { registerLibraryContracts } from "./libraries-contracts.mjs";
+import { registerEndpointContracts } from "./endpoint-contracts.mjs";
+import { registerAuthenticationExtractionContracts } from "./authentication-extraction-contracts.mjs";
+import { registerNodeMetadataContracts } from "./node-metadata-contracts.mjs";
+import { registerInventoryContracts } from "./inventory-contracts.mjs";
+import { registerTaxonomyContracts } from "./taxonomy-contracts.mjs";
+import { registerPmexpContracts } from "./pmexp-contracts.mjs";
+import { registerJsonImportContracts } from "./json-import-contracts.mjs";
+import { registerProvenanceContracts } from "./provenance-contracts.mjs";
+
+let harness;
+before(async () => { harness = await startHarness(); });
+after(async () => { if (harness) await harness.stop(); });
+
+const node = (page, id) => page.locator(`.react-flow__node-process[data-id="${id}"]`);
+const scenario = page => page.getByRole("combobox", { name: "Scenario", exact: true });
+const fileMenu = page => page.locator('button[aria-controls="ps-command-menu-file"]');
+
+async function exportModel(page) {
+  await fileMenu(page).click();
+  await page.getByRole("menuitem", { name: /^Save\s/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Save as", exact: true });
+  await dialog.getByLabel("File name", { exact: true }).fill("roundtrip.tma");
+  const downloadEvent = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  const download = await downloadEvent;
+  assert.equal(download.suggestedFilename(), "roundtrip.tma");
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+registerAuthenticationContracts({ getHarness: () => harness, exportModel });
+registerAssistantLayoutContracts({ getHarness: () => harness });
+registerClassificationContracts({ getHarness: () => harness, exportModel });
+registerClassificationEditorContracts({ getHarness: () => harness, exportModel });
+registerLibraryContracts({ getHarness: () => harness });
+registerEndpointContracts({ getHarness: () => harness, exportModel });
+registerAuthenticationExtractionContracts({ getHarness: () => harness, exportModel });
+registerNodeMetadataContracts({ getHarness: () => harness, exportModel });
+registerInventoryContracts({ getHarness: () => harness, exportModel });
+registerTaxonomyContracts({ getHarness: () => harness, exportModel });
+registerPmexpContracts({ getHarness: () => harness, exportModel });
+registerJsonImportContracts({ getHarness: () => harness, exportModel });
+registerProvenanceContracts({ getHarness: () => harness, exportModel });
+
+test("usability: service disclosure reflects credential-free local configuration without destinations or requests", async () => {
+  await harness.run("usability: local service disclosure", async ({ page }) => {
+    await page.getByRole("button", { name: "About", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "About SecureDesignStudio", exact: true });
+    await dialog.getByText("Collaboration is disabled in local-only mode.", { exact: true }).waitFor();
+    assert.match(await dialog.innerText(), /Design Assistant is disabled in credential-free local mode/);
+    assert.equal(await dialog.locator("code").count(), 0);
+    await page.setViewportSize({ width: 320, height: 640 });
+    assert.equal(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("tab", { name: /^Findings\b/ }).click();
+    await page.locator(".ps-service-notice").filter({ hasText: /credential-free local mode/ }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Analyze model", exact: true }).isDisabled(), true);
+  });
+});
+
+test("regression: Analyze retains unavailable evidence through UI, native files, history, recovery and reports", async () => {
+  await harness.run("regression: unavailable analyzer evidence", async ({ page }) => {
+    const input = unavailableIssueFixture();
+    const upload = async (model, name) => {
+      await page.locator("#ps-file-open-input").setInputFiles({
+        name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(model)),
+      });
+      await page.getByLabel("Document status").getByText(name, { exact: true }).waitFor();
+    };
+    const openIssues = () => page.getByRole("tab", { name: /^Issues/ }).click();
+    const runAnalyze = async () => {
+      await page.locator('button[aria-controls="ps-command-menu-review"]').click();
+      await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
+    };
+    const panel = page.locator(".ps-allissues");
+    const retained = panel.locator(".ps-allissues-row").filter({ hasText: "Saved i_unavailable" });
+    await upload(input, "unavailable-findings.tma");
+    await runAnalyze();
+    await panel.getByRole("status").filter({ hasText: "2 not re-evaluated" }).waitFor();
+    assert.match(await retained.innerText(), /Resolved[\s\S]*Not re-evaluated: rule unavailable/i);
+    assert.equal(await retained.getByRole("link", { name: /Resolution guidance/ }).getAttribute("href"),
+      "https://example.invalid/remediation");
+    await retained.getByRole("button", { name: "Details", exact: true }).press("Enter");
+    await retained.getByText("Saved review decision.", { exact: true }).waitFor();
+    assert.match(await retained.innerText(), /Coverage is incomplete/);
+    await panel.getByRole("searchbox").fill("not re-evaluated");
+    assert.equal(await panel.locator(".ps-allissues-row").count(), 2);
+    await panel.getByRole("searchbox").fill("");
+    const saved = await exportModel(page);
+    for (const [id, reason] of [["i_unavailable", "rule-unavailable"], ["i_policy", "policy-unavailable"]]) {
+      assert.deepEqual(saved.doc.issues.find(issue => issue.id === id),
+        { ...input.doc.issues.find(issue => issue.id === id), notEvaluatedReason: reason });
+    }
+    assert.equal(saved.doc.issues.some(issue => issue.id === "i_clear"), false);
+    assert.deepEqual(saved.doc.issues.find(issue => issue.id === "i_manual"),
+      JSON.parse(JSON.stringify(input.doc.issues.find(issue => issue.id === "i_manual"))));
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await openIssues();
+    assert.equal(await panel.locator(".ps-issue-evaluation").count(), 0);
+    assert.equal((await exportModel(page)).doc.issues.some(issue => issue.id === "i_clear"), true);
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await openIssues();
+    assert.deepEqual((await exportModel(page)).doc.issues, saved.doc.issues);
+    await upload(saved, "reopened-findings.tma");
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) ?? "null")?.doc.issues
+      ?.find(issue => issue.id === "i_unavailable")?.notEvaluatedReason === "rule-unavailable", autosaveKey);
+    await page.reload();
+    await openIssues();
+    await retained.locator(".ps-issue-evaluation").waitFor();
+    assert.deepEqual((await exportModel(page)).doc.issues, saved.doc.issues);
+    await page.locator('button[aria-controls="ps-command-menu-export"]').click();
+    const reportEvent = page.waitForEvent("download");
+    await page.getByRole("menuitem", { name: /Review report \(\.html\)/i }).click();
+    const chunks = [];
+    for await (const chunk of await (await reportEvent).createReadStream()) chunks.push(chunk);
+    assert.match(Buffer.concat(chunks).toString("utf8"), /Not re-evaluated: required policy definition unavailable/);
+    await page.setViewportSize({ width: 320, height: 640 });
+    assert.equal(await retained.locator(".ps-issue-evaluation").evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.locator('.ps-edge-label[data-edge-id="e_request"] .ps-edge-num').click();
+    await page.getByRole("tab", { name: /^Properties/ }).click();
+    await page.locator(".ps-target-issues .ps-allissues-row").filter({ hasText: "Saved i_unavailable" })
+      .getByText("Not re-evaluated: rule unavailable", { exact: true }).waitFor();
+  });
+});
+
+test("regression: failed Analyze leaves document and history unchanged with an explicit diagnostic", async () => {
+  await harness.run("regression: atomic analyzer failure", async ({ page }) => {
+    const before = await exportModel(page);
+    await page.evaluate(async () => {
+      const { IssueManager } = await import("/src/IssueManager.ts");
+      const original = IssueManager.prototype.analyze;
+      IssueManager.prototype.analyze = function () {
+        IssueManager.prototype.analyze = original;
+        throw new Error("Synthetic evaluator failure");
+      };
+      const alert = window.alert;
+      window.alert = message => {
+        window.alert = alert;
+        window.analyzerDiagnostic = message;
+      };
+    });
+    const historyBefore = await page.evaluate(key => {
+      window.dispatchEvent(new Event("pagehide"));
+      const { past, future } = JSON.parse(localStorage.getItem(key));
+      return { past, future };
+    }, autosaveKey);
+    await page.locator('button[aria-controls="ps-command-menu-review"]').click();
+    await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
+    assert.equal(await page.evaluate(() => window.analyzerDiagnostic),
+      "Analyze failed. The model, findings and history were not changed: Synthetic evaluator failure");
+    await page.keyboard.press("Escape");
+    assert.deepEqual((await exportModel(page)).doc, before.doc);
+    const historyAfter = await page.evaluate(key => {
+      window.dispatchEvent(new Event("pagehide"));
+      const { past, future } = JSON.parse(localStorage.getItem(key));
+      return { past, future };
+    }, autosaveKey);
+    assert.deepEqual(historyAfter, historyBefore);
+  });
+});
+
+test("regression: saved catalog snapshots override labels and survive native, history and recovery", async () => {
+  await harness.run("regression: saved catalog snapshots", async ({ page }) => {
+    const upload = async (model, name) => {
+      await page.locator("#ps-file-open-input").setInputFiles({
+        name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(model)),
+      });
+      await page.getByLabel("Document status").getByText(name, { exact: true }).waitFor();
+    };
+    const profileKey = "secure-design-studio:authentication-library:v1";
+    const profileBefore = await page.evaluate(key => localStorage.getItem(key), profileKey);
+    const input = catalogSnapshotFixture();
+    await upload(input, "saved-definitions.tma");
+    const notice = page.locator(".ps-catalog-snapshots");
+    await notice.locator("summary").press("Enter");
+    assert.match(await notice.innerText(), /Differs from installed definition; saved definition retained/);
+    assert.match(await notice.innerText(), /example-library @ 1.0.0 \(unverified\)/);
+    assert.match(await notice.innerText(), /Document-only definition/);
+    await notice.locator("summary").press("Enter");
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    const classification = page.getByRole("combobox", { name: "Classification for Synthetic request", exact: true });
+    assert.equal(await classification.locator("option:checked").textContent(), "Partner restricted data (saved)");
+    assert.equal(await classification.locator('option[value="EUII"]').textContent(), "Saved EUII label (saved)");
+    assert.match(await page.locator('[data-edge-id="e_request"] .ps-edge-classification-badge').getAttribute("aria-label"),
+      /Partner restricted data/);
+    const saved = await exportModel(page);
+    for (const definition of input.doc.catalogDefinitions) {
+      assert.deepEqual(saved.doc.catalogDefinitions.find(item => item.kind === definition.kind && item.id === definition.id), definition);
+    }
+    await upload(modelFixture(), "without-snapshots.tma");
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    assert.equal(await classification.locator('option[value="EUII"]').textContent(), "EUII (saved)");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    assert.equal(await classification.locator("option:checked").textContent(), "Partner restricted data (saved)");
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await upload(saved, "reopened-snapshots.tma");
+    assert.deepEqual((await exportModel(page)).doc, saved.doc);
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) ?? "null")?.doc.catalogDefinitions
+      ?.some(def => def.id === "ExampleRestricted"), autosaveKey);
+    await page.reload();
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    assert.equal(await classification.locator("option:checked").textContent(), "Partner restricted data (saved)");
+    assert.deepEqual((await exportModel(page)).doc.catalogDefinitions, saved.doc.catalogDefinitions);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), profileKey), profileBefore);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await notice.locator("summary").press("Enter");
+    assert.equal(await notice.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);
+    const withoutAvailableDefinitions = unavailableCatalogFixture();
+    withoutAvailableDefinitions.doc.data[1].classification = "AnotherMissingDefinition";
+    await upload(withoutAvailableDefinitions, "unknown-only.tma");
+    assert.deepEqual((await exportModel(page)).doc.catalogDefinitions, [],
+      "An explicit Open without definitions clears the previous document's snapshots");
+  });
+});
+
+test("regression: invalid catalog snapshots reject atomically and recovery never overwrites corrupt data", async () => {
+  await harness.run("regression: invalid catalog snapshot recovery", async ({ page }) => {
+    const before = await exportModel(page);
+    const invalid = catalogSnapshotFixture();
+    invalid.doc.catalogDefinitions[0].script = "not an allowed field";
+    await page.evaluate(() => {
+      const original = window.alert;
+      window.alert = message => {
+        window.alert = original;
+        if (message !== 'Failed to import JSON: Catalog definitions[0]: unsupported field "script".') {
+          throw new Error("Unexpected import diagnostic");
+        }
+        window.catalogImportRejected = true;
+      };
+    });
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "invalid.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(invalid)),
+    });
+    await page.waitForFunction(() => window.catalogImportRejected === true);
+    assert.deepEqual((await exportModel(page)).doc, before.doc);
+    const corrupt = JSON.stringify({ version: 1, doc: invalid.doc, past: [], future: [], view: invalid.view });
+    await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: autosaveKey, value: corrupt });
+    await page.reload();
+    await page.getByRole("alert").filter({ hasText: "Saved diagram recovery is paused" }).waitFor();
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), autosaveKey), corrupt);
+    const valid = catalogSnapshotFixture();
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "recovery.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(valid)),
+    });
+    await page.getByLabel("Document status").getByText("recovery.tma", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("alert").filter({ hasText: "Saved diagram recovery is paused" }).count(), 0);
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) ?? "null")?.doc.catalogDefinitions
+      ?.every(def => !("script" in def)), autosaveKey);
+  });
+});
+
+test("regression: unavailable catalog references survive controls, native save, history and recovery", async () => {
+  await harness.run("regression: unavailable catalog references", async ({ page }) => {
+    const input = unavailableCatalogFixture();
+    input.view.filter.dataClassification = "ExampleRestricted";
+    const expected = catalogReferenceSnapshot(input.doc);
+    const upload = async (model, name) => {
+      await page.locator("#ps-file-open-input").setInputFiles({
+        name, mimeType: "application/json", buffer: Buffer.from(JSON.stringify(model)),
+      });
+      await page.getByLabel("Document status").getByText(name, { exact: true }).waitFor();
+    };
+    await upload(input, "unavailable.tma");
+    const filter = page.locator('button[aria-controls="ps-command-menu-filter"]');
+    await filter.click();
+    const classificationFilter = page.getByRole("combobox", { name: "Data classification", exact: true });
+    assert.equal(await classificationFilter.inputValue(), "ExampleRestricted");
+    assert.equal(await classificationFilter.locator("option:checked").textContent(), "ExampleRestricted (unresolved)");
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert.match(await page.locator('[data-edge-id="e_request"] .ps-edge-classification-badge').getAttribute("aria-label"),
+      /ExampleRestricted \(unresolved\)/);
+    for (const [id, name, value] of [["b_security", "Security subtype", "ExampleSecurity"],
+      ["b_privacy", "Privacy subtype", "ExamplePrivacy"]]) {
+      await page.locator(`.react-flow__node-boundary[data-id="${id}"] .ps-boundary-title-text`).click();
+      const subtype = page.getByRole("combobox", { name, exact: true });
+      assert.equal(await subtype.inputValue(), value);
+      assert.match(await subtype.locator("option:checked").textContent(), /unresolved/);
+    }
+
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    const classification = page.getByRole("combobox", { name: "Classification for Synthetic request", exact: true });
+    assert.equal(await classification.inputValue(), "ExampleRestricted");
+    assert.match(await classification.locator("option:checked").textContent(), /unresolved/);
+    await classification.selectOption("System Metadata");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    await until(async () => await classification.inputValue() === "ExampleRestricted", "undo restores unavailable classification");
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    await until(async () => await classification.inputValue() === "System Metadata", "redo restores explicit selection");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.getByRole("tab", { name: /^Data/ }).click();
+
+    await page.getByRole("tab", { name: /^Edges/ }).click();
+    await page.getByRole("row", { name: /^Request payload, sequence/ }).click();
+    await page.getByRole("tab", { name: /^Properties/ }).click();
+    const tenant = page.getByRole("combobox", { name: "Tenant", exact: true });
+    assert.equal(await tenant.inputValue(), "ExampleTenant");
+    assert.match(await tenant.locator("option:checked").textContent(), /unresolved/);
+    await page.getByRole("tab", { name: /^Deviations/ }).click();
+    assert.equal(await page.locator(".ps-deviation-kind").textContent(), "example-evidence (unresolved)");
+
+    await page.getByRole("button", { name: "Model", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Node Type Catalog/ }).click();
+    const catalog = page.getByRole("dialog", { name: "Node type catalog", exact: true });
+    await catalog.getByRole("button", { name: /Browser test process/ }).click();
+    assert.equal(await catalog.getByRole("combobox", { name: "Classification for data rule 1" }).inputValue(), "ExampleRestricted");
+    assert.equal(await catalog.getByRole("combobox", { name: "Privacy boundary", exact: true }).inputValue(), "ExamplePrivacy");
+    await catalog.getByRole("textbox", { name: "Label", exact: true }).fill("Renamed synthetic type");
+    await catalog.getByRole("button", { name: "Save type", exact: true }).click();
+    await catalog.getByRole("button", { name: "Close", exact: true }).click();
+
+    const saved = await exportModel(page);
+    assert.deepEqual(catalogReferenceSnapshot(saved.doc), expected);
+    assert.equal(saved.view.filter.dataClassification, "ExampleRestricted");
+    await upload(modelFixture(), "different.tma");
+    await upload(saved, "reopened.tma");
+    const reopened = await exportModel(page);
+    assert.deepEqual(reopened.doc, saved.doc);
+    assert.deepEqual(reopened.view, saved.view);
+    await page.waitForFunction(key => {
+      const autosave = JSON.parse(localStorage.getItem(key) ?? "null");
+      return autosave?.doc.data.some(item => item.classification === "ExampleRestricted");
+    }, autosaveKey);
+    await page.reload();
+    await page.getByRole("tab", { name: /^Data/ }).click();
+    assert.equal(await classification.inputValue(), "ExampleRestricted");
+    const recovered = await exportModel(page);
+    assert.deepEqual(catalogReferenceSnapshot(recovered.doc), expected);
+    assert.equal(recovered.view.filter.dataClassification, "ExampleRestricted");
+  });
+});
+
+test("regression: scenario visibility, parallel flows, sequence view, and native round-trip", async () => {
+  await harness.run("regression: model round-trip", async ({ page }) => {
+    assert.equal(await page.locator(".react-flow__edge").count(), 2);
+    assert.equal(await node(page, "n_archive").count(), 0);
+    await scenario(page).selectOption("s_archive");
+    await node(page, "n_archive").waitFor({ state: "visible" });
+    assert.equal(await node(page, "n_client").count(), 0);
+    await page.getByRole("button", { name: "Sequence", exact: true }).click();
+    const sequenceFlow = page.locator('.ps-seq-svg [data-seq-edge="e_archive"]');
+    await sequenceFlow.waitFor({ state: "visible" });
+    assert.match(await sequenceFlow.textContent(), /Archive payload/);
+    await page.getByRole("button", { name: "Diagram", exact: true }).click();
+    await scenario(page).selectOption("s_primary");
+    const exported = await exportModel(page);
+    assert.equal(exported.format, "secure-design-studio-diagram");
+    assert.equal(exported.version, 2);
+    const expected = modelFixture().doc;
+    assert.deepEqual(exported.doc.edges.map(({ id, source, target }) => ({ id, source, target })),
+      expected.edges.map(({ id, source, target }) => ({ id, source, target })));
+    for (const original of expected.scenarios) {
+      const actual = exported.doc.scenarios.find(item => item.id === original.id);
+      for (const key of ["nodeIds", "edgeIds", "edgeNumbers", "edgeRequestData", "edgeResponseData"]) {
+        assert.deepEqual(actual[key], original[key], `${original.name}.${key}`);
+      }
+    }
+    const empty = modelFixture();
+    for (const field of ["nodes", "edges", "scenarios", "boundaries", "data", "comments", "issues", "workItems"]) {
+      empty.doc[field] = [];
+    }
+    empty.view.activeScenarioId = null;
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "empty.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(empty)),
+    });
+    await until(async () => (await page.locator(".react-flow__node-process").count()) === 0 &&
+      (await page.locator(".react-flow__edge").count()) === 0, "model cleared before reopening");
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "roundtrip.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(exported)),
+    });
+    await until(() => page.locator(".react-flow__edge").count().then(count => count === 2), "reopened parallel flows");
+    assert.equal(await scenario(page).inputValue(), exported.view.activeScenarioId);
+    const reopened = await exportModel(page);
+    assert.deepEqual(reopened.doc, exported.doc, "Reopening restores the complete canonical model");
+    assert.deepEqual(reopened.view, exported.view, "Reopening restores the saved view");
+  });
+});
+
+test("regression: editing, undo, redo, autosave, and reload retain the current model", async () => {
+  await harness.run("regression: history and recovery", async ({ page }) => {
+    await node(page, "n_client").click();
+    await page.getByRole("textbox", { name: "Title", exact: true }).fill("Edited client");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await until(() => node(page, "n_client").innerText().then(text => text.includes("Client")), "undo title");
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await until(() => node(page, "n_client").innerText().then(text => text.includes("Edited client")), "redo title");
+    await page.waitForFunction(key => {
+      const saved = JSON.parse(localStorage.getItem(key) || "null");
+      return saved?.doc.nodes.some(item => item.id === "n_client" && item.title === "Edited client");
+    }, autosaveKey);
+    await page.reload();
+    await node(page, "n_client").waitFor({ state: "visible" });
+    assert.match(await node(page, "n_client").innerText(), /Edited client/);
+    assert.equal(await scenario(page).inputValue(), "s_primary");
+  });
+});
+
+test("regression: creating an edge is one undoable history action", async () => {
+  await harness.run("regression: edge creation history", async ({ page }) => {
+    const source = node(page, "n_client").locator(".react-flow__handle-right");
+    const target = node(page, "n_api").locator(".react-flow__handle-left");
+    const sourceBounds = await source.boundingBox();
+    const targetBounds = await target.boundingBox();
+    assert.ok(sourceBounds && targetBounds, "Connection handles are visible");
+
+    await page.mouse.move(
+      sourceBounds.x + sourceBounds.width / 2,
+      sourceBounds.y + sourceBounds.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      targetBounds.x + targetBounds.width / 2,
+      targetBounds.y + targetBounds.height / 2,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+
+    await until(() => page.locator(".react-flow__edge").count().then(count => count === 3),
+      "parallel edge created");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await until(() => page.locator(".react-flow__edge").count().then(count => count === 2),
+      "edge creation undone in one step");
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await until(() => page.locator(".react-flow__edge").count().then(count => count === 3),
+      "edge creation redone in one step");
+  });
+});
+
+test("regression: inert room fragments and editing without network connectivity", async () => {
+  await harness.run("regression: offline local-only behavior", async ({ page, context }) => {
+    assert.equal(new URL(page.url()).hash, "#room=synthetic-test-room&key=synthetic-test-key");
+    await context.setOffline(true);
+    await node(page, "n_client").click();
+    await page.getByRole("textbox", { name: "Title", exact: true }).fill("Offline client");
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) || "null")?.doc.nodes
+      .some(item => item.id === "n_client" && item.title === "Offline client"), autosaveKey);
+    const caches = await page.evaluate(async () => ({
+      storage: Object.keys(localStorage),
+      databases: (await indexedDB.databases()).map(database => database.name || ""),
+    }));
+    assert.ok(![...caches.storage, ...caches.databases].some(name => /(?:privsec|secure-design-studio):collab:/.test(name)));
+    assert.equal(await page.getByRole("menuitem", { name: /Start collaboration|Copy collaboration link/ }).count(), 0);
+  }, { hash: "#room=synthetic-test-room&key=synthetic-test-key" });
+});
+
+test("regression: light theme defaults, saved choices, and preference reset", async () => {
+  await harness.run("regression: light theme preferences", async ({ page }) => {
+    const settings = page.getByRole("button", { name: "Settings", exact: true });
+    const preferenceKey = "ps-ui-preferences-v2";
+    const isDark = () => page.locator(".ps-shell")
+      .evaluate(element => element.classList.contains("ps-theme-dark"));
+    assert.equal(await isDark(), false, "Fresh profiles default to light mode");
+
+    for (const dark of [true, false]) {
+      await settings.click();
+      const option = page.getByRole("menuitemcheckbox", { name: /Dark Theme/ });
+      await option.click();
+      await until(async () => await isDark() === dark, "chosen theme rendered");
+      assert.equal(await option.getAttribute("aria-checked"), String(dark));
+      await page.waitForFunction(({ key, dark }) =>
+        JSON.parse(localStorage.getItem(key) || "null")?.darkTheme === dark,
+      { key: preferenceKey, dark });
+      await page.reload();
+      await page.locator(".ps-shell").waitFor();
+      assert.equal(await isDark(), dark, "Explicit theme choices survive reload");
+    }
+
+    await settings.click();
+    await page.getByRole("menuitemcheckbox", { name: /Dark Theme/ }).click();
+    assert.equal(await isDark(), true);
+    await page.getByRole("menuitem", { name: "Reset all preferences", exact: true }).click();
+    await until(async () => !await isDark(), "Reset restores light mode");
+    await page.waitForFunction(key =>
+      JSON.parse(localStorage.getItem(key) || "null")?.darkTheme === false, preferenceKey);
+    await page.reload();
+    await page.locator(".ps-shell").waitFor();
+    assert.equal(await isDark(), false, "Reset light theme survives reload");
+  });
+});
+
+test("regression: light theme fallback for missing or invalid saved theme", async () => {
+  await harness.run("regression: light theme fallback", async ({ page }) => {
+    for (const raw of ['{"inspectorWidth":560}', '{"darkTheme":"true"}', "{invalid", "null"]) {
+      await page.evaluate(value => localStorage.setItem("ps-ui-preferences-v2", value), raw);
+      await page.reload();
+      await page.locator(".ps-shell").waitFor();
+      assert.equal(await page.locator(".ps-shell.ps-theme-dark").count(), 0,
+        "Missing, invalid or malformed preferences use the light default");
+    }
+  });
+});
+
+test("usability: File menu keyboard navigation and focus return", async () => {
+  await harness.run("usability: keyboard command navigation", async ({ page }) => {
+    const trigger = fileMenu(page);
+    await trigger.focus();
+    await page.keyboard.press("ArrowDown");
+    await page.getByRole("menu").waitFor({ state: "visible" });
+    await until(() => page.locator(":focus").innerText().then(text => /New/.test(text)), "first menu item focus");
+    await page.keyboard.press("ArrowDown");
+    await until(() => page.locator(":focus").innerText().then(text => /Open/.test(text)), "next menu item focus");
+    await page.keyboard.press("End");
+    await until(() => page.locator(":focus").innerText().then(text => /Compare/.test(text)), "last menu item focus");
+    await page.keyboard.press("Escape");
+    assert.equal(await trigger.getAttribute("aria-expanded"), "false");
+    await until(() => trigger.evaluate(element => element === document.activeElement), "File focus return");
+  });
+});
+
+test("usability: filters stage changes, cancel, apply with Enter, and clear immediately", async () => {
+  await harness.run("usability: staged filters", async ({ page }) => {
+    const trigger = page.getByRole("button", { name: /^Filter,/ });
+    await trigger.click();
+    let dialog = page.getByRole("dialog", { name: "Filter model" });
+    await dialog.getByRole("searchbox").fill("Client");
+    assert.equal(await page.locator(".react-flow__node-process").count(), 2);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await trigger.click();
+    dialog = page.getByRole("dialog", { name: "Filter model" });
+    assert.equal(await dialog.getByRole("searchbox").inputValue(), "");
+    await dialog.getByRole("searchbox").fill("Client");
+    await dialog.getByRole("searchbox").press("Enter");
+    await until(() => page.locator(".react-flow__node-process").count().then(count => count === 1), "applied filter");
+    assert.equal(await trigger.getAttribute("aria-label"), "Filter, 1 active");
+    await trigger.click();
+    await page.getByRole("button", { name: "Clear all", exact: true }).click();
+    await until(() => page.locator(".react-flow__node-process").count().then(count => count === 2), "cleared filter");
+    assert.equal(await dialog.isVisible(), true);
+    await page.keyboard.press("Escape");
+    assert.equal(await trigger.evaluate(element => element === document.activeElement), true);
+  });
+});
+
+const layouts = ["light", "dark"].flatMap(theme =>
+  [320, 375, 480, 768, 1024, 1366].map(width => ({ theme, width })));
+for (const { theme, width } of layouts) {
+  test(`usability: responsive reflow and reachable controls at ${width}px (${theme})`, async () => {
+    await harness.run(`usability: responsive controls at ${width}px (${theme})`, async ({ page, observations }) => {
+      await node(page, "n_client").click();
+      const settings = page.getByRole("button", { name: "Settings", exact: true });
+      await settings.click();
+      const themeOption = page.getByRole("menuitemcheckbox", { name: /Dark Theme/ });
+      if ((await themeOption.getAttribute("aria-checked") === "true") !== (theme === "dark")) {
+        await themeOption.click();
+      }
+      await until(() => page.locator(".ps-shell").evaluate(element => element.classList.contains("ps-theme-dark"))
+        .then(dark => dark === (theme === "dark")), "requested color theme");
+      observations.theme = theme;
+      if (await settings.getAttribute("aria-expanded") === "true") await settings.click();
+      const reopenBeforeResize = page.getByRole("button", { name: "Open inspector", exact: true });
+      if (await reopenBeforeResize.isVisible()) await reopenBeforeResize.click();
+      await page.setViewportSize({ width, height: 900 });
+      const close = page.getByRole("button", { name: "Close inspector", exact: true });
+      await close.waitFor({ state: "visible" });
+      await until(async () => {
+        observations.reflow = await page.evaluate(() => ({
+          viewport: window.innerWidth, scrollWidth: document.documentElement.scrollWidth,
+        }));
+        return observations.reflow.viewport === width && observations.reflow.scrollWidth <= width + 1;
+      }, `No page-level horizontal overflow at ${width}px`);
+      for (const locator of [close, fileMenu(page), scenario(page),
+        ...["Model", "Review", "View", "Settings"].map(name => page.getByRole("button", { name, exact: true })),
+        page.getByRole("button", { name: /^Filter,/ }),
+        page.getByRole("button", { name: "Zoom in", exact: true }),
+        page.getByRole("button", { name: "Zoom out", exact: true })]) {
+        const bounds = await locator.boundingBox();
+        assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 &&
+          bounds.x + bounds.width <= width + 1 && bounds.y + bounds.height <= 901,
+        `${locator} must be within the viewport at ${width}px`);
+        await locator.click({ trial: true });
+      }
+      const controls = await page.getByRole("group", { name: "Canvas zoom controls" }).boundingBox();
+      const canvas = await page.locator(".ps-canvas").boundingBox();
+      assert.ok(controls.x >= canvas.x && controls.x - canvas.x <= 24, "Zoom controls remain left anchored");
+      if (width <= 640) {
+        const inspector = await page.locator(".ps-inspector").boundingBox();
+        assert.ok(controls.y + controls.height <= inspector.y, "Zoom controls stay above the bottom sheet");
+      }
+      await close.click();
+      const reopen = page.getByRole("button", { name: "Open inspector", exact: true });
+      await until(() => reopen.evaluate(element => element === document.activeElement), "inspector focus return");
+      await reopen.click();
+      await close.waitFor({ state: "visible" });
+    });
+  });
+}
+
+test("usability: inspector keyboard tabs, pinning, and keyboard resizing", async () => {
+  await harness.run("usability: inspector interactions", async ({ page }) => {
+    await node(page, "n_client").click();
+    const properties = page.getByRole("tab", { name: "Properties", exact: true });
+    await properties.focus();
+    await page.keyboard.press("ArrowRight");
+    const edges = page.getByRole("tab", { name: /^Edges/ });
+    assert.equal(await edges.getAttribute("aria-selected"), "true");
+    await node(page, "n_api").click();
+    assert.equal(await edges.getAttribute("aria-selected"), "true", "Edges intentionally keeps its context on selection");
+    const issues = page.getByRole("tab", { name: /^Issues/ });
+    await issues.click();
+    await page.getByRole("button", { name: "Pin inspector tab", exact: true }).click();
+    await node(page, "n_client").click();
+    assert.equal(await issues.getAttribute("aria-selected"), "true");
+    await page.getByRole("button", { name: "Unpin inspector tab", exact: true }).click();
+    await node(page, "n_api").click();
+    await until(() => properties.getAttribute("aria-selected").then(value => value === "true"), "unpinned selection follows Properties");
+    const resize = page.getByRole("separator", { name: "Resize inspector" });
+    await resize.focus();
+    const before = Number(await resize.getAttribute("aria-valuenow"));
+    const minimum = Number(await resize.getAttribute("aria-valuemin"));
+    const maximum = Number(await resize.getAttribute("aria-valuemax"));
+    assert.ok(maximum > minimum, "Desktop inspector exposes a resizable range");
+    const grow = before < maximum;
+    const expected = grow ? Math.min(maximum, before + 16) : Math.max(minimum, before - 16);
+    await page.keyboard.press(grow ? "ArrowLeft" : "ArrowRight");
+    await until(() => resize.getAttribute("aria-valuenow").then(value => Number(value) === expected), "bounded keyboard resize");
+    const after = Number(await resize.getAttribute("aria-valuenow"));
+    assert.notEqual(after, before, "Keyboard resizing changes the width within its declared limits");
+    const rendered = await page.locator(".ps-inspector").boundingBox();
+    assert.ok(Math.abs(rendered.width - after) <= 2, "ARIA width agrees with the rendered width");
+  });
+});
+
+test("regression: deviations require and only allow explanation edits", async () => {
+  await harness.run("regression: deviations", async ({ page }) => {
+    assert.equal(await page.getByRole("tab", { name: /^Deviations/ }).count(), 0);
+    assert.equal(
+      await page.getByLabel("Quick actions").getByRole("button", { name: /^Deviations/ }).count(),
+      0,
+    );
+    await page.locator('button[aria-controls="ps-command-menu-review"]').click();
+    assert.equal(
+      await page.locator("#ps-command-menu-review")
+        .getByRole("menuitem", { name: /^Deviations/ }).count(),
+      0,
+    );
+    await page.locator('button[aria-controls="ps-command-menu-review"]').click();
+    await page.locator('button[aria-controls="ps-command-menu-view"]').click();
+    assert.equal(
+      await page.locator("#ps-command-menu-view")
+        .getByRole("menuitem", { name: "Deviations", exact: true }).count(),
+      0,
+    );
+    await page.locator('button[aria-controls="ps-command-menu-view"]').click();
+    const withDeviation = modelFixture();
+    withDeviation.doc.deviations = [{
+      id: "dev_imported",
+      key: "coverage:network-endpoint:imported.example.test",
+      kind: "network-endpoint",
+      title: "Imported endpoint deviation",
+      description: "Imported evidence details.",
+      explanation: "Imported reviewer explanation.",
+      status: "Active",
+      evidenceIds: ["network-record-imported"],
+      sampleCalls: [
+        { source: "api-service", destination: "https://one.example.test/v1/call", count: 12 },
+        { source: "worker-service", destination: "https://two.example.test/v2/call", count: 8 },
+        { source: "job-service", destination: "three.example.test", count: 3 },
+      ],
+      scenarioIds: [],
+      createdAt: 1,
+      updatedAt: 1,
+    }];
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "with-deviation.tma",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(withDeviation)),
+    });
+    const deviationsTab = page.getByRole("tab", { name: /^Deviations/ });
+    await deviationsTab.waitFor();
+    await page.getByLabel("Quick actions")
+      .getByRole("button", { name: /^Deviations/ }).waitFor();
+    await deviationsTab.click();
+    const importedRow = page.locator(".ps-deviation-row").filter({
+      hasText: "Imported endpoint deviation",
+    });
+    await importedRow.getByRole("button", {
+      name: "View sample calls",
+      exact: true,
+    }).click();
+    const sampleDialog = page.getByRole("dialog", { name: "Sample calls", exact: true });
+    await sampleDialog.getByText("https://one.example.test/v1/call", {
+      exact: true,
+    }).waitFor();
+    assert.equal(await sampleDialog.getByRole("row").count(), 4);
+    await sampleDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await importedRow.getByRole("button", {
+      name: "View sample calls",
+      exact: true,
+    }).waitFor();
+    await page.getByRole("button", { name: "Add deviation", exact: true }).click();
+    await page.getByLabel("Stable key", { exact: true }).fill(
+      "coverage:network-endpoint:api.example.test",
+    );
+    await page.locator(".ps-deviation-create select").selectOption("network-endpoint");
+    await page.getByLabel("Title", { exact: true }).fill("Missing external endpoint");
+    await page.getByLabel("Evidence details", { exact: true }).fill(
+      "Network evidence observed api.example.test.",
+    );
+    await page.getByLabel("Evidence IDs", { exact: true }).fill("network-record-123");
+    await page.getByRole("button", { name: "Create deviation", exact: true }).click();
+    await page.getByRole("alert").getByText("Deviation explanation is required.").waitFor();
+    await page.getByLabel(/^Explanation/).fill(
+      "Track until the endpoint and flow are represented.",
+    );
+    await page.getByRole("button", { name: "Create deviation", exact: true }).click();
+    await page.getByText("Missing external endpoint", { exact: true }).waitFor();
+    const row = page.locator(".ps-deviation-row").filter({
+      hasText: "Missing external endpoint",
+    });
+    assert.equal(await row.getByText(/^Key:/).count(), 0);
+    assert.equal(await row.getByText(/^Evidence:/).count(), 0);
+    await row.getByText("Network evidence observed api.example.test.", {
+      exact: true,
+    }).waitFor();
+    assert.equal(await row.getByRole("button", { name: "Edit", exact: true }).count(), 0);
+    assert.equal(await row.getByRole("button", { name: "Resolve", exact: true }).count(), 0);
+    assert.equal(await row.getByRole("button", { name: "Reopen", exact: true }).count(), 0);
+    assert.equal(await row.getByRole("button", { name: "Delete", exact: true }).count(), 0);
+    await row.getByText("Active", { exact: true }).waitFor();
+    await row.getByRole("button", { name: "Explain", exact: true }).click();
+    const editor = page.locator(".ps-deviation-row");
+    const explanation = editor.getByLabel(/^Explanation/);
+    await explanation.fill("Retain until the endpoint and flow are represented.");
+    await editor.getByRole("button", { name: "Save", exact: true }).click();
+    await row.getByText(
+      "Explanation: Retain until the endpoint and flow are represented.",
+      { exact: true },
+    ).waitFor();
+    const empty = modelFixture();
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "without-deviations.tma",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(empty)),
+    });
+    await until(
+      () => page.getByRole("tab", { name: /^Deviations/ }).count().then(count => count === 0),
+      "deviations tab hidden for empty model",
+    );
+    await until(
+      () => page.getByRole("tab", { name: "Properties", exact: true })
+        .getAttribute("aria-selected").then(value => value === "true"),
+      "inspector falls back after deviations disappear",
+    );
+  });
+});
