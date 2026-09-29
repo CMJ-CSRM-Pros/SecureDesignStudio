@@ -1,0 +1,9 @@
+[
+  { "id": "primary-application-flow", "label": "Primary application flow" },
+  { "id": "resource-application", "label": "Resource application" },
+  { "id": "network-endpoint", "label": "Network endpoint" },
+  { "id": "network-flow", "label": "Network flow" },
+  { "id": "key-vault-secret", "label": "Key Vault secret" },
+  { "id": "arm-resource", "label": "ARM resource" },
+  { "id": "other", "label": "Other" }
+]

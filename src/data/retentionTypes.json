@@ -1,0 +1,17 @@
+[
+  {
+    "id": "ProcessingNoStorage",
+    "label": "Processing only (no storage)",
+    "description": "Data is held only in memory for the duration of a request and is never written to durable storage."
+  },
+  {
+    "id": "StorageUnder48Hours",
+    "label": "Storage < 48 hours",
+    "description": "Data is persisted but deleted within 48 hours. Typically caches, short-lived audit buffers, or transient queues."
+  },
+  {
+    "id": "StorageOver48Hours",
+    "label": "Storage ≥ 48 hours",
+    "description": "Data is persisted for 48 hours or longer. Document the retention period and deletion behavior for the data and applicable obligations. This modeling bucket does not define a legal retention limit."
+  }
+]

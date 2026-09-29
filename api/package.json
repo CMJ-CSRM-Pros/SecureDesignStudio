@@ -1,0 +1,21 @@
+{
+  "name": "secure-design-studio-collab-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure Static Web Apps managed Functions for SecureDesignStudio collaboration. Issues short-lived Web Pub/Sub client tokens scoped to a single room.",
+  "main": "dist/collab-token/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "func start --port 7071 --cors http://localhost:5173"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.5.0",
+    "@azure/web-pubsub": "^1.1.3"
+  },
+  "devDependencies": {
+    "@azure/functions": "^3.6.0",
+    "@types/node": "^18.19.0",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "format":"secure-design-studio-diagram","version":2,
+  "doc":{
+    "version":1,
+    "nodeTypes":[{"id":"ExternalUser","label":"External user"},{"id":"WebApp","label":"Web application"},{"id":"AiGateway","label":"AI gateway"},{"id":"ModelEndpoint","label":"Model endpoint"},{"id":"VectorStore","label":"Vector store"},{"id":"Telemetry","label":"Telemetry service"}],
+    "nodes":[
+      {"id":"n_user","title":"Knowledge Worker","description":"Employee asks questions about uploaded documents.","type":"ExternalUser","serviceTreeId":"30000000-0000-4000-8000-000000000001","endpointRegex":"","position":{"x":20,"y":210}},
+      {"id":"n_app","title":"Document Assistant Web","description":"Uploads documents and displays generated answers.","type":"WebApp","serviceTreeId":"30000000-0000-4000-8000-000000000002","endpointRegex":"^https://docs.example.test","position":{"x":245,"y":210}},
+      {"id":"n_gateway","title":"AI Gateway","description":"Builds grounded prompts, applies content controls, and enforces tenant isolation.","type":"AiGateway","serviceTreeId":"30000000-0000-4000-8000-000000000003","endpointRegex":"^https://ai-gateway.example.test","position":{"x":485,"y":150}},
+      {"id":"n_model","title":"External Model Endpoint","description":"Managed generative model endpoint outside the application trust boundary.","type":"ModelEndpoint","serviceTreeId":"30000000-0000-4000-8000-000000000004","endpointRegex":"^https://model.example.test","position":{"x":750,"y":70}},
+      {"id":"n_vector","title":"Vector Store","description":"Stores document chunks and tenant-scoped embeddings.","type":"VectorStore","serviceTreeId":"30000000-0000-4000-8000-000000000005","endpointRegex":"","position":{"x":750,"y":225}},
+      {"id":"n_logs","title":"Prompt Telemetry","description":"Central logging service; risky scenario records full prompts and retrieved document text.","type":"Telemetry","serviceTreeId":"","endpointRegex":"^https://logs.example.test","position":{"x":750,"y":365}}
+    ],
+    "edges":[
+      {"id":"e_question","source":"n_user","target":"n_app","title":"Ask question","description":"User submits a question.","authenticationTypes":["UserWithAad"],"audience":"api://document-assistant","productionIdentity":{"kind":"AppId","appId":"31000000-0000-4000-8000-000000000001","tenant":"FirstParty"},"waypoints":[{"id":"wp1","x":130,"y":210}]},
+      {"id":"e_prompt","source":"n_app","target":"n_gateway","title":"Create grounded request","description":"Forwards the question with tenant and user context.","authenticationTypes":["S2SWithAadAndCdt"],"audience":"api://ai-gateway","constraints":"tenantId and userObjectId","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp2","x":365,"y":180}]},
+      {"id":"e_retrieve","source":"n_gateway","target":"n_vector","title":"Retrieve chunks","description":"Fetches tenant-scoped document chunks.","authenticationTypes":["S2SWithAad"],"audience":"api://vector-store","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp3","x":620,"y":210}]},
+      {"id":"e_generate","source":"n_gateway","target":"n_model","title":"Generate answer","description":"Sends grounded context to the model endpoint.","authenticationTypes":["S2SWithAad"],"audience":"api://model-endpoint","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp4","x":620,"y":105}]},
+      {"id":"e_log","source":"n_gateway","target":"n_logs","title":"Log prompt and context","description":"Intentionally risky telemetry exports full prompts, retrieved confidential text, and user identifiers without authentication.","authenticationTypes":["Unauthenticated"],"waypoints":[{"id":"wp5","x":620,"y":320}]}
+    ],
+    "boundaries":[
+      {"id":"b_tenant","type":"privacy","title":"Tenant data isolation boundary","position":{"x":205,"y":25},"size":{"width":620,"height":300}},
+      {"id":"b_ai","type":"security","title":"AI processing trust boundary","position":{"x":445,"y":45},"size":{"width":390,"height":240}}
+    ],
+    "scenarios":[
+      {"id":"s_secure","name":"Grounded tenant-safe answer","description":"Secure baseline uses scoped retrieval, managed identity, and excludes prompt content from telemetry.","nodeIds":["n_user","n_app","n_gateway","n_model","n_vector"],"edgeIds":["e_question","e_prompt","e_retrieve","e_generate"],"edgeNumbers":{"e_question":1,"e_prompt":2,"e_retrieve":3,"e_generate":4},"boundaryIds":["b_tenant","b_ai"],"nodeData":{"n_app":{"d_question":"ProcessingNoStorage"},"n_gateway":{"d_question":"ProcessingNoStorage","d_document":"ProcessingNoStorage"},"n_vector":{"d_document":"StorageOver48Hours"},"n_model":{"d_question":"ProcessingNoStorage","d_document":"ProcessingNoStorage"}},"edgeRequestData":{"e_question":["d_question"],"e_prompt":["d_question"],"e_retrieve":["d_question"],"e_generate":["d_question","d_document"]},"edgeResponseData":{"e_question":[],"e_prompt":["d_answer"],"e_retrieve":["d_document"],"e_generate":["d_answer"]}},
+      {"id":"s_risky","name":"Risky prompt telemetry","description":"Intentionally insecure: confidential document chunks and user prompts are copied to an unowned logging service with no authentication or retention decision.","nodeIds":["n_user","n_app","n_gateway","n_model","n_vector","n_logs"],"edgeIds":["e_question","e_prompt","e_retrieve","e_generate","e_log"],"edgeNumbers":{"e_question":1,"e_prompt":2,"e_retrieve":3,"e_generate":4,"e_log":5},"boundaryIds":["b_tenant","b_ai"],"nodeData":{"n_gateway":{"d_question":"ProcessingNoStorage","d_document":"ProcessingNoStorage"},"n_logs":{"d_question":"","d_document":""}},"edgeRequestData":{"e_question":["d_question"],"e_prompt":["d_question"],"e_retrieve":["d_question"],"e_generate":["d_question","d_document"],"e_log":["d_question","d_document","d_identity"]},"edgeResponseData":{"e_question":[],"e_prompt":[],"e_retrieve":["d_document"],"e_generate":["d_answer"],"e_log":[]}}
+    ],
+    "data":[
+      {"id":"d_question","name":"User prompt","classification":"EUPI","sample":"Synthetic question about a confidential document"},
+      {"id":"d_document","name":"Retrieved document chunks","classification":"Customer Content","sample":"Synthetic confidential policy excerpt"},
+      {"id":"d_identity","name":"User identity context","classification":"EUII","sample":"Synthetic tenant and user identifiers"},
+      {"id":"d_answer","name":"Generated answer","classification":"Customer Content","sample":"Synthetic grounded response"}
+    ],
+    "comments":[{"id":"c_prompt","scenarioId":"s_risky","targetKind":"edge","targetId":"e_log","text":"Ask about prompt injection, cross-tenant disclosure, logging minimization, and retention.","status":"Active","createdAt":1789000002000,"replies":[]}],
+    "issues":[],"workItems":[]
+  },
+  "view":{"activeScenarioId":"s_risky","filter":{"text":"","nodeType":"","authType":"","dataClassification":""}}
+}

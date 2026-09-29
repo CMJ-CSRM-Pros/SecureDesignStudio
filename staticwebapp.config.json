@@ -1,0 +1,21 @@
+{
+  "routes": [
+    {
+      "route": "/api/collab-token",
+      "methods": ["GET", "OPTIONS"],
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/design-assistant",
+      "methods": ["POST", "OPTIONS"],
+      "allowedRoles": ["authenticated"]
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/api/*", "/*.{js,css,svg,png,ico,json,map}"]
+  },
+  "globalHeaders": {
+    "Cache-Control": "no-cache"
+  }
+}

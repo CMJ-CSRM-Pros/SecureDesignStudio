@@ -427,3 +427,19 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# SecureDesignStudio reviewed source import
+# Preserve the Visual Studio scaffold above; append missing application rules.
+dist
+dist-single
+.vite
+tsconfig.tsbuildinfo
+out-test
+tmcExport.json
+privacyManagerExport.pmexp
+api/local.settings.json
+.sds/
+.sdsdata/
+.env
+.env.*
+internal/

@@ -1,0 +1,106 @@
+[
+  {
+    "id": "EntraDelegatedUserAccess",
+    "label": "Entra user",
+    "description": "Calls the receiving service with an Entra access token for a signed-in user and delegated permissions.",
+    "shortLabel": "Entra user",
+    "aliases": ["Microsoft Entra ID - delegated user access"],
+    "behavior": { "productionIdentity": "required", "audience": true, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "EntraApplicationOnlyAccess",
+    "label": "Entra app",
+    "description": "Calls the receiving service with an Entra access token for the application itself, without delegated user context.",
+    "shortLabel": "Entra app",
+    "aliases": ["Microsoft Entra ID - application-only access"],
+    "behavior": { "productionIdentity": "required", "audience": true, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "EntraOnBehalfOf",
+    "label": "Entra on-behalf-of (OBO)",
+    "description": "Exchanges an incoming user token for a token intended for a downstream service, preserving delegated user context.",
+    "shortLabel": "OBO",
+    "behavior": { "productionIdentity": "required", "audience": true, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "EntraManagedIdentity",
+    "label": "Managed identity",
+    "description": "An Azure-managed system-assigned or user-assigned identity obtains an Entra access token without a manually managed application secret.",
+    "shortLabel": "Managed identity",
+    "behavior": { "productionIdentity": "required", "audience": true, "constraints": false, "anonymous": false, "managedIdentity": true }
+  },
+  {
+    "id": "EntraFederatedWorkloadIdentity",
+    "label": "Federated workload identity",
+    "description": "Exchanges a trusted workload identity assertion for an Entra access token without a stored application secret or certificate.",
+    "shortLabel": "Federated identity",
+    "behavior": { "productionIdentity": "required", "audience": true, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "OAuthAccessToken",
+    "label": "OAuth token",
+    "description": "Uses an access token from another configured issuer; the receiving service validates its intended audience and permissions.",
+    "shortLabel": "OAuth",
+    "behavior": { "productionIdentity": "optional", "audience": true, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "ClientCertificateMtls",
+    "label": "Client certificate (mTLS)",
+    "description": "The calling service presents an X.509 client certificate directly to the receiving service during mutual TLS.",
+    "shortLabel": "mTLS",
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "ApiKey",
+    "label": "API key",
+    "description": "Presents a service-issued API or subscription key granting configured access, not delegated user identity.",
+    "shortLabel": "API key",
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "SharedKeyAuthorization",
+    "label": "Shared key",
+    "description": "Signs requests with a shared account key, such as Storage Shared Key; distinct from simply presenting an API key.",
+    "shortLabel": "Shared key",
+    "aliases": ["Shared key authorization"],
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "SharedAccessSignature",
+    "label": "Shared access signature (SAS)",
+    "description": "Uses a signed, scoped token. User-delegation, service and account SAS variants have different signers and capabilities. An unspecified legacy SAS is not assumed to be user delegation.",
+    "shortLabel": "SAS",
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "AnonymousAccess",
+    "label": "No authentication",
+    "description": "Provides no authentication proof. The receiving service must intentionally permit it.",
+    "shortLabel": "Anonymous",
+    "aliases": ["Anonymous access (no authentication)"],
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": true, "managedIdentity": false }
+  },
+  {
+    "id": "InternalProcessCall",
+    "label": "Internal process call",
+    "description": "Calls another component within the same process boundary. No particular authentication mechanism is required because the call does not cross that boundary.",
+    "shortLabel": "Internal",
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": false, "managedIdentity": false }
+  },
+  {
+    "id": "CustomAuthentication",
+    "label": "Custom method",
+    "description": "Uses an explicitly documented mechanism not covered above. Record how the caller proves identity and the receiving service validates it. This is not a blank or not-specified selection.",
+    "shortLabel": "Custom",
+    "aliases": ["Custom or other authentication"]
+  },
+  {
+    "id": "CertificateAuthentication",
+    "label": "Certificate authentication (legacy, ambiguous)",
+    "description": "Preserves a legacy certificate selection whose role is unspecified. Do not assume direct mTLS or certificate-based Entra token acquisition. Explicitly classify this flow when its contract is known.",
+    "shortLabel": "Cert",
+    "legacy": true,
+    "aliases": ["Certificate authentication"],
+    "behavior": { "productionIdentity": "optional", "audience": false, "constraints": false, "anonymous": false, "managedIdentity": false }
+  }
+]

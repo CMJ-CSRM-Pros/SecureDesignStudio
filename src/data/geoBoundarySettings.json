@@ -1,0 +1,24 @@
+[
+  {
+    "id": "DataKeptInGeo",
+    "label": "Data kept in geo",
+    "description": "All data stays inside the customer's selected geographic region — no cross-geo egress under any circumstances."
+  },
+  {
+    "id": "DataKeptInGeoUnlessIndicatedByCaller",
+    "label": "Data kept in geo unless otherwise indicated by calling service",
+    "instanceMustSpecify": true,
+    "description": "Default is in-geo, but the calling service can request cross-geo handling per request. Each instantiation must pick a concrete behavior."
+  },
+  {
+    "id": "DataKeptInGeoUnlessCustomerAllowsXGeo",
+    "label": "Data kept in geo unless customer allows cross-geo calls",
+    "requiresDescription": true,
+    "description": "Data stays in-geo by default; the customer can explicitly opt in to cross-geo flows via a documented control. Specify the exact opt-in mechanism."
+  },
+  {
+    "id": "DataNotKeptInGeo",
+    "label": "Data not kept in geo",
+    "description": "Data is processed or stored without geographic constraints. Requires explicit privacy review for any non-public data."
+  }
+]

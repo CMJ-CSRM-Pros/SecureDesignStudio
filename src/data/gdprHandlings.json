@@ -1,0 +1,22 @@
+[
+  {
+    "id": "NodeHandlesGdpr",
+    "label": "Node handles GDPR or facilitates the customer handling GDPR",
+    "description": "This node provides GDPR data subject rights (export, delete, rectify) directly, or surfaces an API that lets the customer fulfill them. See [GDPR DSR overview](https://learn.microsoft.com/compliance/regulatory/gdpr-data-subject-requests)."
+  },
+  {
+    "id": "NotInGDPRScope",
+    "label": "Node does not store data in GDPR scope",
+    "description": "This node does not store data in scope for GDPR"
+  },
+  {
+    "id": "CallingServiceResponsible",
+    "label": "Calling service is responsible for GDPR export / delete",
+    "description": "This node is a processor only. The calling service must propagate DSR requests and ensure end-to-end fulfillment."
+  },
+  {
+    "id": "Unknown",
+    "label": "Unknown",
+    "description": "Unknown handling. This is a placeholder until more information is known."
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "RetainedDaysRange",
+    "label": "Retained for at least X days but not more than Y days",
+    "requiresDayRange": true,
+    "description": "Data is held for a bounded window after the customer's subscription ends. Provide the minimum and maximum retention days. See [data retention guidance](https://learn.microsoft.com/compliance/regulatory/gdpr-dsr-azure)."
+  },
+  {
+    "id": "ControlledByCallingService",
+    "label": "Retention is fully controlled by the calling service",
+    "instanceMustSpecify": true,
+    "description": "This node does not enforce its own retention — the calling service is responsible. Each instantiation must declare the effective retention behavior."
+  }
+]

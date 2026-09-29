@@ -1,0 +1,14 @@
+{
+  "format": "secure-design-studio-service-configuration",
+  "version": 1,
+  "id": "example",
+  "name": "Example services",
+  "collaboration": {
+    "tokenEndpoint": "https://services.example.invalid/api/collab-token",
+    "appUrl": "https://diagram.example.invalid/app/"
+  },
+  "assistant": {
+    "hostedEndpoint": "https://services.example.invalid/api/design-assistant",
+    "standaloneEndpoint": "https://services.example.invalid/api/design-assistant"
+  }
+}

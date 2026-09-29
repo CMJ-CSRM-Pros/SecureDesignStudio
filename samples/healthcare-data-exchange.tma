@@ -1,0 +1,37 @@
+{
+  "format":"secure-design-studio-diagram","version":2,
+  "doc":{
+    "version":1,
+    "nodeTypes":[{"id":"ExternalUser","label":"External user"},{"id":"ClinicalApp","label":"Clinical application"},{"id":"ApiService","label":"API service"},{"id":"HealthRecordStore","label":"Health record store"},{"id":"PartnerSystem","label":"Partner system"}],
+    "nodes":[
+      {"id":"n_clinician","title":"Clinician","description":"Authorized clinician viewing a patient record.","type":"ExternalUser","serviceTreeId":"40000000-0000-4000-8000-000000000001","endpointRegex":"","position":{"x":25,"y":200}},
+      {"id":"n_portal","title":"Clinical Portal","description":"Hospital workforce application.","type":"ClinicalApp","serviceTreeId":"40000000-0000-4000-8000-000000000002","endpointRegex":"^https://clinical.example.test","position":{"x":255,"y":200}},
+      {"id":"n_fhir","title":"FHIR Exchange API","description":"Validates consent and exchanges clinical records.","type":"ApiService","serviceTreeId":"40000000-0000-4000-8000-000000000003","endpointRegex":"^https://fhir.example.test","position":{"x":510,"y":130}},
+      {"id":"n_ehr","title":"Electronic Health Record","description":"Primary clinical record store in the approved health-data region.","type":"HealthRecordStore","serviceTreeId":"40000000-0000-4000-8000-000000000004","endpointRegex":"","position":{"x":780,"y":70}},
+      {"id":"n_lab","title":"External Lab Partner","description":"Partner system receiving orders and returning results across an organization boundary.","type":"PartnerSystem","serviceTreeId":"","endpointRegex":"^https://lab.partner.test","position":{"x":780,"y":310}}
+    ],
+    "edges":[
+      {"id":"e_access","source":"n_clinician","target":"n_portal","title":"Open patient chart","description":"Clinician requests a patient chart.","authenticationTypes":["UserWithAad"],"audience":"api://clinical-portal","productionIdentity":{"kind":"AppId","appId":"41000000-0000-4000-8000-000000000001","tenant":"FirstParty"},"waypoints":[{"id":"wp1","x":140,"y":200}]},
+      {"id":"e_query","source":"n_portal","target":"n_fhir","title":"Query patient record","description":"Consent-aware record query.","authenticationTypes":["S2SWithAadAndCdt"],"audience":"api://fhir","constraints":"patientId, clinicianId, purposeOfUse","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp2","x":380,"y":165}]},
+      {"id":"e_record","source":"n_fhir","target":"n_ehr","title":"Read clinical record","description":"Retrieves the minimum clinical record needed.","authenticationTypes":["S2SWithAad"],"audience":"api://ehr","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp3","x":650,"y":95}]},
+      {"id":"e_lab","source":"n_fhir","target":"n_lab","title":"Send lab order","description":"Risky flow sends patient and test data to an external partner with a shared SAS credential.","authenticationTypes":["Sas"],"waypoints":[{"id":"wp4","x":650,"y":250}]},
+      {"id":"e_result","source":"n_lab","target":"n_fhir","title":"Return lab result","description":"Risky result callback has no declared authentication and no attached data.","authenticationTypes":["Unauthenticated"],"waypoints":[{"id":"wp5","x":650,"y":320}]}
+    ],
+    "boundaries":[
+      {"id":"b_health","type":"privacy","title":"Regulated health-data boundary","position":{"x":210,"y":25},"size":{"width":720,"height":390}},
+      {"id":"b_hospital","type":"security","title":"Hospital trust boundary","position":{"x":465,"y":45},"size":{"width":390,"height":200}}
+    ],
+    "scenarios":[
+      {"id":"s_secure","name":"Secure clinician record access","description":"Baseline workforce access with purpose constraints and no external disclosure.","nodeIds":["n_clinician","n_portal","n_fhir","n_ehr"],"edgeIds":["e_access","e_query","e_record"],"edgeNumbers":{"e_access":1,"e_query":2,"e_record":3},"boundaryIds":["b_health","b_hospital"],"nodeData":{"n_portal":{"d_patient":"ProcessingNoStorage"},"n_fhir":{"d_patient":"ProcessingNoStorage"},"n_ehr":{"d_patient":"StorageOver48Hours"}},"edgeRequestData":{"e_access":["d_identity"],"e_query":["d_identity"],"e_record":["d_identity"]},"edgeResponseData":{"e_access":[],"e_query":["d_patient"],"e_record":["d_patient"]}},
+      {"id":"s_risky","name":"Risky external lab exchange","description":"Intentionally insecure: regulated patient data crosses to an unowned partner using a shared SAS; the result callback is unauthenticated and undocumented.","nodeIds":["n_clinician","n_portal","n_fhir","n_ehr","n_lab"],"edgeIds":["e_access","e_query","e_record","e_lab","e_result"],"edgeNumbers":{"e_access":1,"e_query":2,"e_record":3,"e_lab":4,"e_result":5},"boundaryIds":["b_health","b_hospital"],"nodeData":{"n_fhir":{"d_patient":"ProcessingNoStorage"},"n_lab":{"d_patient":""}},"edgeRequestData":{"e_access":["d_identity"],"e_query":["d_identity"],"e_record":["d_identity"],"e_lab":["d_patient","d_test"],"e_result":[]},"edgeResponseData":{"e_access":[],"e_query":["d_patient"],"e_record":["d_patient"],"e_lab":[],"e_result":[]}}
+    ],
+    "data":[
+      {"id":"d_identity","name":"Clinician identity and purpose","classification":"EUII","sample":"Synthetic clinician ID and treatment purpose"},
+      {"id":"d_patient","name":"Patient clinical record","classification":"Customer Content","sample":"Synthetic patient demographics and clinical summary"},
+      {"id":"d_test","name":"Lab test order","classification":"EUPI","sample":"Synthetic test code and specimen metadata"}
+    ],
+    "comments":[{"id":"c_lab","scenarioId":"s_risky","targetKind":"edge","targetId":"e_lab","text":"Review consent, minimum necessary disclosure, partner identity, credential rotation, and breach impact.","status":"Active","createdAt":1789000003000,"replies":[]}],
+    "issues":[],"workItems":[]
+  },
+  "view":{"activeScenarioId":"s_risky","filter":{"text":"","nodeType":"","authType":"","dataClassification":""}}
+}

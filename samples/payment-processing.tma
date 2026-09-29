@@ -1,0 +1,37 @@
+{
+  "format": "secure-design-studio-diagram", "version": 2,
+  "doc": {
+    "version": 1,
+    "nodeTypes": [{"id":"ExternalUser","label":"External user"},{"id":"WebApp","label":"Web application"},{"id":"ApiService","label":"API service"},{"id":"Database","label":"Database"},{"id":"PaymentProvider","label":"Payment provider"}],
+    "nodes": [
+      {"id":"n_buyer","title":"Buyer","description":"Customer purchasing a product.","type":"ExternalUser","serviceTreeId":"10000000-0000-4000-8000-000000000001","endpointRegex":"","position":{"x":30,"y":210}},
+      {"id":"n_checkout","title":"Checkout Web App","description":"Internet-facing checkout application.","type":"WebApp","serviceTreeId":"10000000-0000-4000-8000-000000000002","endpointRegex":"^https://checkout.example.test","position":{"x":260,"y":210}},
+      {"id":"n_payment","title":"Payment API","description":"Creates payment intents and receives provider callbacks.","type":"ApiService","serviceTreeId":"10000000-0000-4000-8000-000000000003","endpointRegex":"^https://payments.example.test","position":{"x":510,"y":120}},
+      {"id":"n_ledger","title":"Transaction Ledger","description":"Stores payment status, order identifiers, and reconciliation records.","type":"Database","serviceTreeId":"10000000-0000-4000-8000-000000000004","endpointRegex":"","position":{"x":780,"y":70}},
+      {"id":"n_provider","title":"External Payment Provider","description":"Third-party card processor outside the production trust boundary.","type":"PaymentProvider","serviceTreeId":"","endpointRegex":"^https://pay.provider.test","position":{"x":780,"y":300}}
+    ],
+    "edges": [
+      {"id":"e_checkout","source":"n_buyer","target":"n_checkout","title":"Submit checkout","description":"Buyer submits order and payment token.","authenticationTypes":["UserWithAad"],"audience":"api://checkout","productionIdentity":{"kind":"AppId","appId":"20000000-0000-4000-8000-000000000001","tenant":"Customer"},"waypoints":[{"id":"wp1","x":145,"y":210}]},
+      {"id":"e_intent","source":"n_checkout","target":"n_payment","title":"Create payment intent","description":"Authenticated internal payment request.","authenticationTypes":["S2SWithAad"],"audience":"api://payment","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp2","x":385,"y":165}]},
+      {"id":"e_provider","source":"n_payment","target":"n_provider","title":"Authorize payment","description":"Sends tokenized payment details to the processor.","authenticationTypes":["Certificate"],"waypoints":[{"id":"wp3","x":650,"y":220}]},
+      {"id":"e_ledger","source":"n_payment","target":"n_ledger","title":"Record transaction","description":"Writes payment status to the ledger.","authenticationTypes":["S2SWithAad"],"audience":"https://database.windows.net","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp4","x":650,"y":95}]},
+      {"id":"e_callback","source":"n_provider","target":"n_payment","title":"Payment callback","description":"Intentionally risky unsigned callback that can alter payment status.","authenticationTypes":["Unauthenticated"],"waypoints":[{"id":"wp5","x":650,"y":300}]}
+    ],
+    "boundaries": [
+      {"id":"b_pci","type":"privacy","title":"Payment data boundary","position":{"x":225,"y":30},"size":{"width":700,"height":390}},
+      {"id":"b_prod","type":"security","title":"Production trust boundary","position":{"x":470,"y":45},"size":{"width":390,"height":200}}
+    ],
+    "scenarios": [
+      {"id":"s_secure","name":"Secure card payment","description":"Tokenized payment with authenticated internal calls and a verified provider integration.","nodeIds":["n_buyer","n_checkout","n_payment","n_ledger","n_provider"],"edgeIds":["e_checkout","e_intent","e_provider","e_ledger"],"edgeNumbers":{"e_checkout":1,"e_intent":2,"e_provider":3,"e_ledger":4},"boundaryIds":["b_pci","b_prod"],"nodeData":{"n_checkout":{"d_order":"ProcessingNoStorage"},"n_payment":{"d_token":"ProcessingNoStorage"},"n_provider":{"d_token":"ProcessingNoStorage"},"n_ledger":{"d_transaction":"StorageOver48Hours"}},"edgeRequestData":{"e_checkout":["d_order"],"e_intent":["d_order"],"e_provider":["d_token"],"e_ledger":["d_transaction"]},"edgeResponseData":{"e_checkout":[],"e_intent":["d_transaction"],"e_provider":["d_transaction"],"e_ledger":[]}},
+      {"id":"s_risky","name":"Risky provider callback","description":"Intentionally insecure: unauthenticated callback crosses the external trust boundary, carries transaction data, and the provider has no owner.","nodeIds":["n_buyer","n_checkout","n_payment","n_ledger","n_provider"],"edgeIds":["e_checkout","e_intent","e_provider","e_callback","e_ledger"],"edgeNumbers":{"e_checkout":1,"e_intent":2,"e_provider":3,"e_callback":4,"e_ledger":5},"boundaryIds":["b_pci","b_prod"],"nodeData":{"n_checkout":{"d_order":"ProcessingNoStorage"},"n_payment":{"d_transaction":""},"n_provider":{"d_transaction":""},"n_ledger":{"d_transaction":"StorageOver48Hours"}},"edgeRequestData":{"e_checkout":["d_order"],"e_intent":["d_order"],"e_provider":["d_token"],"e_callback":["d_transaction"],"e_ledger":["d_transaction"]},"edgeResponseData":{"e_checkout":[],"e_intent":[],"e_provider":[],"e_callback":[],"e_ledger":[]}}
+    ],
+    "data": [
+      {"id":"d_order","name":"Order details","classification":"Customer Content","sample":"Synthetic order identifier and amount"},
+      {"id":"d_token","name":"Payment token","classification":"EUPI","sample":"Synthetic token, never a real card number"},
+      {"id":"d_transaction","name":"Transaction status","classification":"Customer Content","sample":"Synthetic authorization status and provider reference"}
+    ],
+    "comments":[{"id":"c_callback","scenarioId":"s_risky","targetKind":"edge","targetId":"e_callback","text":"Ask Design Assistant how spoofing and replay attacks could affect this callback.","status":"Active","createdAt":1789000001000,"replies":[]}],
+    "issues":[],"workItems":[]
+  },
+  "view":{"activeScenarioId":"s_risky","filter":{"text":"","nodeType":"","authType":"","dataClassification":""}}
+}

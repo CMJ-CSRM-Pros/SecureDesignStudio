@@ -1,0 +1,18 @@
+[
+  {
+    "id": "EntraApplicationOnlyWithForwardedUserContext",
+    "names": ["App + user context", "Application-only access with forwarded user context (custom)"]
+  },
+  {
+    "id": "EntraApplicationOnlyWithCdt",
+    "names": ["Constrained delegation (CDT)", "Application-only access with constrained delegation token (CDT)"]
+  },
+  {
+    "id": "ProtectedForwardedAccessToken",
+    "names": ["PFAT", "Protected Forwarded Access Token (PFAT)"]
+  },
+  {
+    "id": "PopWithProtectedForwardedToken",
+    "names": ["PoP + PFT", "POP+PFT"]
+  }
+]

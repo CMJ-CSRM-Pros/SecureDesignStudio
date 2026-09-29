@@ -1,0 +1,7 @@
+{
+  "id": "sds-default-classifications",
+  "name": "Default classifications",
+  "revision": "1.1.0",
+  "defaultId": "EUII",
+  "guidanceUrl": "https://learn.microsoft.com/en-us/purview/purview-privacy"
+}
