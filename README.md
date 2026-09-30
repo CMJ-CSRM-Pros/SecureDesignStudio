@@ -1,5 +1,5 @@
 # SecureDesignStudio
-
+.
 **Public-source candidate documentation.** Publication and release clearance
 are pending; this file does not announce an available release.
 
