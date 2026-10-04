@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { useBreachSimulation } from "../breachSimulation";
 import { nodeTypeIconUrl } from "../nodeTypeIcons";
+import { DFD_ROLE_LABELS, DFD_SCOPE_LABELS, nodeDfdSummary, resolveNodeReviewScope } from "../dfdSemantics";
 import {
   NODE_COLORS,
   authTypeLabel,
@@ -346,7 +347,7 @@ function InnerDiagram() {
   const commentCounts = useMemo(() => {
     const counts = new Map<string, { active: number; resolved: number }>();
     for (const c of doc.comments) {
-      if (activeScenarioId && c.scenarioId !== activeScenarioId) continue;
+      if (activeScenario && c.scenarioId !== activeScenario.id) continue;
       const key = `${c.targetKind}:${c.targetId}`;
       const cur = counts.get(key) ?? { active: 0, resolved: 0 };
       if (c.status === "Active") cur.active += 1;
@@ -354,7 +355,7 @@ function InnerDiagram() {
       counts.set(key, cur);
     }
     return counts;
-  }, [doc.comments, activeScenarioId]);
+  }, [doc.comments, activeScenario]);
 
   // Per-target issue counts. An issue is "visible" on a target in a given
   // scenario if (a) the scenario is in its scenarioIds list, OR (b) the
@@ -363,10 +364,10 @@ function InnerDiagram() {
   const issueCounts = useMemo(() => {
     const counts = new Map<string, { active: number; resolved: number }>();
     for (const i of doc.issues) {
-      if (activeScenarioId) {
+      if (activeScenario) {
         const applies =
           i.scenarioIds.length === 0 ||
-          i.scenarioIds.includes(activeScenarioId);
+          i.scenarioIds.includes(activeScenario.id);
         if (!applies) continue;
       }
       const key = `${i.targetKind}:${i.targetId}`;
@@ -376,7 +377,7 @@ function InnerDiagram() {
       counts.set(key, cur);
     }
     return counts;
-  }, [doc.issues, activeScenarioId]);
+  }, [doc.issues, activeScenario]);
 
   const edgeClassificationVisuals = useMemo(() => {
     const presentations = new Map(classificationLibrary.classifications.flatMap(
@@ -451,11 +452,14 @@ function InnerDiagram() {
       zIndex: -1,
     }));
     const processNodes: RfNode[] = visibleNodes.map((n) => {
+      const scope = resolveNodeReviewScope(n, activeScenario, doc.nodeTypes);
+      const semanticSummary = nodeDfdSummary(n, doc, activeScenario);
       const cc = commentCounts.get(`node:${n.id}`) ?? { active: 0, resolved: 0 };
       const ic = issueCounts.get(`node:${n.id}`) ?? { active: 0, resolved: 0 };
       return {
         id: n.id,
         type: "process",
+        ariaLabel: `${n.title || "Untitled node"}. ${semanticSummary}`,
         position: n.position,
         data: {
           title: n.title,
@@ -463,6 +467,11 @@ function InnerDiagram() {
           typeLabel: nodeTypeLabel(n.type, doc.nodeTypes),
           iconUrl: nodeTypeIconUrl(n.type, doc.nodeTypes),
           color: n.color,
+          dfdRole: scope.role.role,
+          dfdLabel: DFD_ROLE_LABELS[scope.role.role],
+          scopeDisposition: scope.disposition,
+          scopeLabel: activeScenario ? DFD_SCOPE_LABELS[scope.disposition] : "Scope varies by scenario",
+          semanticSummary,
           commentActive: cc.active,
           commentResolved: cc.resolved,
           issueActive: ic.active,
@@ -491,7 +500,8 @@ function InnerDiagram() {
     issueCounts,
     onBoundaryResizeStart,
     onBoundaryResizeEnd,
-    doc.nodeTypes,
+    doc,
+    activeScenario,
     activeReferenceKeys,
     currentReferenceKey,
     simulationPlan,

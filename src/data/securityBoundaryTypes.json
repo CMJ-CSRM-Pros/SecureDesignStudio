@@ -23,5 +23,30 @@
     "id": "UserTenantTrust",
     "label": "User Tenant Trust Boundary",
     "description": "Trust boundary between the end user and their tenant — separates user-controlled context (identity, device, session) from tenant-controlled resources, policies, and data governance."
+  },
+  {
+    "id": "VNet",
+    "label": "VNet",
+    "description": "A modeled virtual-network perimeter. Actual isolation depends on configured connectivity and access controls."
+  },
+  {
+    "id": "Subnet",
+    "label": "Subnet",
+    "description": "A modeled subnet or network-segmentation perimeter. A subnet alone does not establish enforced isolation."
+  },
+  {
+    "id": "Container",
+    "label": "Container",
+    "description": "A container execution perimeter. Actual separation depends on runtime, host, privilege, and shared-resource configuration."
+  },
+  {
+    "id": "Process",
+    "label": "Process",
+    "description": "A process or address-space perimeter. Cross-process access depends on operating-system and application controls; this subtype is not a node DFD role."
+  },
+  {
+    "id": "Machine",
+    "label": "Machine",
+    "description": "A host or virtual-machine perimeter. Network access and host controls determine actual separation."
   }
 ]

@@ -55,13 +55,21 @@ async function measureAllNodes(page, count, restoreScenario) {
   await scenario.selectOption("");
   await page.waitForFunction(({ count, key }) => {
     const elements = [...document.querySelectorAll(".react-flow__node-process")];
-    const doc = JSON.parse(localStorage.getItem(key) || "null")?.doc;
-    return elements.length === count && elements.every(element => {
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    const doc = saved?.doc;
+    return document.querySelector('select[aria-label="Scenario"]')?.value === "" &&
+      saved?.view?.activeScenarioId === null &&
+      elements.length === count && elements.every(element => {
       const node = doc?.nodes.find(node => node.id === element.getAttribute("data-id"));
       return node?.size?.width === element.offsetWidth && node?.size?.height === element.offsetHeight;
     });
   }, { count, key: autosaveKey });
   await scenario.selectOption(restoreScenario);
+  await page.waitForFunction(({ key, restoreScenario }) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    return document.querySelector('select[aria-label="Scenario"]')?.value === restoreScenario &&
+      saved?.view?.activeScenarioId === (restoreScenario || null);
+  }, { key: autosaveKey, restoreScenario });
 }
 
 export function registerJsonImportContracts({ getHarness, exportModel }) {

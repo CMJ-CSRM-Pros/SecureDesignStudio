@@ -191,6 +191,68 @@ save `.tma` in an approved location before replacing or sharing a model.
 
 ## 4. Advanced features
 
+### DFD roles and scenario scope
+
+A service **Type** and its **DFD role** are independent. In **Model > Node Type
+Catalog**, set Default DFD role to Process, Data Store, or External Interactor.
+Azure SQL has an explicit Data Store default. Other unclassified services use
+the conservative Process fallback; there is no title/icon-based guessing.
+In node **Properties > General / Security**, choose **Use type default** or an
+explicit override. A SQL node can be Process without changing its service type,
+identity, endpoint, or policy. An explicit override survives later type changes.
+
+For an active scenario, enter an **Out-of-scope reason** on the node. Blank or
+whitespace means in scope. The reason applies only to that scenario; duplicating
+a scenario copies its reasons independently. Show all displays per-scenario
+context and does not provide a global scope editor. Removing membership keeps a
+dormant reason for an existing node; deleting the node removes its reasons.
+
+Clear an ordinary editable reason by deleting its text. Recovery-only actions
+remain for nonblank inactive External Interactor reasons and unrecognized
+imported evidence; clearing them is explicit and undoable.
+
+The application's **Undo** and **Redo** treat a continuous scope-reason edit
+as one unit and keep its node editor visible while that node remains valid in
+the same active scenario. Leaving the field or editing another field starts a
+separate gesture; selected-text replacement and switching between typing and
+deletion are separate edits. Enter still inserts a newline and starts a new
+group. Other model actions are not folded into the scope edit. **Ctrl/Cmd+Z
+inside the text field** remains the browser's native text undo, not the app's
+history command. Editor context is local to the current session: restored or
+imported history does not carry this context and does not promise to reopen
+the same editor.
+
+External Interactors are black boxes, **never effectively out of scope**.
+Imported contradictory reasons remain visible but inactive and can be cleared.
+Unknown roles and malformed fields are retained as bounded recovery evidence,
+with visible diagnostics; they cannot silently exclude node interiors. Older
+models remain Process until explicitly adopting defaults, even when a newly
+installed library gives their service a different role.
+
+Canvas shapes, textual role/scope labels, dashed out-of-scope borders, sequence
+headers, edge context and reports carry the semantics without hiding graph
+content. **Scope appearance (this browser)** in Properties changes local accents
+only; shapes and labels remain and preferences are not collaborative model data.
+
+Only optional **LLM review** applies scope exclusions: Process/Data Store
+interiors are included unless out of scope; External Interactor interiors are
+excluded. All flows remain included except External Interactor connected to an
+out-of-scope node, in either direction. Request/response data use the same
+eligibility. Included crossing flows retain minimal endpoint identity context,
+not the excluded node's description, retention or other interior details.
+Missing endpoints are structural gaps, not successful review.
+**Analyze's deterministic checks are unchanged.** Scope edits do not delete,
+resolve or re-rate existing/manual findings.
+
+Native `.tma`, autosave/history, standalone HTML, semantic comparison and
+compatible Yjs peers retain the model's roles and per-scenario reasons.
+Node-catalog packages carry type role defaults, not node overrides or
+scenario scope reasons. Use clients
+with this feature on every peer: older normalizers can discard these fields.
+Concurrent changes to one scenario's reason map use the existing atomic-map
+Yjs behavior (one whole map wins, not per-node/text merging). Native `.tma`
+remains authoritative; external formats may omit these semantics.
+
 ### Reuse scenarios without duplicating services
 
 Use **Model > Duplicate current scenario** or **New scenario > Start from**,
@@ -228,6 +290,52 @@ Saved diagram definitions do not overwrite your library: resolve conflicts
 explicitly. Never infer direct mTLS from legacy certificate authentication.
 The [library contract](authentication-library.md) covers stable IDs,
 safe deletion, Undo/Redo, and compatibility.
+
+### Document required flow access rights
+
+Select a flow and open **Properties > General / Security > Required access
+rights** to record an Azure RBAC role or rights such as read/write/execute.
+This is optional declared intent, not verification of deployed grants or
+compliance. Authentication and production identity remain independent.
+The same flow shares its text across all scenarios; parallel flows have
+separate values. Blank means unspecified, not no rights required. The limit
+is 4,000 UTF-16 code units; some characters count as two. Invalid edits are
+rejected, not shortened.
+
+Save `.tma` or portable application HTML to retain the exact text and newlines.
+The HTML review report displays it in full with its flow. Use current editing
+clients and keep a native backup: older readers can discard this field.
+TM7, VSDX and PNG are not full-metadata backups. The
+[TM7 loss preview](tm7-compatibility.md#intentional-losses) reports nonblank
+rights omitted from exported flows; it does not map them to native permissions.
+
+### Document boundary network intent
+
+Select a security boundary and open **Properties** to edit **Inbound Allow**,
+**Inbound Deny**, **Outbound Allow**, and **Outbound Deny**. These four optional
+multiline values are plain-text declared intent, not parsed firewall rules,
+verified enforcement or compliance. Blank means undocumented. Text and
+newlines are retained without a field-specific length or network-syntax limit;
+non-text saved values produce an explicit recovery error rather than coercion.
+
+Notes belong to the boundary instance: the same ID shares them across scenarios.
+Ordinary new boundaries start blank and never infer a source. Scenario Duplicate
+shares boundary IDs; it does not create independent boundary copies. There is
+no new source selector, Duplicate command or inheritance mechanism.
+
+Switching to Privacy retains the notes as inactive native data, hides their
+editors and excludes them from reports and Assistant context. Switching back
+to Security restores access. Unrelated title, geometry and subtype edits keep
+the notes. Active security notes may accompany an explicitly requested
+Assistant review; editing them does not trigger an AI call.
+
+Save `.tma` or portable application HTML for a complete backup. Review reports
+show active notes as escaped multiline text. Use current editing clients:
+older readers may discard these fields. TM7, VSDX and PNG do not preserve this
+metadata. The [TM7 loss preview](tm7-compatibility.md#intentional-losses) counts
+distinct exported security boundaries with nonblank notes without displaying
+their contents or inventing native network fields. Privacy boundaries and
+objects outside all scenarios retain their existing separate omission notices.
 
 ### Model privacy and lifecycle
 
@@ -271,13 +379,25 @@ responsibility, and Unknown/deferred values with the owner.
 
 ### Navigate a larger model
 
-Core boundary choices are Geo boundary, IFrame, CSP, Azure, User browser and
-User Tenant Trust. Organization compliance/deployment perimeters and the ESTS
+Core privacy boundaries offer Geo boundary. Core security choices are IFrame,
+CSP, Azure, User browser, User Tenant Trust, VNet, Subnet, Container, Process,
+and Machine. Select a boundary and use **Properties > Security subtype** to
+choose its type and read its description. New security boundaries still
+default to IFrame. A subtype describes intended separation, not proof that
+isolation is enforced; the Process boundary subtype is distinct from a node's
+DFD role.
+
+Organization compliance/deployment perimeters and the ESTS
 evidence-kind label are available for new selections only when their library
 is installed. Saved values retain their labels/descriptions or appear as
 unresolved IDs; they are not silently replaced with generic choices. A saved
-definition does not install a library. Classification defaults are unchanged
-by this boundary/evidence-label extraction.
+definition does not install a library. Saved definitions take precedence over
+same-ID installed definitions; **Saved catalog definitions** reports conflicting
+labels or descriptions without replacing the saved meaning. Without a saved
+snapshot, an available same-ID definition supplies the current meaning; this
+does not recover an absent author's original description. With neither a
+snapshot nor an available definition, the ID remains unresolved. See
+[Custom Libraries](custom-libraries.md) for the portable-definition contract.
 
 **Filter** stages text, node-type, auth, and classification choices until
 **Apply**. Cancel/Escape discards drafts; **Clear all** immediately clears
@@ -330,7 +450,7 @@ AI Analysis and Chat require a specific scenario in the top-bar **Scenario**
 selector. **(Show all)** displays the whole diagram but does not provide an AI
 analysis scope. Native `.tma` files preserve this view choice, so a valid model
 can reopen with Assistant actions disabled. The Assistant notice explains how
-to select a scenario, or create one through **File > New scenario** when none
+to select a scenario, or create one through **Model > New scenario** when none
 exist. Selecting a scenario removes this notice; separate endpoint/local-mode
 restrictions still apply.
 

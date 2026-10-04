@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import { IssueRow } from "./IssueRow";
+import { AddThreatNote } from "./AddThreatNote";
 import { ISSUE_NOT_EVALUATED_LABELS, type PsIssue } from "../types";
 
 type StatusFilter = "all" | "active" | "resolved";
@@ -49,6 +50,7 @@ export function AllIssuesPanel({ embedded = false }: { embedded?: boolean }) {
         if (
           !i.title.toLowerCase().includes(q) &&
           !i.description.toLowerCase().includes(q) &&
+          !(i.justification ?? "").toLowerCase().includes(q) &&
           !(i.kind && i.notEvaluatedReason && ISSUE_NOT_EVALUATED_LABELS[i.notEvaluatedReason].toLowerCase().includes(q)) &&
           !i.replies.some((r) => r.text.toLowerCase().includes(q))
         ) {
@@ -179,6 +181,9 @@ export function AllIssuesPanel({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       <div className="ps-allcomments-body">
+        {selection && (selection.kind === "node" || selection.kind === "edge") ? (
+          <AddThreatNote targetKind={selection.kind} targetId={selection.id} />
+        ) : <p className="ps-description-below">Select a node or flow to add a threat note.</p>}
         {counts.notEvaluated > 0 && (
           <p className="ps-issue-evaluation" role="status">
             {counts.notEvaluated} not re-evaluated across all issues. Active/Resolved is the review status, not proof of a complete analysis.

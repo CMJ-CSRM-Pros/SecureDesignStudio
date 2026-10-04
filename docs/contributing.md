@@ -31,8 +31,8 @@ customer/service exports out of fixtures.
 | Service configuration | The explicit configuration matrix in the browser guide and `service-build.json` verification |
 
 `test:runtime` is the agent-independent pure application suite. In the public
-package, `test:authentication` is an alias for it. Companion integrations have
-their own test command and are not required to run shared runtime tests.
+package, `test:authentication` is an alias for it. Shared runtime tests require
+no optional integrations.
 There is no generic `npm test` or lint script.
 
 See the [browser guide](../tests/browser/README.md) for exact coverage,

@@ -15,6 +15,10 @@ import { registerTaxonomyContracts } from "./taxonomy-contracts.mjs";
 import { registerPmexpContracts } from "./pmexp-contracts.mjs";
 import { registerJsonImportContracts } from "./json-import-contracts.mjs";
 import { registerProvenanceContracts } from "./provenance-contracts.mjs";
+import { registerDfdContracts } from "./dfd-contracts.mjs";
+import { registerTm7Contracts } from "./tm7-contracts.mjs";
+import { registerThreatNoteContracts } from "./threat-note-contracts.mjs";
+import { registerSampleContracts } from "./sample-contracts.mjs";
 
 let harness;
 before(async () => { harness = await startHarness(); });
@@ -51,6 +55,10 @@ registerTaxonomyContracts({ getHarness: () => harness, exportModel });
 registerPmexpContracts({ getHarness: () => harness, exportModel });
 registerJsonImportContracts({ getHarness: () => harness, exportModel });
 registerProvenanceContracts({ getHarness: () => harness, exportModel });
+registerDfdContracts({ getHarness: () => harness, exportModel });
+registerTm7Contracts({ getHarness: () => harness, exportModel });
+registerThreatNoteContracts({ getHarness: () => harness, exportModel });
+registerSampleContracts({ getHarness: () => harness, exportModel });
 
 test("usability: service disclosure reflects credential-free local configuration without destinations or requests", async () => {
   await harness.run("usability: local service disclosure", async ({ page }) => {

@@ -1,10 +1,8 @@
 # Third-party provenance and notices
 
-The prepared public first-party source uses the owner-approved MIT license,
-copyright Microsoft Corporation. That license does not replace the separate
-terms below or grant trademark rights. Publication approval is separate from
-license selection; the private companion's licensing is not changed by the
-public candidate.
+Public first-party source is licensed under MIT, copyright Microsoft
+Corporation. That license does not replace the separate component and icon
+terms below or grant trademark rights.
 
 ## Runtime dependency notices
 

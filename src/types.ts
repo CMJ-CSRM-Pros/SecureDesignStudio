@@ -259,8 +259,13 @@ export interface AllowedDataType {
   action: AllowedDataAction;
 }
 
+export type DfdRole = "Process" | "DataStore" | "ExternalInteractor";
+export interface InvalidDfdValue { invalid: string; truncated?: true }
+export type DfdValue = string | InvalidDfdValue;
+
 export interface NodeTypeDef {
   id: NodeType;
+  defaultDfdRole?: DfdValue;
   // User-facing label shown in dropdowns. May be the same as id for legacy
   // entries, but distinct from id so labels can be edited without breaking
   // references on existing nodes.
@@ -314,6 +319,7 @@ export interface NodeTypeRef {
 
 export function emptyNodeTypeDefinition(): NodeTypeDefinition {
   return {
+    defaultDfdRole: "Process",
     serviceTreeId: "",
     endpointRegex: "^$",
     templateHints: [],
@@ -329,6 +335,7 @@ export function emptyNodeTypeDefinition(): NodeTypeDefinition {
 
 interface MicrosoftCloudNodeTypeCatalogEntry {
   id: string;
+  defaultDfdRole?: DfdRole;
   label: string;
   category: string;
   catalogSource: string;
@@ -680,6 +687,9 @@ export interface Size {
 
 export interface PsNode {
   id: string;
+  dfdRoleOverride?: DfdValue;
+  // Pinned before catalog hydration. False marks an authored adoption of defaults.
+  dfdRoleLegacy?: boolean;
   metadata?: Record<string, string>;
   metadataFields?: MetadataField[];
   title: string;
@@ -820,6 +830,20 @@ export interface PsWorkItem {
   link: string;
 }
 
+export const REQUIRED_ACCESS_RIGHTS_MAX_LENGTH = 4000;
+
+export function normalizeRequiredAccessRights(value: unknown, edgeId?: string): string | undefined {
+  if (value == null || value === "") return undefined;
+  if (typeof value !== "string" || value.length > REQUIRED_ACCESS_RIGHTS_MAX_LENGTH) {
+    throw new Error(`Edge ${edgeId ?? "(unidentified)"}: requiredAccessRights must be text of at most ${REQUIRED_ACCESS_RIGHTS_MAX_LENGTH} UTF-16 code units. Correct the field and retry; no text was truncated.`);
+  }
+  return value;
+}
+
+export function formatRequiredAccessRights(value: string | undefined): string {
+  return value?.trim() ? value : "";
+}
+
 export interface PsEdge {
   id: string;
   metadata?: Record<string, string>;
@@ -830,6 +854,9 @@ export interface PsEdge {
   targetHandle?: string;
   title: string;
   description: string;
+  // Declared design intent, shared by every scenario using this edge.
+  // Missing or blank is unspecified, not a claim that no rights are needed.
+  requiredAccessRights?: string;
   // Stored as an array for file compatibility, but authored flows select at
   // most one method. Older imports with multiple values remain recoverable
   // and are flagged until the user chooses the method the call actually uses.
@@ -867,12 +894,36 @@ export interface PsBoundary {
   // Subtype id from SECURITY_BOUNDARY_TYPE_DEFS. Only meaningful when
   // `type === "security"`; mirrors privacySubtype for the security family.
   securitySubtype?: string;
+  // Shared instance notes. Retained, but inactive, on privacy boundaries.
+  inboundAllow?: string;
+  inboundDeny?: string;
+  outboundAllow?: string;
+  outboundDeny?: string;
   title: string;
   position: Position;
   size: Size;
   // Nodes physically contained by this boundary. A node may belong to
   // multiple overlapping boundaries.
   nodeIds: string[];
+}
+
+export const BOUNDARY_NETWORK_FIELDS = [
+  { key: "inboundAllow", label: "Inbound Allow" },
+  { key: "inboundDeny", label: "Inbound Deny" },
+  { key: "outboundAllow", label: "Outbound Allow" },
+  { key: "outboundDeny", label: "Outbound Deny" },
+] as const;
+
+export function normalizeBoundaryNetworkText(value: unknown, label: string): string | undefined {
+  if (value == null || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`Boundary ${label} must be plain text when supplied.`);
+  }
+  return value;
+}
+
+export function formatBoundaryNetworkText(value: string | undefined): string {
+  return value?.trim() ? value : "";
 }
 
 // Per scenario, the edge sequence number lives on the scenario, not the edge.
@@ -883,6 +934,8 @@ export interface Scenario {
   name: string;
   description: string;
   nodeIds: string[];
+  nodeScopeReasons?: Record<string, DfdValue>;
+  nodeScopeReasonsRecovery?: InvalidDfdValue;
   // edgeIds in array order; the index+1 is the sequence number,
   // but we also store edgeNumbers as a map for clarity & to allow
   // gaps or custom numbering if the user prefers.
@@ -952,6 +1005,9 @@ export function normalizeIssueNotEvaluatedReason(value: unknown): IssueNotEvalua
 // scenario (e.g. structural problems on the node/edge itself).
 export interface PsIssue {
   id: string;
+  // Only explicit Add threat note authoring sets this; absence is not provenance.
+  origin?: "authored-threat";
+  justification?: string;
   // Auto-generated issues are tagged with a stable rule identifier (e.g.
   // "Edge_must_have_data") so the analyzer can reconcile them on subsequent
   // runs: only a completely evaluated issue whose rule no longer triggers

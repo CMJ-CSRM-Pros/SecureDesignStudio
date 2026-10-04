@@ -10,9 +10,8 @@
 //    the change list signal-heavy.
 //  - Auth methods and per-scenario edge-data attachments are compared with
 //    set semantics; ordering differences don't count as changes.
-//  - Comments and issues are not part of the diff. They're either
-//    discussion-time state or analyzer-derived state, not user-authored
-//    model facts.
+//  - Ordinary comments/issues are excluded; explicit authored threat notes
+//    are model facts and are compared independently of analyzer findings.
 
 import {
   authTypeLabel,
@@ -22,6 +21,8 @@ import {
   dataClassificationLabel,
   privacyBoundaryTypeLabel,
   securityBoundaryTypeLabel,
+  BOUNDARY_NETWORK_FIELDS,
+  formatBoundaryNetworkText,
   RETENTION_LABELS,
   canonicalGeoBoundary,
   canonicalPostSubscriptionRetention,
@@ -29,8 +30,11 @@ import {
   formatGeoBoundary,
   formatPostSubscriptionRetention,
   formatProductionIdentity,
+  formatRequiredAccessRights,
 } from "./types";
 import { catalogDefinitionKey } from "./catalogDefinitions";
+import { formatDfdValue, resolveDfdRole } from "./dfdSemantics";
+import { isAuthoredThreatNote } from "./threatNotes";
 import type {
   AuthenticationType,
   CatalogDefinitionSnapshot,
@@ -164,6 +168,20 @@ export function diffDocuments(
   inventoryLabel = "Inventory ID",
 ): ChangeItem[] {
   const changes: ChangeItem[] = [];
+  const previousNotes = new Map(prev.issues.filter(isAuthoredThreatNote).map(note => [note.id, note]));
+  const currentNotes = new Map(curr.issues.filter(isAuthoredThreatNote).map(note => [note.id, note]));
+  for (const id of new Set([...previousNotes.keys(), ...currentNotes.keys()])) {
+    const before = previousNotes.get(id), after = currentNotes.get(id);
+    if (before && after && before.title === after.title && before.description === after.description &&
+        (before.justification ?? "") === (after.justification ?? "") && before.status === after.status &&
+        before.targetKind === after.targetKind && before.targetId === after.targetId &&
+        sameSet(before.scenarioIds, after.scenarioIds)) continue;
+    const note = after ?? before!;
+    changes.push({ id: nextId(), category: note.targetKind,
+      description: `${!before ? "Added" : !after ? "Removed" : "Changed"} authored threat note "${note.title || "(untitled)"}"`,
+      ...(after ? { target: { kind: after.targetKind, id: after.targetId, scenarioId: after.scenarioIds[0] } } : {}),
+    });
+  }
   const previousDefinitions = new Map((prev.catalogDefinitions ?? []).map((def) => [catalogDefinitionKey(def), def]));
   const currentDefinitions = new Map((curr.catalogDefinitions ?? []).map((def) => [catalogDefinitionKey(def), def]));
   for (const key of new Set([...previousDefinitions.keys(), ...currentDefinitions.keys()])) {
@@ -266,6 +284,17 @@ export function diffDocuments(
       });
     } else {
       const ps = prevScenarios.get(id)!;
+      for (const nodeId of new Set([...Object.keys(ps.nodeScopeReasons ?? {}), ...Object.keys(s.nodeScopeReasons ?? {})])) {
+        if (JSON.stringify(ps.nodeScopeReasons?.[nodeId]) !== JSON.stringify(s.nodeScopeReasons?.[nodeId])) {
+          changes.push({ id: nextId(), category: "scenario", scenarioId: id, scenarioName: s.name,
+            description: `Changed scope reason for "${nodeLabel(currNodes.get(nodeId), nodeId)}" in "${s.name}" from "${formatDfdValue(ps.nodeScopeReasons?.[nodeId]) || "(blank)"}" to "${formatDfdValue(s.nodeScopeReasons?.[nodeId]) || "(blank)"}"`,
+            target: currNodes.has(nodeId) ? { kind: "node", id: nodeId, scenarioId: id } : { kind: "scenario", id } });
+        }
+      }
+      if (JSON.stringify(ps.nodeScopeReasonsRecovery) !== JSON.stringify(s.nodeScopeReasonsRecovery)) {
+        changes.push({ id: nextId(), category: "scenario",
+          description: `Changed recovered scope input in "${s.name}"`, target: { kind: "scenario", id } });
+      }
       if ((ps.name ?? "") !== (s.name ?? "")) {
         changes.push({
           id: nextId(),
@@ -307,6 +336,14 @@ export function diffDocuments(
       });
     } else {
       const pn = prevNodes.get(id)!;
+      const beforeRole = resolveDfdRole(pn, prev.nodeTypes);
+      const afterRole = resolveDfdRole(n, curr.nodeTypes);
+      if (JSON.stringify([pn.dfdRoleOverride, pn.dfdRoleLegacy, beforeRole])
+          !== JSON.stringify([n.dfdRoleOverride, n.dfdRoleLegacy, afterRole])) {
+        changes.push({ id: nextId(), category: "node",
+          description: `Changed DFD role of "${nodeLabel(n, id)}": ${beforeRole.role} (${beforeRole.source}) -> ${afterRole.role} (${afterRole.source})`,
+          target: { kind: "node", id } });
+      }
       if (metadataKey(pn) !== metadataKey(n)) {
         changes.push({ id: nextId(), category: "node",
           description: `Changed custom metadata on node "${nodeLabel(n, id)}"`, target: { kind: "node", id } });
@@ -535,6 +572,13 @@ export function diffDocuments(
           ),
         );
       }
+      if (formatRequiredAccessRights(pe.requiredAccessRights) !== formatRequiredAccessRights(e.requiredAccessRights)) {
+        changes.push(tagEdge({
+          category: "edge",
+          description: `Updated required access rights on edge ${edgePath(e, currNodes, currNodes)}`,
+          target: { kind: "edge", id },
+        }, id));
+      }
       if ((pe.problem === true) !== (e.problem === true)) {
         changes.push(
           tagEdge(
@@ -666,6 +710,17 @@ export function diffDocuments(
           category: "boundary",
           description: `Renamed boundary "${boundaryLabel(pb, id)}" → "${boundaryLabel(b, id)}"`,
           target: { kind: "boundary", id },
+        });
+      }
+      for (const { key, label } of BOUNDARY_NETWORK_FIELDS) {
+        const previous = formatBoundaryNetworkText(pb[key]);
+        const current = formatBoundaryNetworkText(b[key]);
+        if (previous === current) continue;
+        changes.push({
+          id: nextId(),
+          category: "boundary",
+          description: `Changed ${label} on boundary "${boundaryLabel(b, id)}"${b.type === "privacy" ? " (retained, inactive)" : ""} from "${previous || "Undocumented"}" to "${current || "Undocumented"}"`,
+          target: { kind: "boundary", id, scenarioId: curr.scenarios.find(s => s.boundaryIds.includes(id))?.id },
         });
       }
       const previousNodeIds = new Set(pb.nodeIds ?? []);

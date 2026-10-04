@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   GEO_BOUNDARY_SETTING_DEF_MAP,
   GEO_BOUNDARY_SETTING_DEFS,
@@ -44,12 +45,18 @@ import { LibraryMetadataFields } from "./LibraryMetadataFields";
 import { useLibraries } from "../libraries/LibraryProvider";
 import { nodeTypeMetadataDefaults } from "../nodeTypeMetadata";
 import { inventoryFieldFor, inventoryIdError } from "../inventoryIdentity";
+import { useUiShell } from "../uiShell";
+import { DFD_ROLES, DFD_ROLE_LABELS, DFD_SCOPE_LABELS, formatDfdValue, isDfdRole,
+  nodeDfdSummary, resolveNodeReviewScope } from "../dfdSemantics";
 
 export function NodeDetails({ node }: { node: PsNode }) {
+  const { outOfScopeColor, externalInteractorColor, setScopeColor } = useUiShell();
   const libraries = useLibraries();
   const inventoryField = inventoryFieldFor(libraries.fields);
   const {
     updateNode,
+    setNodeScopeReason,
+    updateScenario,
     deleteNode,
     doc,
     nodeTypeCatalog,
@@ -67,6 +74,7 @@ export function NodeDetails({ node }: { node: PsNode }) {
   const { removeNodeOrDelete } = useRemoveFromScenarioWithConfirm();
 
   const typeDef = resolveNodeTypeDef(node.type, nodeTypeCatalog);
+  const scope = resolveNodeReviewScope(node, activeScenario, doc.nodeTypes);
   const typeIconUrl = nodeTypeIconUrl(node.type, nodeTypeCatalog);
   const libraryType = libraries.provenance[`nodes/${node.type.toLowerCase()}`];
   const documentDefinition = doc.nodeTypes.find(
@@ -103,6 +111,10 @@ export function NodeDetails({ node }: { node: PsNode }) {
 
   const inScenario =
     activeScenario != null && activeScenario.nodeIds.includes(node.id);
+  const scopeReasonEditSession = useRef<{ token: symbol; kind?: "insert" | "delete" }>();
+  useEffect(() => {
+    scopeReasonEditSession.current = undefined;
+  }, [node.id, activeScenarioId]);
 
   const scenarioNodeMap: Record<string, Retention> =
     activeScenario && inScenario
@@ -231,6 +243,92 @@ export function NodeDetails({ node }: { node: PsNode }) {
               }}
             />
           </label>
+          <label>
+            DFD role
+            <select
+              value={node.dfdRoleOverride !== undefined
+                ? isDfdRole(node.dfdRoleOverride) ? node.dfdRoleOverride : "unresolved"
+                : node.dfdRoleLegacy ? "legacy" : "default"}
+              onChange={event => updateNode(node.id, event.target.value === "default"
+                ? { dfdRoleOverride: undefined, dfdRoleLegacy: false }
+                : { dfdRoleOverride: event.target.value })}
+            >
+              {node.dfdRoleLegacy && <option value="legacy" disabled>Legacy Process (preserved)</option>}
+              {node.dfdRoleOverride !== undefined && !isDfdRole(node.dfdRoleOverride)
+                && <option value="unresolved" disabled>Unrecognized saved override</option>}
+              <option value="default">Use type default ({isDfdRole(typeDef?.defaultDfdRole)
+                ? DFD_ROLE_LABELS[typeDef.defaultDfdRole] : typeDef?.defaultDfdRole !== undefined ? "unresolved" : "Process fallback"})</option>
+              {DFD_ROLES.map(role => <option key={role} value={role}>{DFD_ROLE_LABELS[role]} override</option>)}
+            </select>
+          </label>
+          <p className="ps-description-below">
+            {DFD_ROLE_LABELS[scope.role.role]} · Source: {scope.role.source} · Confidence: {scope.role.confidence}.
+            {" "}Role is independent of service identity and policy. Explicit overrides survive type changes.
+          </p>
+          {scope.role.confidence === "unresolved" && <p className="ps-auth-selection-warning" role="status">
+            {formatDfdValue(node.dfdRoleOverride ?? typeDef?.defaultDfdRole)}
+          </p>}
+          <label>
+            Out-of-scope reason{activeScenario ? ` - ${activeScenario.name}` : " - select a scenario"}
+            <AutoGrowTextarea
+              value={typeof scope.storedReason === "string" ? scope.storedReason : ""}
+              maxLength={16000}
+              disabled={!inScenario || scope.role.role === "ExternalInteractor"}
+              onFocus={() => { scopeReasonEditSession.current = { token: Symbol("scope-reason-edit") }; }}
+              onBlur={() => { scopeReasonEditSession.current = undefined; }}
+              onBeforeInput={event => {
+                if (event.currentTarget.selectionStart !== event.currentTarget.selectionEnd) {
+                  scopeReasonEditSession.current = undefined;
+                }
+              }}
+              onKeyDown={event => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                  scopeReasonEditSession.current = undefined;
+                }
+              }}
+              onChange={event => {
+                if (!activeScenario) return;
+                const inputType = event.nativeEvent instanceof InputEvent ? event.nativeEvent.inputType : "";
+                const previousValue = typeof scope.storedReason === "string" ? scope.storedReason : "";
+                const kind = inputType.startsWith("delete") ? "delete"
+                  : inputType.startsWith("insert") ? "insert"
+                  : event.target.value.length < previousValue.length ? "delete" : "insert";
+                const previousSession = scopeReasonEditSession.current;
+                const session: { token: symbol; kind: "insert" | "delete" } =
+                  !previousSession || (previousSession.kind && previousSession.kind !== kind) ||
+                  inputType.startsWith("history")
+                  ? { token: Symbol("scope-reason-edit"), kind }
+                  : { ...previousSession, kind };
+                scopeReasonEditSession.current = session;
+                setNodeScopeReason(activeScenario.id, node.id, event.target.value, session.token);
+              }}
+              placeholder="Blank means in scope"
+            />
+          </label>
+          <p className="ps-description-below">
+            {activeScenario ? DFD_SCOPE_LABELS[scope.disposition] : nodeDfdSummary(node, doc)}.
+            {" "}Only LLM review excludes node internals; fixed checks still run. External Interactors are black boxes, never out-of-scope infrastructure.
+          </p>
+          {scope.storedReason !== undefined && typeof scope.storedReason !== "string" && <pre className="ps-dfd-recovery">{formatDfdValue(scope.storedReason)}</pre>}
+          {scope.diagnostics.length > 0 && <p className="ps-auth-selection-warning" role="status">{scope.diagnostics.join(" ")}</p>}
+          {inScenario && scope.storedReason !== undefined &&
+            (typeof scope.storedReason !== "string" ||
+              (scope.role.role === "ExternalInteractor" && scope.storedReason.trim() !== "")) && (
+              <button type="button"
+                onClick={() => activeScenario && setNodeScopeReason(activeScenario.id, node.id, "")}>
+                {scope.role.role === "ExternalInteractor" ? "Clear inactive scope reason" : "Clear unrecognized scope reason"}
+              </button>
+            )}
+          {activeScenario?.nodeScopeReasonsRecovery && <button type="button"
+            onClick={() => updateScenario(activeScenario.id, { nodeScopeReasonsRecovery: undefined })}>Clear malformed scenario scope input</button>}
+          <details>
+            <summary className="nokey">Scope appearance (this browser)</summary>
+            <label>Out-of-scope accent<input type="color" value={outOfScopeColor}
+              onChange={event => setScopeColor("outOfScopeColor", event.target.value)} /></label>
+            <label>External Interactor accent<input type="color" value={externalInteractorColor}
+              onChange={event => setScopeColor("externalInteractorColor", event.target.value)} /></label>
+            <p className="ps-description-below">Labels and shapes always remain visible. Colors do not change model semantics.</p>
+          </details>
           {typeDef && (
             <div className="ps-node-type-summary">
               {typeIconUrl && (

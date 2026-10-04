@@ -1,39 +1,881 @@
 {
-  "format":"secure-design-studio-diagram","version":2,
-  "doc":{
-    "version":1,
-    "nodeTypes":[{"id":"ExternalUser","label":"External user"},{"id":"WebApp","label":"Web application"},{"id":"AiGateway","label":"AI gateway"},{"id":"ModelEndpoint","label":"Model endpoint"},{"id":"VectorStore","label":"Vector store"},{"id":"Telemetry","label":"Telemetry service"}],
-    "nodes":[
-      {"id":"n_user","title":"Knowledge Worker","description":"Employee asks questions about uploaded documents.","type":"ExternalUser","serviceTreeId":"30000000-0000-4000-8000-000000000001","endpointRegex":"","position":{"x":20,"y":210}},
-      {"id":"n_app","title":"Document Assistant Web","description":"Uploads documents and displays generated answers.","type":"WebApp","serviceTreeId":"30000000-0000-4000-8000-000000000002","endpointRegex":"^https://docs.example.test","position":{"x":245,"y":210}},
-      {"id":"n_gateway","title":"AI Gateway","description":"Builds grounded prompts, applies content controls, and enforces tenant isolation.","type":"AiGateway","serviceTreeId":"30000000-0000-4000-8000-000000000003","endpointRegex":"^https://ai-gateway.example.test","position":{"x":485,"y":150}},
-      {"id":"n_model","title":"External Model Endpoint","description":"Managed generative model endpoint outside the application trust boundary.","type":"ModelEndpoint","serviceTreeId":"30000000-0000-4000-8000-000000000004","endpointRegex":"^https://model.example.test","position":{"x":750,"y":70}},
-      {"id":"n_vector","title":"Vector Store","description":"Stores document chunks and tenant-scoped embeddings.","type":"VectorStore","serviceTreeId":"30000000-0000-4000-8000-000000000005","endpointRegex":"","position":{"x":750,"y":225}},
-      {"id":"n_logs","title":"Prompt Telemetry","description":"Central logging service; risky scenario records full prompts and retrieved document text.","type":"Telemetry","serviceTreeId":"","endpointRegex":"^https://logs.example.test","position":{"x":750,"y":365}}
+  "format": "secure-design-studio-diagram",
+  "version": 2,
+  "doc": {
+    "version": 1,
+    "authenticationDefinitions": [
+      {
+        "id": "EntraDelegatedUserAccess",
+        "label": "Entra user",
+        "description": "Calls the receiving service with an Entra access token for a signed-in user and delegated permissions.",
+        "shortLabel": "Entra user",
+        "behavior": {
+          "productionIdentity": "required",
+          "audience": true,
+          "constraints": false,
+          "anonymous": false,
+          "managedIdentity": false
+        },
+        "disabled": false,
+        "legacy": false,
+        "aliases": [
+          "Microsoft Entra ID - delegated user access"
+        ]
+      },
+      {
+        "id": "EntraOnBehalfOf",
+        "label": "Entra on-behalf-of (OBO)",
+        "description": "Exchanges an incoming user token for a token intended for a downstream service, preserving delegated user context.",
+        "shortLabel": "OBO",
+        "behavior": {
+          "productionIdentity": "required",
+          "audience": true,
+          "constraints": false,
+          "anonymous": false,
+          "managedIdentity": false
+        },
+        "disabled": false,
+        "legacy": false,
+        "aliases": []
+      },
+      {
+        "id": "EntraManagedIdentity",
+        "label": "Managed identity",
+        "description": "An Azure-managed system-assigned or user-assigned identity obtains an Entra access token without a manually managed application secret.",
+        "shortLabel": "Managed identity",
+        "behavior": {
+          "productionIdentity": "required",
+          "audience": true,
+          "constraints": false,
+          "anonymous": false,
+          "managedIdentity": true
+        },
+        "disabled": false,
+        "legacy": false,
+        "aliases": []
+      }
     ],
-    "edges":[
-      {"id":"e_question","source":"n_user","target":"n_app","title":"Ask question","description":"User submits a question.","authenticationTypes":["UserWithAad"],"audience":"api://document-assistant","productionIdentity":{"kind":"AppId","appId":"31000000-0000-4000-8000-000000000001","tenant":"FirstParty"},"waypoints":[{"id":"wp1","x":130,"y":210}]},
-      {"id":"e_prompt","source":"n_app","target":"n_gateway","title":"Create grounded request","description":"Forwards the question with tenant and user context.","authenticationTypes":["S2SWithAadAndCdt"],"audience":"api://ai-gateway","constraints":"tenantId and userObjectId","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp2","x":365,"y":180}]},
-      {"id":"e_retrieve","source":"n_gateway","target":"n_vector","title":"Retrieve chunks","description":"Fetches tenant-scoped document chunks.","authenticationTypes":["S2SWithAad"],"audience":"api://vector-store","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp3","x":620,"y":210}]},
-      {"id":"e_generate","source":"n_gateway","target":"n_model","title":"Generate answer","description":"Sends grounded context to the model endpoint.","authenticationTypes":["S2SWithAad"],"audience":"api://model-endpoint","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp4","x":620,"y":105}]},
-      {"id":"e_log","source":"n_gateway","target":"n_logs","title":"Log prompt and context","description":"Intentionally risky telemetry exports full prompts, retrieved confidential text, and user identifiers without authentication.","authenticationTypes":["Unauthenticated"],"waypoints":[{"id":"wp5","x":620,"y":320}]}
+    "catalogDefinitions": [
+      {
+        "kind": "classification",
+        "id": "Customer Content",
+        "label": "Customer Content",
+        "description": "Content a customer provides or generates, such as documents, messages, files, or AI interactions. This existing modeling category is narrower than Customer Data, which also covers configuration and other service data. Assess the actual content for personal or sensitive information; the category alone does not set retention, access rules, or a universal sensitivity rank."
+      },
+      {
+        "kind": "classification",
+        "id": "Access Control Data",
+        "label": "Access Control Data",
+        "description": "Authorization records such as permissions, roles, group memberships, or access control lists. An additional modeling category, distinct from Administrator Data about people performing administrative duties. Records can reveal security-sensitive structure and identify individuals."
+      },
+      {
+        "kind": "classification",
+        "id": "EUPI",
+        "label": "EUPI",
+        "description": "End User Pseudonymized Identifiers. Identifiers representing an end user, such as UserID, UserKey, or mailbox GUID, as described in [Privacy in Microsoft Purview](https://learn.microsoft.com/en-us/purview/purview-privacy#end-user-pseudonymized-identifier-eupi). They may be linked to a person using additional information. Pseudonymized does not mean anonymous."
+      },
+      {
+        "kind": "classification",
+        "id": "OII",
+        "label": "OII",
+        "description": "Organization Identifiable Information. Information identifying a tenant or organization, such as a tenant ID or organization name. An additional modeling category, not a named Purview content type. Related contacts, sole-trader records, or combined information can also identify individuals."
+      },
+      {
+        "kind": "classification",
+        "id": "System Metadata",
+        "label": "System Metadata",
+        "description": "Operational metadata generated by a service, such as request IDs, timestamps, diagnostic events, or correlation identifiers. An additional modeling category, not a named Purview content type. Logs and metadata may contain EUII, EUPI, or other personal data; assess their content and linkability."
+      },
+      {
+        "kind": "tenant",
+        "id": "Customer",
+        "label": "Customer"
+      },
+      {
+        "kind": "securityBoundary",
+        "id": "Subnet",
+        "label": "Subnet",
+        "description": "A modeled subnet or network-segmentation perimeter. A subnet alone does not establish enforced isolation."
+      }
     ],
-    "boundaries":[
-      {"id":"b_tenant","type":"privacy","title":"Tenant data isolation boundary","position":{"x":205,"y":25},"size":{"width":620,"height":300}},
-      {"id":"b_ai","type":"security","title":"AI processing trust boundary","position":{"x":445,"y":45},"size":{"width":390,"height":240}}
+    "nodeTypes": [
+      {
+        "id": "ExternalUser",
+        "label": "External user",
+        "definition": {
+          "defaultDfdRole": "ExternalInteractor",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Custom",
+          "catalogSource": "Document",
+          "resourceProviders": [],
+          "icon": "generic/component.svg",
+          "description": "Fictional external participant category; its implementation is not a Microsoft service or an asserted policy."
+        }
+      },
+      {
+        "id": "azure.compute.app-service-app",
+        "label": "App Service app",
+        "definition": {
+          "defaultDfdRole": "Process",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Azure / Compute",
+          "catalogSource": "Document",
+          "resourceProviders": [
+            "Microsoft.Web/sites"
+          ],
+          "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+          "icon": "azure/10035-icon-service-App-Services.svg",
+          "description": "App Service app catalog entry from Microsoft Azure. Resource provider: Microsoft.Web/sites. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+        }
+      },
+      {
+        "id": "azure.ai.openai",
+        "label": "Azure OpenAI Service",
+        "definition": {
+          "defaultDfdRole": "Process",
+          "serviceTreeId": "",
+          "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.openai\\.azure\\.com(?::\\d+)?(?:\\/.*)?$",
+          "templateHints": [
+            ".openai.azure.com"
+          ],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Azure / AI + machine learning",
+          "catalogSource": "Document",
+          "resourceProviders": [
+            "Microsoft.CognitiveServices/accounts"
+          ],
+          "documentationUrl": "https://learn.microsoft.com/en-us/azure/developer/ai/how-to/switching-endpoints",
+          "icon": "azure/03438-icon-service-Azure-OpenAI.svg",
+          "description": "Azure OpenAI Service catalog entry from Microsoft Azure. Resource provider: Microsoft.CognitiveServices/accounts. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/developer/ai/how-to/switching-endpoints)."
+        }
+      },
+      {
+        "id": "azure.ai.search",
+        "label": "Azure AI Search",
+        "definition": {
+          "defaultDfdRole": "Process",
+          "serviceTreeId": "",
+          "endpointRegex": "^https?:\\/\\/[a-z0-9-]+\\.search\\.windows\\.net(?::\\d+)?(?:\\/.*)?$",
+          "templateHints": [
+            ".search.windows.net"
+          ],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Azure / AI + machine learning",
+          "catalogSource": "Document",
+          "resourceProviders": [
+            "Microsoft.Search/searchServices"
+          ],
+          "documentationUrl": "https://learn.microsoft.com/en-us/azure/search/search-get-started-text",
+          "icon": "azure/10044-icon-service-Cognitive-Search.svg",
+          "description": "Azure AI Search catalog entry from Microsoft Azure. Resource provider: Microsoft.Search/searchServices. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/search/search-get-started-text)."
+        }
+      },
+      {
+        "id": "azure.ops.log-analytics",
+        "label": "Log Analytics workspace",
+        "definition": {
+          "defaultDfdRole": "Process",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Azure / Management and governance",
+          "catalogSource": "Document",
+          "resourceProviders": [
+            "Microsoft.OperationalInsights/workspaces",
+            "Microsoft.OperationalInsights/querypacks"
+          ],
+          "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+          "icon": "azure/00009-icon-service-Log-Analytics-Workspaces.svg",
+          "description": "Log Analytics workspace catalog entry from Microsoft Azure. Resource providers: Microsoft.OperationalInsights/workspaces, Microsoft.OperationalInsights/querypacks. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+        }
+      }
     ],
-    "scenarios":[
-      {"id":"s_secure","name":"Grounded tenant-safe answer","description":"Secure baseline uses scoped retrieval, managed identity, and excludes prompt content from telemetry.","nodeIds":["n_user","n_app","n_gateway","n_model","n_vector"],"edgeIds":["e_question","e_prompt","e_retrieve","e_generate"],"edgeNumbers":{"e_question":1,"e_prompt":2,"e_retrieve":3,"e_generate":4},"boundaryIds":["b_tenant","b_ai"],"nodeData":{"n_app":{"d_question":"ProcessingNoStorage"},"n_gateway":{"d_question":"ProcessingNoStorage","d_document":"ProcessingNoStorage"},"n_vector":{"d_document":"StorageOver48Hours"},"n_model":{"d_question":"ProcessingNoStorage","d_document":"ProcessingNoStorage"}},"edgeRequestData":{"e_question":["d_question"],"e_prompt":["d_question"],"e_retrieve":["d_question"],"e_generate":["d_question","d_document"]},"edgeResponseData":{"e_question":[],"e_prompt":["d_answer"],"e_retrieve":["d_document"],"e_generate":["d_answer"]}},
-      {"id":"s_risky","name":"Risky prompt telemetry","description":"Intentionally insecure: confidential document chunks and user prompts are copied to an unowned logging service with no authentication or retention decision.","nodeIds":["n_user","n_app","n_gateway","n_model","n_vector","n_logs"],"edgeIds":["e_question","e_prompt","e_retrieve","e_generate","e_log"],"edgeNumbers":{"e_question":1,"e_prompt":2,"e_retrieve":3,"e_generate":4,"e_log":5},"boundaryIds":["b_tenant","b_ai"],"nodeData":{"n_gateway":{"d_question":"ProcessingNoStorage","d_document":"ProcessingNoStorage"},"n_logs":{"d_question":"","d_document":""}},"edgeRequestData":{"e_question":["d_question"],"e_prompt":["d_question"],"e_retrieve":["d_question"],"e_generate":["d_question","d_document"],"e_log":["d_question","d_document","d_identity"]},"edgeResponseData":{"e_question":[],"e_prompt":[],"e_retrieve":["d_document"],"e_generate":["d_answer"],"e_log":[]}}
+    "nodes": [
+      {
+        "id": "n_user",
+        "dfdRoleLegacy": false,
+        "title": "Knowledge Worker",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. External signed-in worker queries documents they are authorized to read. No device persistence or token issuance is modeled; the worker remains visible in both scenarios.\n\nPrivacy/retention: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration.",
+        "type": "ExternalUser",
+        "serviceTreeId": "",
+        "endpointRegex": "",
+        "position": {
+          "x": 40,
+          "y": 300
+        },
+        "size": {
+          "width": 142,
+          "height": 78
+        },
+        "color": "#fed7aa"
+      },
+      {
+        "id": "n_app",
+        "dfdRoleLegacy": false,
+        "title": "Assistant Web App",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. In-scope frontend: validates session, forwards delegated assistant.query, renders generated text as inert content and stores neither prompt nor answer locally. Not an excluded supporting infrastructure component.\n\nPrivacy/retention: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration.",
+        "type": "azure.compute.app-service-app",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://app\\.aidocumentassistant\\.example(?:/|$)",
+        "position": {
+          "x": 360,
+          "y": 300
+        },
+        "size": {
+          "width": 137,
+          "height": 74
+        },
+        "color": "#bfdbfe"
+      },
+      {
+        "id": "n_gateway",
+        "dfdRoleLegacy": false,
+        "title": "Retrieval Gateway",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. In-scope orchestration service owns tenant/user authorization. Derives ACL filters from validated claims, requests minimum chunks, treats retrieved text as untrusted content and cannot invoke tools. Emits only aggregate counters through a separate allowlisted telemetry path.\n\nPrivacy/retention: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration.",
+        "type": "azure.compute.app-service-app",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://gateway\\.aidocumentassistant\\.example(?:/|$)",
+        "position": {
+          "x": 730,
+          "y": 300
+        },
+        "size": {
+          "width": 133,
+          "height": 74
+        },
+        "color": "#bfdbfe"
+      },
+      {
+        "id": "n_model",
+        "dfdRoleOverride": "ExternalInteractor",
+        "dfdRoleLegacy": false,
+        "title": "Azure OpenAI Provider",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Separately operated Azure OpenAI inference endpoint. This instance is explicitly an External Interactor, not a subject process. Approved geography, retention/abuse-monitoring handling and no training on prompts require a provider-specific review; processing-only is a reference contract assumption, not a universal product default.\n\nPrivacy/retention: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration.",
+        "type": "azure.ai.openai",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://model\\.aidocumentassistant\\.example(?:/|$)",
+        "position": {
+          "x": 1090,
+          "y": 100
+        },
+        "size": {
+          "width": 158,
+          "height": 78
+        },
+        "color": "#fed7aa"
+      },
+      {
+        "id": "n_vector",
+        "dfdRoleOverride": "DataStore",
+        "dfdRoleLegacy": false,
+        "title": "Azure AI Search Index",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Application-owned persistent search index, explicitly a Data Store. Gateway MI has query-only access, not index management. Tenant/document ACL security trimming is enforced by Gateway and validated on returned chunks; index ingestion must preserve trustworthy ACL metadata. Stored documents/ACLs are purged with source deletion within 24 hours.\n\nPrivacy/retention: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration.",
+        "type": "azure.ai.search",
+        "serviceTreeId": "",
+        "endpointRegex": "",
+        "position": {
+          "x": 1090,
+          "y": 300
+        },
+        "size": {
+          "width": 149,
+          "height": 78
+        },
+        "color": "#bbf7d0"
+      },
+      {
+        "id": "n_logs",
+        "dfdRoleOverride": "DataStore",
+        "dfdRoleLegacy": false,
+        "title": "Metrics Workspace",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. In-scope application-owned Log Analytics workspace. Only allowlisted aggregate count/latency metrics are retained, for an illustrative 30 days. Reject prompt, excerpt, subject, tenant and correlation identifiers. No raw payload logging; workspace access and retention configuration require deployment evidence.\n\nPrivacy/retention: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration.",
+        "type": "azure.ops.log-analytics",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://logs\\.aidocumentassistant\\.example(?:/|$)",
+        "position": {
+          "x": 1090,
+          "y": 565
+        },
+        "size": {
+          "width": 157,
+          "height": 78
+        },
+        "color": "#bbf7d0"
+      }
     ],
-    "data":[
-      {"id":"d_question","name":"User prompt","classification":"EUPI","sample":"Synthetic question about a confidential document"},
-      {"id":"d_document","name":"Retrieved document chunks","classification":"Customer Content","sample":"Synthetic confidential policy excerpt"},
-      {"id":"d_identity","name":"User identity context","classification":"EUII","sample":"Synthetic tenant and user identifiers"},
-      {"id":"d_answer","name":"Generated answer","classification":"Customer Content","sample":"Synthetic grounded response"}
+    "edges": [
+      {
+        "id": "e_question",
+        "source": "n_user",
+        "target": "n_app",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Ask authorized question",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Question and documentation-only access context arrive from the worker; a cited answer returns on this request. Production App ID identifies the fictional Knowledge Worker client application, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: Assistant Web App requires assistant.query for the signed-in subject and derives tenant from validated claims.",
+        "authenticationTypes": [
+          "EntraDelegatedUserAccess"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "11111111-1111-4111-8111-111111111111",
+          "tenant": "Customer"
+        },
+        "audience": "api://assistant-web.example",
+        "waypoints": [
+          {
+            "id": "w_question",
+            "x": 280,
+            "y": 250
+          }
+        ]
+      },
+      {
+        "id": "e_prompt",
+        "source": "n_app",
+        "target": "n_gateway",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Delegate query",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. All subject frontend/gateway interiors stay in scope in both scenarios; delegated user context must survive this hop. Production App ID identifies the fictional Assistant Web App workload client, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: Retrieval Gateway validates assistant.query, subject and tenant; it owns document ACL decisions and rejects caller-provided authorization filters.",
+        "authenticationTypes": [
+          "EntraOnBehalfOf"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "22222222-2222-4222-8222-222222222222",
+          "tenant": "Customer"
+        },
+        "audience": "api://retrieval-gateway.example",
+        "waypoints": [
+          {
+            "id": "w_prompt",
+            "x": 625,
+            "y": 270
+          }
+        ]
+      },
+      {
+        "id": "e_retrieve",
+        "source": "n_gateway",
+        "target": "n_vector",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Read ACL-trimmed chunks",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. A workload token is not user delegation. Query fields and ACL evidence are transient; stored chunks/ACLs remain in the application-owned index. The response includes independently stored document ACL metadata alongside each chunk, enabling Gateway to recheck it against transient caller claims. Session scope/claims are not persisted as document ACLs.",
+        "requiredAccessRights": "Reference requirement: Azure AI Search grants Gateway query-only Search Index Data Reader; Gateway constructs a validated tenant/document ACL filter and rechecks returned chunk authorization. No index write/admin rights.",
+        "authenticationTypes": [
+          "EntraManagedIdentity"
+        ],
+        "productionIdentity": {
+          "kind": "ManagedIdentity"
+        },
+        "audience": "https://search.azure.com",
+        "waypoints": [
+          {
+            "id": "w_retrieve",
+            "x": 975,
+            "y": 392
+          }
+        ]
+      },
+      {
+        "id": "e_generate",
+        "source": "n_gateway",
+        "target": "n_model",
+        "sourceHandle": "top",
+        "targetHandle": "left",
+        "title": "Generate cited answer",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Provider receives question and minimum chunks without subject/tenant/access claims. Contract assumptions on geography and retained abuse-monitoring data must be verified independently.",
+        "requiredAccessRights": "Reference requirement: Approved Azure OpenAI deployment grants Gateway inference invocation only; no deployment management or tool execution. Gateway sends only authorized grounding.",
+        "authenticationTypes": [
+          "EntraManagedIdentity"
+        ],
+        "productionIdentity": {
+          "kind": "ManagedIdentity"
+        },
+        "audience": "https://cognitiveservices.azure.com",
+        "waypoints": [
+          {
+            "id": "w_generate",
+            "x": 940,
+            "y": 190
+          }
+        ]
+      },
+      {
+        "id": "e_log",
+        "source": "n_gateway",
+        "target": "n_logs",
+        "sourceHandle": "bottom",
+        "targetHandle": "left",
+        "title": "Ingest aggregate metrics",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Approved ingestion path to the modeled Log Analytics store. Reject content/identity fields before the crossing; modeled data-collection components are abstracted as part of the workspace endpoint.",
+        "requiredAccessRights": "Reference requirement: Metrics ingestion endpoint authorizes Gateway for its single data collection rule; allowlist aggregate counters only. Workspace queries are separately privileged; this identity has no workspace read/admin access.",
+        "authenticationTypes": [
+          "EntraManagedIdentity"
+        ],
+        "productionIdentity": {
+          "kind": "ManagedIdentity"
+        },
+        "audience": "https://monitor.azure.com",
+        "waypoints": [
+          {
+            "id": "w_log_out",
+            "x": 685,
+            "y": 450
+          },
+          {
+            "id": "w_log",
+            "x": 940,
+            "y": 490
+          },
+          {
+            "id": "w_log_in",
+            "x": 1040,
+            "y": 540
+          }
+        ]
+      }
     ],
-    "comments":[{"id":"c_prompt","scenarioId":"s_risky","targetKind":"edge","targetId":"e_log","text":"Ask about prompt injection, cross-tenant disclosure, logging minimization, and retention.","status":"Active","createdAt":1789000002000,"replies":[]}],
-    "issues":[],"workItems":[]
+    "boundaries": [
+      {
+        "id": "b_tenant",
+        "type": "privacy",
+        "title": "Tenant data",
+        "position": {
+          "x": 320,
+          "y": 210
+        },
+        "size": {
+          "width": 970,
+          "height": 220
+        },
+        "nodeIds": [
+          "n_app",
+          "n_gateway",
+          "n_vector"
+        ]
+      },
+      {
+        "id": "b_ai",
+        "type": "security",
+        "title": "Private retrieval services",
+        "position": {
+          "x": 690,
+          "y": 245
+        },
+        "size": {
+          "width": 580,
+          "height": 160
+        },
+        "nodeIds": [
+          "n_gateway",
+          "n_vector"
+        ],
+        "securitySubtype": "Subnet",
+        "inboundAllow": "Reference intent: delegated HTTPS from Assistant Web App to Gateway; no direct user index access.",
+        "inboundDeny": "Reference intent: deny public index writes and requests lacking validated tenant/document scope.",
+        "outboundAllow": "Reference intent: query-only Azure AI Search, approved Azure OpenAI inference and aggregate-only metrics ingestion.",
+        "outboundDeny": "Reference intent: no identity/raw prompt/chunk telemetry or arbitrary tool/network destinations. Declarative intent, not observed enforcement."
+      },
+      {
+        "id": "b_model",
+        "type": "security",
+        "title": "Approved inference operator",
+        "position": {
+          "x": 1040,
+          "y": 45
+        },
+        "size": {
+          "width": 240,
+          "height": 145
+        },
+        "nodeIds": [
+          "n_model"
+        ]
+      },
+      {
+        "id": "b_logs",
+        "type": "security",
+        "title": "Application metrics store",
+        "position": {
+          "x": 1040,
+          "y": 515
+        },
+        "size": {
+          "width": 250,
+          "height": 150
+        },
+        "nodeIds": [
+          "n_logs"
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "s_secure",
+        "name": "01 | Reference - authorized grounding",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration. All subject processes and stores are in scope; external participants are visible black boxes, not excluded infrastructure. Numbering orders requests; response buckets return on the same call, not a second login.",
+        "nodeIds": [
+          "n_user",
+          "n_app",
+          "n_gateway",
+          "n_vector",
+          "n_model"
+        ],
+        "edgeIds": [
+          "e_question",
+          "e_prompt",
+          "e_retrieve",
+          "e_generate"
+        ],
+        "edgeNumbers": {
+          "e_question": 1,
+          "e_prompt": 2,
+          "e_retrieve": 3,
+          "e_generate": 4
+        },
+        "boundaryIds": [
+          "b_tenant",
+          "b_ai",
+          "b_model"
+        ],
+        "nodeData": {
+          "n_app": {
+            "d_question": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_identity": "ProcessingNoStorage",
+            "d_answer": "ProcessingNoStorage"
+          },
+          "n_user": {
+            "d_answer": "ProcessingNoStorage"
+          },
+          "n_gateway": {
+            "d_question": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_identity": "ProcessingNoStorage",
+            "d_document": "ProcessingNoStorage",
+            "d_acl": "ProcessingNoStorage",
+            "d_answer": "ProcessingNoStorage"
+          },
+          "n_vector": {
+            "d_question": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_identity": "ProcessingNoStorage",
+            "d_document": "StorageOver48Hours",
+            "d_acl": "StorageOver48Hours"
+          },
+          "n_model": {
+            "d_question": "ProcessingNoStorage",
+            "d_document": "ProcessingNoStorage"
+          }
+        },
+        "edgeRequestData": {
+          "e_question": [
+            "d_question",
+            "d_subject",
+            "d_tenant_id",
+            "d_identity"
+          ],
+          "e_prompt": [
+            "d_question",
+            "d_subject",
+            "d_tenant_id",
+            "d_identity"
+          ],
+          "e_retrieve": [
+            "d_question",
+            "d_subject",
+            "d_tenant_id",
+            "d_identity"
+          ],
+          "e_generate": [
+            "d_question",
+            "d_document"
+          ]
+        },
+        "edgeResponseData": {
+          "e_question": [
+            "d_answer"
+          ],
+          "e_prompt": [
+            "d_answer"
+          ],
+          "e_retrieve": [
+            "d_document",
+            "d_acl"
+          ],
+          "e_generate": [
+            "d_answer"
+          ]
+        }
+      },
+      {
+        "id": "s_risky",
+        "name": "02 | Reference - privacy-safe metrics",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration. All subject processes and stores are in scope; external participants are visible black boxes, not excluded infrastructure. Numbering orders requests; response buckets return on the same call, not a second login.",
+        "nodeIds": [
+          "n_user",
+          "n_app",
+          "n_gateway",
+          "n_vector",
+          "n_model",
+          "n_logs"
+        ],
+        "edgeIds": [
+          "e_question",
+          "e_prompt",
+          "e_retrieve",
+          "e_generate",
+          "e_log"
+        ],
+        "edgeNumbers": {
+          "e_question": 1,
+          "e_prompt": 2,
+          "e_retrieve": 3,
+          "e_generate": 4,
+          "e_log": 5
+        },
+        "boundaryIds": [
+          "b_tenant",
+          "b_ai",
+          "b_model",
+          "b_logs"
+        ],
+        "nodeData": {
+          "n_app": {
+            "d_question": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_identity": "ProcessingNoStorage",
+            "d_answer": "ProcessingNoStorage"
+          },
+          "n_user": {
+            "d_answer": "ProcessingNoStorage"
+          },
+          "n_gateway": {
+            "d_question": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_identity": "ProcessingNoStorage",
+            "d_document": "ProcessingNoStorage",
+            "d_acl": "ProcessingNoStorage",
+            "d_answer": "ProcessingNoStorage",
+            "d_ack": "ProcessingNoStorage"
+          },
+          "n_vector": {
+            "d_question": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_identity": "ProcessingNoStorage",
+            "d_document": "StorageOver48Hours",
+            "d_acl": "StorageOver48Hours"
+          },
+          "n_model": {
+            "d_question": "ProcessingNoStorage",
+            "d_document": "ProcessingNoStorage"
+          },
+          "n_logs": {
+            "d_metrics": "StorageOver48Hours"
+          }
+        },
+        "edgeRequestData": {
+          "e_question": [
+            "d_question",
+            "d_subject",
+            "d_tenant_id",
+            "d_identity"
+          ],
+          "e_prompt": [
+            "d_question",
+            "d_subject",
+            "d_tenant_id",
+            "d_identity"
+          ],
+          "e_retrieve": [
+            "d_question",
+            "d_subject",
+            "d_tenant_id",
+            "d_identity"
+          ],
+          "e_generate": [
+            "d_question",
+            "d_document"
+          ],
+          "e_log": [
+            "d_metrics"
+          ]
+        },
+        "edgeResponseData": {
+          "e_question": [
+            "d_answer"
+          ],
+          "e_prompt": [
+            "d_answer"
+          ],
+          "e_retrieve": [
+            "d_document",
+            "d_acl"
+          ],
+          "e_generate": [
+            "d_answer"
+          ],
+          "e_log": [
+            "d_ack"
+          ]
+        }
+      }
+    ],
+    "data": [
+      {
+        "id": "d_question",
+        "name": "Worker question",
+        "classification": "Customer Content",
+        "sample": "Summarize the synthetic access policy."
+      },
+      {
+        "id": "d_document",
+        "name": "Authorized grounding chunks",
+        "classification": "Customer Content",
+        "sample": "{\"document\":\"doc-synthetic-01\",\"text\":\"Fictional access policy excerpt\"}"
+      },
+      {
+        "id": "d_identity",
+        "name": "Validated document permission claims",
+        "classification": "Access Control Data",
+        "sample": "{\"scope\":\"assistant.query\",\"validatedCallerGroups\":[\"group-synthetic\"]}; transient caller permission claims, no access token or stored document ACL"
+      },
+      {
+        "id": "d_answer",
+        "name": "Cited answer",
+        "classification": "Customer Content",
+        "sample": "Synthetic answer with citation [doc-synthetic-01]."
+      },
+      {
+        "id": "d_subject",
+        "name": "Pseudonymous subject reference",
+        "classification": "EUPI",
+        "sample": "subject-synthetic-001; linkable, not anonymous"
+      },
+      {
+        "id": "d_tenant_id",
+        "name": "Tenant partition identifier",
+        "classification": "OII",
+        "sample": "tenant-synthetic-a"
+      },
+      {
+        "id": "d_metrics",
+        "name": "Allowlisted aggregate counters",
+        "classification": "System Metadata",
+        "sample": "{\"window\":\"synthetic-hour\",\"count\":120,\"latencyBucket\":\"100-200ms\"}; no user, tenant, prompt, contact or request ID"
+      },
+      {
+        "id": "d_ack",
+        "name": "Operation acknowledgement",
+        "classification": "System Metadata",
+        "sample": "{\"accepted\":true}; synthetic protocol acknowledgement, no sensitive content"
+      },
+      {
+        "id": "d_acl",
+        "name": "Stored document ACL and tenant binding",
+        "classification": "Access Control Data",
+        "sample": "{\"document\":\"doc-synthetic-01\",\"tenantPartition\":\"tenant-synthetic-a\",\"allowedGroups\":[\"group-synthetic\"]}; synthetic index metadata, not caller session claims"
+      }
+    ],
+    "comments": [
+      {
+        "id": "c_reference_1",
+        "scenarioId": "s_secure",
+        "targetKind": "node",
+        "targetId": "n_gateway",
+        "text": "01 | Reference - authorized grounding: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration. These are recommended design controls, not a claim that the synthetic system has been deployed or assessed.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      },
+      {
+        "id": "c_reference_2",
+        "scenarioId": "s_risky",
+        "targetKind": "node",
+        "targetId": "n_gateway",
+        "text": "02 | Reference - privacy-safe metrics: Questions/answers and identity context are processing-only; the index retains chunks/ACLs for active documents and purges within 24 hours of source deletion. Aggregate metrics expire after an illustrative 30 days. Provider processing-only is a contract assumption requiring review of actual provider retention, not a claim about every Azure OpenAI configuration. These are recommended design controls, not a claim that the synthetic system has been deployed or assessed.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      }
+    ],
+    "issues": [
+      {
+        "id": "i_sample_1",
+        "origin": "authored-threat",
+        "justification": "The design requires these controls; implementation and negative-test evidence remain to be reviewed. Active is not an observed exploit or risk acceptance.",
+        "targetKind": "node",
+        "targetId": "n_gateway",
+        "scenarioIds": [
+          "s_secure",
+          "s_risky"
+        ],
+        "title": "Cross-document prompt injection",
+        "description": "Reference review concern: Test ACL-filter construction, cross-tenant/chunk authorization and inert rendering; document text must never become a tool or system instruction.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      },
+      {
+        "id": "i_sample_2",
+        "origin": "authored-threat",
+        "justification": "Verify the named boundary-crossing controls before implementation approval. A declared requirement or clean deterministic result is not assurance.",
+        "targetKind": "edge",
+        "targetId": "e_generate",
+        "scenarioIds": [
+          "s_secure",
+          "s_risky"
+        ],
+        "title": "Excessive provider disclosure",
+        "description": "Reference review concern: Inspect the exact outbound grounding, provider geography/retention contract and no-tools configuration. A managed identity and clean Analyze result do not prove these properties.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      }
+    ],
+    "deviations": [],
+    "workItems": [
+      {
+        "id": "wi_reference_controls",
+        "description": "Verify cross-document prompt injection and excessive provider disclosure controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
+        "link": ""
+      }
+    ]
   },
-  "view":{"activeScenarioId":"s_risky","filter":{"text":"","nodeType":"","authType":"","dataClassification":""}}
+  "view": {
+    "activeScenarioId": "s_secure",
+    "filter": {
+      "text": "",
+      "nodeType": "",
+      "authType": "",
+      "dataClassification": ""
+    }
+  }
 }

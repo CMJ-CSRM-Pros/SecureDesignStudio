@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import { useStore } from "../store";
 import type { PsBoundary } from "../types";
 import {
@@ -6,10 +7,14 @@ import {
   securityBoundaryTypeDescription,
   securityBoundaryTypeLabel,
   catalogDefinitionChoices,
+  BOUNDARY_NETWORK_FIELDS,
+  formatBoundaryNetworkText,
 } from "../types";
 import { RichText } from "./RichText";
 
 export function BoundaryDetails({ boundary }: { boundary: PsBoundary }) {
+  const networkHelpId = useId();
+  const [networkError, setNetworkError] = useState<{ boundaryId: string; message: string } | null>(null);
   const {
     doc,
     availableCatalogDefinitions,
@@ -131,6 +136,49 @@ export function BoundaryDetails({ boundary }: { boundary: PsBoundary }) {
             )}
         </label>
       )}
+      {boundary.type === "security" ? (
+        <div>
+          <p id={networkHelpId} className="ps-description-below">
+            Optional network notes, shared across scenarios using this boundary.
+            Blank means undocumented. This is declared intent, not verified enforcement
+            or compliance. Switching to Privacy retains these notes as inactive.
+          </p>
+          {(["Inbound", "Outbound"] as const).map(direction => (
+            <div key={direction}>
+              <h4>{direction}</h4>
+              {BOUNDARY_NETWORK_FIELDS.filter(field => field.label.startsWith(direction)).map(({ key, label }) => (
+                <label key={key}>
+                  {label}
+                  <textarea
+                    rows={3}
+                    aria-describedby={networkHelpId}
+                    value={boundary[key] ?? ""}
+                    onChange={event => {
+                      try {
+                        updateBoundary(boundary.id, { [key]: event.target.value });
+                        setNetworkError(null);
+                      } catch (error) {
+                        setNetworkError({
+                          boundaryId: boundary.id,
+                          message: error instanceof Error ? error.message : String(error),
+                        });
+                      }
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          ))}
+          {networkError?.boundaryId === boundary.id && (
+            <p role="alert" className="ps-auth-selection-warning">{networkError.message}</p>
+          )}
+        </div>
+      ) : BOUNDARY_NETWORK_FIELDS.some(({ key }) => formatBoundaryNetworkText(boundary[key])) ? (
+        <p className="ps-description-below">
+          Security network notes are retained but inactive while this boundary is Privacy.
+          Switch to Security to view or edit them.
+        </p>
+      ) : null}
       <div className="ps-boundary-geom">
         <span>
           @ ({Math.round(boundary.position.x)}, {Math.round(boundary.position.y)})

@@ -7,17 +7,19 @@ one documented interface. **Model > Custom Libraries** lists loaded, rejected
 and unavailable packages, identities, versions, contributions and provenance.
 About and the status bar summarize the selected set.
 
-Core defaults exclude four owner-specific authentication methods, two tenant
-choices and all 13 former curated node definitions. The 164 public-cloud
-entries remain. Inventory ID is an optional text field in core; a selected
-library can supply its ServiceTree label, GUID validation and required-value
-rule. The two compliance perimeters, four organization-specific deployment
-boundaries and ESTS evidence label also require an available library for new
-selections. Core retains Geo boundary, IFrame, CSP, Azure, User browser and
-User Tenant Trust. Both core-only and companion-library configurations inherit
-the same twelve Purview-aligned/supplemental classification definitions.
-Private guidance stays in optional help rather than duplicating the common
-dictionary. Service configuration is selected separately using `SDS_SERVICE_CONFIG`
+Core provides 164 public-cloud node types, configurable authentication and
+classification libraries, and reusable security/privacy boundary definitions.
+Inventory ID is an optional text field; a selected library can provide a
+custom label, GUID validation and a required-value rule. Optional packages can
+add organization-specific catalog entries, metadata and guidance without
+replacing the shared model contract.
+Core includes Geo boundary, IFrame, CSP, Azure, User browser and User Tenant
+Trust, plus VNet, Subnet, Container, Process and Machine security boundaries.
+Existing IDs/order and the IFrame creation default are unchanged. The same
+twelve Purview-aligned/supplemental classification definitions are available
+with or without optional packages. Guidance belongs in optional help rather
+than a duplicate classification dictionary.
+Service configuration is selected separately using `SDS_SERVICE_CONFIG`
 or explicit endpoint environment settings; no service destinations are inferred.
 This is not public-release certification.
 The default selection is empty even if an `internal` directory exists.
@@ -84,7 +86,7 @@ The root fields are `format: "secure-design-studio-library"`, `apiVersion: 1`,
 |---|---|
 | `catalogs.authentication` | Existing strict authentication definitions. Protected built-in behavior/aliases remain protected. New methods remain unverified; prose does not establish security semantics. |
 | `catalogs.classifications` | One complete validated Classification Library, with enabled default and existing presentation/guidance rules. Overrides `classifications/default` explicitly; never silently replaces a stored profile list. |
-| `catalogs.nodes` | Stable bounded node ID (including existing spaces/parentheses), label and explicit node definition: auth/data policy, optional current geo/retention/GDPR metadata, endpoint hints, description and existing bundled icon references. Curated data policy requires one wildcard fallback. |
+| `catalogs.nodes` | Stable bounded node ID (including existing spaces/parentheses), label and explicit node definition: auth/data policy, optional current geo/retention/GDPR metadata, endpoint hints, description and existing bundled icon references. Optional `defaultDfdRole` is exactly `Process`, `DataStore`, or `ExternalInteractor`; an unknown package role rejects the package. Curated data policy requires one wildcard fallback. |
 | `catalogs.taxonomy` | Existing portable tenant, privacy/security boundary and deviation definitions. Classification entries use the dedicated Classification Library instead. |
 | `fields` | Stable ID, node/edge target, label/description and storage binding. The inventory (`serviceTreeId`) binding additionally supports `validation: "guid"`; other metadata uses declarative validation rules. Generic values use `metadata`; node fields may bind existing `serviceTreeId` or `endpointRegex`. Core `serviceTreeId` is labeled Inventory ID and permits ordinary text; bindings cannot be changed by an overlay. |
 | `rules` | Stable finding ID, target, `fieldId`, `check: "required"` or `"guid"`, title/description and optional guidance. GUID checks allow blank values; combine with a required check when blank must also be flagged. No arbitrary expressions or scripts. |
@@ -98,6 +100,14 @@ An overlay declares `{ key, from }`; keys include `authentication/<id>`,
 `rules/<id>` and `help/<id>`. The previous owner must match. Non-core overlays
 also declare that exact owner/version as a dependency. Cycles are rejected.
 Core analyzer rules cannot be replaced by this checkpoint.
+
+The five new security-boundary IDs are exactly `VNet`, `Subnet`, `Container`,
+`Process`, and `Machine`. A package contribution using any of these IDs,
+including a case variant, requires an explicit core override, for example
+`{ "key": "taxonomy/securityBoundary/VNet", "from": "core" }`. Keep persisted
+IDs stable rather than renaming saved references to evade a collision. Boundary
+subtypes describe intended separation, not verified isolation; `Process` here
+is not a node DFD role.
 
 ## Endpoint-import help slots
 
@@ -114,12 +124,10 @@ Generic instructions and Choose file remain usable. The dialog never executes
 the example, queries telemetry, signs in or contacts imported endpoint URLs.
 Clipboard denial selects the text and explains how to copy it manually.
 
-The synthetic example demonstrates these slots without private content. The
-current internal companion repository tracks its real pilot package through
-narrow `internal\custom` ignore exceptions for its manifest, README and companion-only test; that directory and those
-exceptions must be excluded from the reviewed public source import. Public
-setup and tests must not depend on that package. An unconfigured build must
-contain no pilot query even when the private directory is present.
+The synthetic example demonstrates these slots without confidential content.
+Public setup and tests require no private package. Keep confidential packages
+and their guidance out of shared source and artifacts; an unconfigured build
+must not contain content from unselected packages.
 
 ## Review guidance
 
@@ -156,6 +164,29 @@ must not replace them with a same-ID installed definition. An ID-only reference
 without an available definition remains ID-only: normalization does not invent
 an empty saved override that would block resolution when its library returns.
 An explicitly saved Unspecified definition still wins.
+For taxonomy, portable meaning is keyed by `(kind, id)` and carries `label`,
+optional `description`, and optional library ID/version, not arbitrary
+executable metadata. A saved snapshot wins even when its library is absent
+or a same-ID installed label/description differs; **Saved catalog definitions**
+distinguishes that conflict from a document-only definition. Without a
+snapshot, an available same-ID definition can be captured as local fallback.
+That fallback cannot reconstruct the original author's missing meaning.
+Saved `defaultDfdRole` definitions likewise win over installed defaults.
+New/adopted nodes capture a known role default, including public catalog
+defaults. Old nodes lacking role evidence get `dfdRoleLegacy: true` before
+catalog hydration; only an explicit **Use type default** action removes that
+legacy pin. `dfdRoleOverride` wins independently of the service type and is
+never erased by type changes. Unknown saved role tokens remain unresolved
+evidence, not authority to treat a node as external.
+
+`Scenario.nodeScopeReasons[nodeId]` holds per-scenario scope text. An effective
+out-of-scope reason requires a nonblank string and a resolved Process/DataStore
+role. Invalid values are retained as `{ invalid, truncated? }` recovery records
+(role evidence capped at 128 characters; reason evidence at 16000).
+Malformed whole maps use `nodeScopeReasonsRecovery`. Those records are inert
+and diagnosed rather than coerced into exclusion. Real nonmember reasons stay
+dormant; orphan-node entries are removed. No document or storage namespace
+version changes are needed for these optional fields.
 Properties shows an unavailable-definition notice for an unresolved node type;
 viewing that notice does not create a replacement definition.
 

@@ -19,13 +19,11 @@
 //                                         subtype — set later in UI)
 //   - Connector (GE.DF)                -> PsEdge
 //
-// What's intentionally dropped (with counters in the summary):
+// What's intentionally dropped (with counters/diagnostics before replacement):
 //   - StencilRectangle (GE.A) free-text annotations — no PsNode analog.
 //   - LineBoundary (GE.TB.L) — PsBoundary is rectangle-only, no surface
 //     for representing a free-floating line. Future improvement.
-//   - Connectors whose Source or Target Guid is the all-zero sentinel,
-//     or refers to a Guid that didn't survive node dedup (e.g. pointed
-//     to a dropped freetext / line boundary).
+// Broken connector references and conflicting identities fail explicitly.
 //
 // Round-trip decorations from `tm7Export.ts` are reversed when present:
 //   - Node "Name" of the form "Title\nST: <guid>" splits into
@@ -44,6 +42,8 @@ import {
   legacyAuthenticationIdentity,
   isAuthenticationType,
   type AuthenticationType,
+  type DfdValue,
+  type DfdRole,
   DEFAULT_NODE_TYPES,
   type PsBoundary,
   type PsDocument,
@@ -53,6 +53,7 @@ import {
   uid,
 } from "./types";
 import { chooseHandles } from "./tmcImport";
+import { normalizeDfdValue } from "./dfdSemantics";
 
 export class Tm7ImportError extends Error {}
 
@@ -63,9 +64,7 @@ export interface Tm7ImportSummary {
   boundaryCount: number;
   // Surfaces seen in the file (= scenarios that will exist).
   surfaceCount: number;
-  // Connectors dropped because Source or Target couldn't be resolved to
-  // a node we kept (zero-GUID, points at a freetext, points at a line
-  // boundary, or the GUID simply wasn't present in any Borders block).
+  // Kept for existing consumers. Invalid connector references now fail import.
   skippedDanglingEdgeCount: number;
   // Free-text annotations (GE.A) dropped on import.
   skippedAnnotationCount: number;
@@ -77,6 +76,7 @@ export interface Tm7ImportResult {
   doc: PsDocument;
   activeScenarioId: string | null;
   summary: Tm7ImportSummary;
+  diagnostics: string[];
 }
 
 // Lowercased TM7 GenericTypeId constants. Centralized so a future
@@ -92,6 +92,11 @@ const GTI_LINE_BOUNDARY = "GE.TB.L";
 const NODE_GTIS = new Set([GTI_PROCESS, GTI_EXTERNAL, GTI_DATASTORE]);
 
 const ZERO_GUID = "00000000-0000-0000-0000-000000000000";
+const NATIVE_PROPERTY_NAMES: Record<string, string> = {
+  "71f3d9aa-b8ef-4e54-8126-607a1d903103": "Out Of Scope",
+  "752473b6-52d4-4776-9a24-202153f7d579": "Reason For Out Of Scope",
+  "15ccd509-98eb-49ad-b9c2-b4a2926d1780": "Dataflow Order",
+};
 
 // Maps the lowercased AuthenticationType label (as emitted by
 // tm7Export.ts via `authTypeLabel`) back to its enum id. Built lazily so
@@ -140,6 +145,102 @@ function textOf(el: Element | null): string {
   return (el.textContent ?? "").trim();
 }
 
+function readXsiType(element: Element): string {
+  return (element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")
+    || element.getAttribute("i:type") || element.getAttribute("type") || "").split(":").pop()!;
+}
+
+function validGuid(value: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) || value.toLowerCase() === ZERO_GUID) {
+    throw new Tm7ImportError(`Invalid TM7 GUID "${value}".`);
+  }
+  return value.toLowerCase();
+}
+
+function validateEntry(entry: Element, seen: Set<string>): Element {
+  const value = firstChild(entry, "Value");
+  if (!value) throw new Tm7ImportError("A drawing entry has no Value.");
+  const id = validGuid(textOf(firstChild(value, "Guid")));
+  const key = textOf(firstChild(entry, "Key"));
+  if (key && validGuid(key) !== id) throw new Tm7ImportError(`Drawing key and object GUID disagree for ${id}.`);
+  if (seen.has(id)) throw new Tm7ImportError(`Duplicate object GUID ${id} on one tab.`);
+  seen.add(id);
+  return value;
+}
+
+function validateSerialization(root: Element): void {
+  const seen = new Set<string>();
+  for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
+    const ns = "http://schemas.microsoft.com/2003/10/Serialization/";
+    const id = el.getAttributeNS(ns, "Id");
+    const ref = el.getAttributeNS(ns, "Ref");
+    if (ref) throw new Tm7ImportError(`Serialization reference ${ref} is unsupported; save an expanded native TM7 before importing.`);
+    if (id && seen.has(id)) throw new Tm7ImportError(`Duplicate XML serialization ID ${id}.`);
+    if (id) seen.add(id);
+  }
+}
+
+function hasElementChildren(element: Element): boolean {
+  for (let child = element.firstChild; child; child = child.nextSibling) {
+    if (child.nodeType === 1) return true;
+  }
+  return false;
+}
+
+function readNodeScope(value: Element, node: ParsedNode, tab: string, diagnostics: string[]): DfdValue | undefined {
+  const props = firstChild(value, "Properties");
+  const flag = textOf(findPropertyValue(props, "Out Of Scope"));
+  const reason = textOf(findPropertyValue(props, "Reason For Out Of Scope"));
+  const enabled = flag === "true" || flag === "1";
+  const prefix = `Node ${node.id} on "${tab}": `;
+  const normalizedReason = normalizeDfdValue(reason);
+  if (typeof normalizedReason !== "string") {
+    diagnostics.push(prefix + "scope reason exceeds the native model's supported text bound; only inactive, truncated recovery evidence is retained. Keep the original TM7.");
+    return normalizedReason;
+  }
+  if (flag && !["true", "false", "1", "0"].includes(flag)) {
+    diagnostics.push(prefix + `unrecognized scope flag "${flag}"; scope is not activated and its reason is omitted.`);
+    return undefined;
+  }
+  if (node.role === "ExternalInteractor") {
+    if (enabled || reason) diagnostics.push(prefix + "External Interactors cannot be out of scope; any reason is retained only as inactive evidence.");
+    return reason || undefined;
+  }
+  if (enabled && !reason) {
+    diagnostics.push(prefix + "Out Of Scope has no reason; it cannot activate reason-based scenario scope. No reason was fabricated.");
+    return undefined;
+  }
+  if (!enabled && reason) {
+    diagnostics.push(prefix + "scope flag is false or absent but a reason is present; the contradictory reason is omitted to avoid activating exclusion.");
+    return undefined;
+  }
+  return enabled ? reason : undefined;
+}
+
+function reportExtraProperties(value: Element, tab: string, diagnostics: string[]): void {
+  const typeId = textOf(firstChild(value, "TypeId"));
+  if (typeId && typeId !== textOf(firstChild(value, "GenericTypeId"))) {
+    diagnostics.push(`Stencil type "${typeId}" on ${textOf(firstChild(value, "Guid"))}, tab "${tab}", is reduced to its generic drawing type; custom behavior is not imported.`);
+  }
+  const props = firstChild(value, "Properties");
+  if (!props) return;
+  for (const attr of childElements(props, "anyType")) {
+    if (readXsiType(attr) === "HeaderDisplayAttribute") continue;
+    const name = propertyName(attr);
+    if (["Name", "Out Of Scope", "Reason For Out Of Scope", "Dataflow Order"].includes(name)) continue;
+    if (textOf(firstChild(attr, "Value"))) {
+      diagnostics.push(`Property "${name || "(unnamed)"}" on ${textOf(firstChild(value, "Guid"))}, tab "${tab}", is not imported.`);
+    }
+
+  }
+}
+
+function propertyName(attribute: Element): string {
+  const id = textOf(firstChild(attribute, "Name")).toLowerCase();
+  return Object.hasOwn(NATIVE_PROPERTY_NAMES, id) ? NATIVE_PROPERTY_NAMES[id]
+    : textOf(firstChild(attribute, "DisplayName"));
+}
+
 // Find a child by local name regardless of nesting depth (BFS). Returns
 // the first match. Used for digging into Properties / Value subtrees
 // where exact namespace prefixes differ across emitters.
@@ -166,12 +267,16 @@ function findPropertyValue(
   displayName: string,
 ): Element | null {
   if (!properties) return null;
+  let result: Element | null = null;
+  let found = false;
   for (const child of childElements(properties, "anyType")) {
-    const dn = textOf(firstChild(child, "DisplayName"));
+    const dn = propertyName(child);
     if (dn !== displayName) continue;
-    return firstChild(child, "Value");
+    if (found) throw new Tm7ImportError(`Duplicate native property "${displayName}".`);
+    found = true;
+    result = firstChild(child, "Value");
   }
-  return null;
+  return result;
 }
 
 // Read the stencil's "headline" — first HeaderDisplayAttribute in the
@@ -181,7 +286,7 @@ function findPropertyValue(
 function readStencilHeader(properties: Element | null): string {
   if (!properties) return "";
   for (const child of childElements(properties, "anyType")) {
-    const xsiType = child.getAttribute("i:type") ?? child.getAttribute("type");
+    const xsiType = readXsiType(child);
     if (!xsiType) continue;
     if (!/HeaderDisplayAttribute$/.test(xsiType)) continue;
     return textOf(firstChild(child, "DisplayName"));
@@ -197,6 +302,8 @@ interface ParsedNode {
   serviceTreeId: string;
   description: string;
   position: { x: number; y: number };
+  role: DfdValue;
+  scopeReason?: DfdValue;
 }
 
 interface ParsedBoundary {
@@ -309,8 +416,7 @@ function parseBorderEntry(entry: Element): {
 } {
   const value = firstChild(entry, "Value");
   if (!value) return { kind: "other" };
-  const xsiType =
-    value.getAttribute("i:type") ?? value.getAttribute("type") ?? "";
+  const xsiType = readXsiType(value);
   const genericTypeId = textOf(firstChild(value, "GenericTypeId"));
   const guid = textOf(firstChild(value, "Guid"));
   if (!guid || guid === ZERO_GUID) return { kind: "other" };
@@ -334,6 +440,19 @@ function parseBorderEntry(entry: Element): {
     if (genericTypeId === GTI_ANNOTATION) return { kind: "annotation" };
     const { title, serviceTreeId } = parseNodeLabel(rawName);
     const header = readStencilHeader(properties);
+    const roles: Record<string, { role: DfdRole; shape: string }> = {
+      [GTI_PROCESS]: { role: "Process", shape: "StencilEllipse" },
+      [GTI_EXTERNAL]: { role: "ExternalInteractor", shape: "StencilRectangle" },
+      [GTI_DATASTORE]: { role: "DataStore", shape: "StencilParallelLines" },
+    };
+    const native = NODE_GTIS.has(genericTypeId) ? roles[genericTypeId] : undefined;
+    if (native && xsiType && native.shape !== xsiType) {
+      throw new Tm7ImportError(`Node ${guid} has conflicting native role ${genericTypeId} and shape ${xsiType}.`);
+    }
+    const typeId = textOf(firstChild(value, "TypeId"));
+    if (native && NODE_GTIS.has(typeId) && typeId !== genericTypeId) {
+      throw new Tm7ImportError(`Node ${guid} has conflicting native role IDs ${genericTypeId} and ${typeId}.`);
+    }
     // Position: TM7 stores top-left of the stencil bounding box. The
     // export side back-computes from `position.x - NODE_W/2`. Restore
     // the centerpoint so re-export round-trips cleanly.
@@ -347,6 +466,7 @@ function parseBorderEntry(entry: Element): {
         serviceTreeId,
         description: header ? `TMT stencil: ${header}` : "",
         position: { x: left + w / 2, y: top + h / 2 },
+        role: native?.role ?? { invalid: `Unsupported TM7 role ${genericTypeId || xsiType}` },
       },
     };
   }
@@ -374,8 +494,7 @@ interface ParseLineResult {
 function parseLineEntry(entry: Element): ParseLineResult {
   const value = firstChild(entry, "Value");
   if (!value) return { kind: "other" };
-  const xsiType =
-    value.getAttribute("i:type") ?? value.getAttribute("type") ?? "";
+  const xsiType = readXsiType(value);
   const genericTypeId = textOf(firstChild(value, "GenericTypeId"));
   const guid = textOf(firstChild(value, "Guid"));
 
@@ -427,6 +546,7 @@ function parseLineEntry(entry: Element): ParseLineResult {
 // ---- Surface walk -------------------------------------------------------
 
 interface ParsedSurface {
+  id: string;
   name: string;
   nodes: ParsedNode[];
   boundaries: ParsedBoundary[];
@@ -438,8 +558,10 @@ interface ParsedSurface {
   lineBoundaries: number;
 }
 
-function parseSurface(surface: Element): ParsedSurface {
+function parseSurface(surface: Element, diagnostics: string[]): ParsedSurface {
+  const nativeId = textOf(firstChild(surface, "Guid"));
   const out: ParsedSurface = {
+    id: nativeId ? validGuid(nativeId) : uid("s"),
     name: "Diagram",
     nodes: [],
     boundaries: [],
@@ -447,6 +569,7 @@ function parseSurface(surface: Element): ParsedSurface {
     annotations: 0,
     lineBoundaries: 0,
   };
+  if (!nativeId) diagnostics.push("A tab has no native GUID; a new scenario identity was assigned.");
 
   // Tab name lives in Properties as a StringDisplayAttribute "Name".
   const properties = firstChild(surface, "Properties");
@@ -454,27 +577,50 @@ function parseSurface(surface: Element): ParsedSurface {
   if (tabName) out.name = tabName;
 
   const borders = firstChild(surface, "Borders");
+  const seen = new Set<string>();
   if (borders) {
     for (const entry of childElements(borders, "KeyValueOfguidanyType")) {
+      const value = validateEntry(entry, seen);
       const parsed = parseBorderEntry(entry);
       if (parsed.kind === "node" && parsed.node) {
+        parsed.node.scopeReason = readNodeScope(value, parsed.node, out.name, diagnostics);
+        if (typeof parsed.node.role !== "string") {
+          diagnostics.push(`Node ${parsed.node.id} on "${out.name}": ${parsed.node.role.invalid}. Retained as an unresolved DFD override, not a verified Process.`);
+        }
         out.nodes.push(parsed.node);
       } else if (parsed.kind === "boundary" && parsed.boundary) {
         out.boundaries.push(parsed.boundary);
+        const props = firstChild(value, "Properties");
+        if (["true", "1"].includes(textOf(findPropertyValue(props, "Out Of Scope"))) ||
+            textOf(findPropertyValue(props, "Reason For Out Of Scope"))) {
+          diagnostics.push(`Boundary scope on "${out.name}" is not mapped; only node scenario scope is supported.`);
+        }
       } else if (parsed.kind === "annotation") {
         out.annotations++;
+      } else {
+        diagnostics.push(`Unsupported border ${textOf(firstChild(value, "Guid"))} on "${out.name}" is omitted.`);
       }
+      reportExtraProperties(value, out.name, diagnostics);
     }
   }
 
   const lines = firstChild(surface, "Lines");
   if (lines) {
     for (const entry of childElements(lines, "KeyValueOfguidanyType")) {
+      const value = validateEntry(entry, seen);
       const parsed = parseLineEntry(entry);
       if (parsed.kind === "edge" && parsed.edge) {
         out.edges.push(parsed.edge);
       } else if (parsed.kind === "lineBoundary") {
         out.lineBoundaries++;
+      } else {
+        diagnostics.push(`Unsupported line ${textOf(firstChild(value, "Guid"))} on "${out.name}" is omitted.`);
+      }
+      reportExtraProperties(value, out.name, diagnostics);
+      const props = firstChild(value, "Properties");
+      if (["true", "1"].includes(textOf(findPropertyValue(props, "Out Of Scope"))) ||
+          textOf(findPropertyValue(props, "Reason For Out Of Scope"))) {
+        diagnostics.push(`Flow/boundary scope on "${out.name}" is not mapped; only node scenario scope is supported.`);
       }
     }
   }
@@ -485,6 +631,9 @@ function parseSurface(surface: Element): ParsedSurface {
 // ---- Entry point --------------------------------------------------------
 
 export function parseTm7(xmlText: string): Tm7ImportResult {
+  if (/<!DOCTYPE|<!ENTITY/i.test(xmlText)) {
+    throw new Tm7ImportError("DTD/entity declarations are not supported in TM7 imports.");
+  }
   // Use the browser's built-in DOMParser. The Node-side test harness
   // polyfills `globalThis.DOMParser` from @xmldom/xmldom before calling
   // this function.
@@ -508,6 +657,9 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
   if (!doc || !doc.documentElement) {
     throw new Tm7ImportError("Empty or unparseable TM7 document.");
   }
+  if (doc.getElementsByTagNameNS("*", "parsererror").length) {
+    throw new Tm7ImportError("Malformed TM7 XML. The current diagram has not been replaced.");
+  }
   if (doc.documentElement.localName !== "ThreatModel") {
     throw new Tm7ImportError(
       `Unexpected root element <${doc.documentElement.nodeName}>; expected <ThreatModel>.`,
@@ -524,7 +676,35 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
     );
   }
 
-  const parsedSurfaces = surfaces.map(parseSurface);
+  validateSerialization(doc.documentElement);
+  const diagnostics: string[] = [];
+  const parsedSurfaces = surfaces.map(surface => parseSurface(surface, diagnostics));
+  const surfaceIds = new Set<string>();
+  const objectKinds = new Map<string, string>();
+  for (const surface of parsedSurfaces) {
+    if (surfaceIds.has(surface.id)) throw new Tm7ImportError(`Duplicate tab GUID ${surface.id}.`);
+    surfaceIds.add(surface.id);
+    for (const [kind, objects] of [["node", surface.nodes], ["edge", surface.edges], ["boundary", surface.boundaries]] as const) {
+      for (const object of objects) {
+        const previous = objectKinds.get(object.id);
+        if (previous && previous !== kind) throw new Tm7ImportError(`GUID ${object.id} is shared by incompatible object kinds.`);
+        objectKinds.set(object.id, kind);
+      }
+    }
+  }
+  for (const id of surfaceIds) {
+    if (objectKinds.has(id)) throw new Tm7ImportError(`GUID ${id} is shared by a tab and an object.`);
+  }
+  const threats = firstChild(doc.documentElement, "ThreatInstances");
+  if (threats && hasElementChildren(threats)) {
+    diagnostics.push("Native threat instances, authored text, mitigation/justification and status are not imported. Keep the original TM7; this is not a complete threat import.");
+  }
+  for (const name of ["Notes", "MetaInformation"]) {
+    const section = firstChild(doc.documentElement, name);
+    if (textOf(section)) diagnostics.push(`${name} content is not imported.`);
+  }
+  const knowledgeBase = firstChild(doc.documentElement, "KnowledgeBase");
+  if (knowledgeBase) diagnostics.push("Template definitions, rules and custom stencil behavior are not imported; only supported native drawing properties are mapped.");
 
   // ---- Cross-tab dedup ----
   //
@@ -542,7 +722,17 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
 
   for (const surf of parsedSurfaces) {
     for (const n of surf.nodes) {
-      if (nodesByGuid.has(n.id)) continue;
+      const previous = nodesByGuid.get(n.id);
+      if (previous) {
+        if (JSON.stringify(previous.dfdRoleOverride) !== JSON.stringify(n.role)) {
+          throw new Tm7ImportError(`Node ${n.id} has conflicting DFD roles across tabs. Correct the original TM7 before importing.`);
+        }
+        if (previous.title !== n.title || previous.serviceTreeId !== n.serviceTreeId ||
+            previous.description !== n.description || JSON.stringify(previous.position) !== JSON.stringify(n.position)) {
+          diagnostics.push(`Shared node ${n.id} has different labels, metadata or positions across tabs; the first occurrence is retained.`);
+        }
+        continue;
+      }
       nodesByGuid.set(n.id, {
         id: n.id,
         title: n.title,
@@ -553,10 +743,18 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
         serviceTreeId: n.serviceTreeId,
         endpointRegex: "",
         position: n.position,
+        dfdRoleOverride: n.role,
       });
     }
     for (const b of surf.boundaries) {
-      if (boundariesByGuid.has(b.id)) continue;
+      const previous = boundariesByGuid.get(b.id);
+      if (previous) {
+        if (previous.title !== b.title || JSON.stringify(previous.position) !== JSON.stringify(b.position) ||
+            JSON.stringify(previous.size) !== JSON.stringify(b.size)) {
+          diagnostics.push(`Shared boundary ${b.id} differs across tabs; the first occurrence is retained.`);
+        }
+        continue;
+      }
       boundariesByGuid.set(b.id, {
         id: b.id,
         type: "security",
@@ -570,23 +768,27 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
     skipped.lineBoundary += surf.lineBoundaries;
   }
 
-  // Edge pass: only register edges whose endpoints survived node dedup.
-  // Doing this AFTER all surfaces are walked means an edge whose
-  // endpoint sits on a different tab (rare but legal in TMT) still
-  // resolves cleanly.
+  // Each connector must resolve to node occurrences on its own tab.
   for (const surf of parsedSurfaces) {
+    const localNodes = new Set(surf.nodes.map(node => node.id));
     for (const e of surf.edges) {
       if (
         e.endpointMissing ||
-        !nodesByGuid.has(e.source) ||
-        !nodesByGuid.has(e.target)
+        !localNodes.has(e.source) ||
+        !localNodes.has(e.target)
       ) {
-        // Only count each unique edge guid once towards the dropped
-        // count to avoid double-counting cross-tab repeats.
-        if (!edgesByGuid.has(e.id)) skipped.danglingEdge++;
+        throw new Tm7ImportError(`Flow ${e.id} on "${surf.name}" has an endpoint missing from that tab. Correct its references before importing.`);
+      }
+      const previous = edgesByGuid.get(e.id);
+      if (previous) {
+        if (previous.source !== e.source || previous.target !== e.target) {
+          throw new Tm7ImportError(`Flow ${e.id} has conflicting endpoints across tabs.`);
+        }
+        if (previous.title !== e.title || JSON.stringify(previous.authenticationTypes) !== JSON.stringify(e.authenticationTypes)) {
+          diagnostics.push(`Shared flow ${e.id} has different labels/authentication across tabs; the first occurrence is retained.`);
+        }
         continue;
       }
-      if (edgesByGuid.has(e.id)) continue;
       const srcNode = nodesByGuid.get(e.source);
       const tgtNode = nodesByGuid.get(e.target);
       // Pick connector sides based on relative node positions so the edge
@@ -614,7 +816,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
 
   // ---- Materialize scenarios ----
   const scenarios: Scenario[] = parsedSurfaces.map((surf) => {
-    const sid = uid("s");
+    const sid = surf.id;
     const surfaceNodeIds = new Set<string>();
     for (const n of surf.nodes) {
       if (nodesByGuid.has(n.id)) surfaceNodeIds.add(n.id);
@@ -649,12 +851,16 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
     }
     const edgeNumbers: Record<string, number> = {};
     edgeIds.forEach((id, i) => (edgeNumbers[id] = i + 1));
+    if (surfaceEdges.some(e => e.dataflowOrder !== null && e.dataflowOrder !== edgeNumbers[e.id])) {
+      diagnostics.push(`Flow numbering on "${surf.name}" is compacted to sequential values on import.`);
+    }
 
     return {
       id: sid,
       name: surf.name || "Diagram",
       description: "",
       nodeIds: [...surfaceNodeIds],
+      nodeScopeReasons: Object.fromEntries(surf.nodes.filter(n => n.scopeReason !== undefined).map(n => [n.id, n.scopeReason!])),
       edgeIds,
       edgeNumbers,
       boundaryIds: [...surfaceBoundaryIds],
@@ -679,6 +885,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
   };
 
   return {
+    diagnostics: [...new Set(diagnostics)],
     doc: psDoc,
     activeScenarioId: scenarios.length > 0 ? scenarios[0].id : null,
     summary: {

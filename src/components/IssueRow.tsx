@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { ISSUE_NOT_EVALUATED_LABELS, type PsIssue } from "../types";
 import { safeNavigationHref } from "../urlSafety";
+import { nodeDfdSummary, flowDfdSummary } from "../dfdSemantics";
+import { isAuthoredThreatNote } from "../threatNotes";
 
 export function IssueRow({
   issue,
@@ -21,6 +23,7 @@ export function IssueRow({
 }) {
   const {
     doc,
+    activeScenario,
     setIssueStatus,
     deleteIssue,
     updateIssue,
@@ -33,9 +36,12 @@ export function IssueRow({
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(issue.title);
   const [descDraft, setDescDraft] = useState(issue.description);
+  const [justificationDraft, setJustificationDraft] = useState(issue.justification ?? "");
+  useEffect(() => setJustificationDraft(issue.justification ?? ""), [issue.justification]);
   useEffect(() => setTitleDraft(issue.title), [issue.title]);
   useEffect(() => setDescDraft(issue.description), [issue.description]);
   const [replyDraft, setReplyDraft] = useState("");
+  const [editError, setEditError] = useState("");
 
   let targetLabel = "";
   let edgeNumberLabel = "";
@@ -58,7 +64,7 @@ export function IssueRow({
   }
   const scenarioNames =
     issue.scenarioIds.length === 0
-      ? "(no scenarios)"
+      ? "All scenarios containing this target"
       : issue.scenarioIds
           .map(
             (sid) =>
@@ -92,14 +98,24 @@ export function IssueRow({
     // analyzer can keep them in sync; the user can still edit replies and
     // toggle status. Only allow text edits on user-authored issues.
     if (issue.kind) return;
-    updateIssue(issue.id, {
-      title: titleDraft.trim() || "(untitled)",
-      description: descDraft,
-    });
-    setEditing(false);
+    try {
+      updateIssue(issue.id, {
+        title: isAuthoredThreatNote(issue) ? titleDraft : titleDraft.trim() || "(untitled)",
+        description: descDraft,
+        ...(isAuthoredThreatNote(issue) ? { justification: justificationDraft } : {}),
+      });
+      setEditing(false);
+      setEditError("");
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Unable to save issue.");
+    }
   };
 
   const canEdit = !issue.kind;
+  const node = issue.targetKind === "node" ? doc.nodes.find(item => item.id === issue.targetId) : undefined;
+  const edge = issue.targetKind === "edge" ? doc.edges.find(item => item.id === issue.targetId) : undefined;
+  const scopeContext = node ? nodeDfdSummary(node, doc, activeScenario)
+    : edge ? flowDfdSummary(edge, doc, activeScenario) : "";
 
   return (
     <div
@@ -133,6 +149,8 @@ export function IssueRow({
           </div>
         )}
         <p className="ps-allissues-title">{issue.title || "(untitled)"}</p>
+        {isAuthoredThreatNote(issue) && <p className="ps-description-below">Authored threat note</p>}
+        {scopeContext && <p className="ps-description-below">Scope context: {scopeContext}{issue.kind ? " Fixed checks unchanged." : ""}</p>}
         {issue.kind && issue.notEvaluatedReason && (
           <p className="ps-issue-evaluation">{ISSUE_NOT_EVALUATED_LABELS[issue.notEvaluatedReason]}</p>
         )}
@@ -202,18 +220,23 @@ export function IssueRow({
                 />
               </label>
               <label className="ps-allissues-field">
-                Description
+                {isAuthoredThreatNote(issue) ? "Threat / mitigation notes" : "Description"}
                 <textarea
                   value={descDraft}
                   onChange={(e) => setDescDraft(e.target.value)}
                   rows={4}
                 />
               </label>
+              {isAuthoredThreatNote(issue) && <label className="ps-allissues-field">
+                Justification (optional)
+                <textarea value={justificationDraft} onChange={event => setJustificationDraft(event.target.value)} rows={3} />
+              </label>}
+              {editError && <p role="alert">{editError}</p>}
               <div className="ps-comment-edit-actions">
                 <button
                   className="ps-modal-primary"
                   onClick={saveEdits}
-                  disabled={!titleDraft.trim()}
+                  disabled={!isAuthoredThreatNote(issue) && !titleDraft.trim()}
                 >
                   Save
                 </button>
@@ -225,6 +248,9 @@ export function IssueRow({
               <p className="ps-allcomments-text">
                 {issue.description || "(no description)"}
               </p>
+              {isAuthoredThreatNote(issue) && <p className="ps-allcomments-text">
+                Justification: {issue.justification || "(not supplied)"}
+              </p>}
               {canEdit && (
                 <div className="ps-allissues-edit-row">
                   <button onClick={() => setEditing(true)}>Edit</button>

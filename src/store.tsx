@@ -1,9 +1,11 @@
 import { SERVICES } from "./services";
+import { normalizeDfdValue, normalizeNodeScope, resolveNodeReviewScope } from "./dfdSemantics";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,6 +17,7 @@ import type { ChangeItem, ChangeTarget } from "./diff";
 import type { AssistantFinding } from "./designAssistant";
 import { loadAutosaveRaw, saveAutosave } from "./autosave";
 import { useUiShell } from "./uiShell";
+import { resetDetailsTab } from "./components/detailsTabStore";
 import type { ParsedPrivExp } from "./privacyManagerImport";
 import { readEmbeddedDoc } from "./embeddedDoc";
 import { mergeCatalogDefinitions, referencedCatalogDefinitions, validateCatalogDefinitions, withCatalogDefinitions } from "./catalogDefinitions";
@@ -43,6 +46,8 @@ import {
   PRIVACY_BOUNDARY_TYPE_LABELS,
   SECURITY_BOUNDARY_TYPE_DEFS,
   SECURITY_BOUNDARY_TYPE_LABELS,
+  BOUNDARY_NETWORK_FIELDS,
+  normalizeBoundaryNetworkText,
   GEO_BOUNDARY_SETTING_DEFS,
   GEO_BOUNDARY_SETTING_DEF_MAP,
   GEO_BOUNDARY_SETTING_LABELS,
@@ -61,6 +66,7 @@ import {
   isGuid,
   formatProductionIdentity,
   canonicalProductionIdentity,
+  normalizeRequiredAccessRights,
   productionIdentityTenantLabel,
   type ProductionIdentity,
   type ProductionIdentityTenant,
@@ -101,6 +107,7 @@ import {
 } from "./types";
 import { IssueManager } from "./IssueManager";
 import { normalizeIssueNotEvaluatedReason } from "./types";
+import { isAuthoredThreatNote, removeThreatNoteScenario, threatNoteFields, validateThreatNotes } from "./threatNotes";
 import { safeNavigationHref } from "./urlSafety";
 import { useLibraries } from "./libraries/LibraryProvider";
 import { libraryNodeTypes, withLibraryDefinitions } from "./libraries/document";
@@ -417,6 +424,7 @@ function normalizeNodeTypeDefinition(
   }
 
   return {
+    ...(raw.defaultDfdRole !== undefined ? { defaultDfdRole: normalizeDfdValue(raw.defaultDfdRole, 128) } : {}),
     serviceTreeId:
       typeof raw.serviceTreeId === "string" &&
       !inventoryIdError(raw.serviceTreeId)
@@ -642,6 +650,7 @@ interface StoreApi {
   // Nodes
   createNode: (position: Position) => PsNode;
   updateNode: (id: string, patch: Partial<PsNode>) => void;
+  setNodeScopeReason: (scenarioId: string, nodeId: string, reason: string, editSession?: symbol) => void;
   deleteNode: (id: string) => void;
   moveNode: (id: string, position: Position) => void;
   finishNodeMove: (id: string, position: Position, size: Size) => void;
@@ -739,11 +748,12 @@ interface StoreApi {
     targetId: string,
     scenarioIds: string[],
     title: string,
-    description: string
+    description: string,
+    threatNote?: { origin: "authored-threat"; justification?: string }
   ) => PsIssue;
   updateIssue: (
     id: string,
-    patch: Partial<Pick<PsIssue, "title" | "description" | "scenarioIds">>
+    patch: Partial<Pick<PsIssue, "title" | "description" | "scenarioIds" | "justification">>
   ) => void;
   setIssueStatus: (id: string, status: IssueStatus) => void;
   deleteIssue: (id: string) => void;
@@ -894,16 +904,37 @@ interface HistoryEntry {
   doc: PsDocument;
   authenticationLibrary?: AuthTypeDef[];
   classificationLibrary?: ClassificationLibrary;
+  // Local editor context only; autosave and collaboration carry document snapshots.
+  scopeReason?: { scenarioId: string; nodeId: string };
+}
+
+interface DocumentHistoryState {
+  doc: PsDocument;
+  past: HistoryEntry[];
+  future: HistoryEntry[];
+  ordinarySnapshot: { renderDoc: PsDocument; entry: HistoryEntry } | null;
+  scopeReasonEdit: {
+    session: symbol;
+    scenarioId: string;
+    nodeId: string;
+    doc: PsDocument;
+  } | null;
+}
+
+const HISTORY_LIMIT = 100;
+
+function appendHistory(entries: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
+  return [...entries, entry].slice(-HISTORY_LIMIT);
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { autosaveIntervalMs } = useUiShell();
+  const { autosaveIntervalMs, openInspector } = useUiShell();
   const libraries = useLibraries();
   const libraryNodes = useMemo(() => libraries.nodes.filter(type =>
     libraries.provenance[`nodes/${type.id.toLowerCase()}`] !== "core"), [libraries]);
   const libraryInitial = useMemo(() => loadAuthenticationLibrary(libraries.authentication), [libraries]);
   const classificationInitial = useMemo(() => loadClassificationLibrary(undefined, libraries.classifications), [libraries]);
-  const [classificationLibrary, setClassificationLibrary] = useState(classificationInitial.library);
+  const [classificationLibrary, setClassificationLibraryState] = useState(classificationInitial.library);
   const [classificationLibrarySource, setClassificationLibrarySource] = useState<StoreApi["classificationLibrarySource"]>(
     classificationInitial.source === "shipped" && libraries.provenance["classifications/default"] !== "core"
       ? "configured library" : classificationInitial.source,
@@ -914,22 +945,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ? classificationInitial.storedValue : null,
   );
   const classificationLibraryRef = useRef(classificationLibrary);
-  classificationLibraryRef.current = classificationLibrary;
   const classificationDefinitions = useMemo(
     () => classificationDefinitionsForLibrary(classificationLibrary), [classificationLibrary],
   );
   const classificationDefinitionsRef = useRef(classificationDefinitions);
-  classificationDefinitionsRef.current = classificationDefinitions;
+  const setClassificationLibrary = useCallback((next: ClassificationLibrary) => {
+    classificationLibraryRef.current = next;
+    classificationDefinitionsRef.current = classificationDefinitionsForLibrary(next);
+    setClassificationLibraryState(next);
+  }, []);
   const captureCatalogDefinitions = useCallback(
     (document: PsDocument, classifications: readonly CatalogDefinitionSnapshot[] = classificationDefinitionsRef.current) =>
       withCatalogDefinitions(document, [...classifications, ...libraries.taxonomy]),
     [libraries],
   );
-  const [authenticationLibrary, setAuthenticationLibrary] = useState(libraryInitial.methods);
+  const [authenticationLibrary, setAuthenticationLibraryState] = useState(libraryInitial.methods);
   const [authenticationStorageError, setAuthenticationStorageError] = useState(libraryInitial.error);
   const [catalogSnapshotError, setCatalogSnapshotError] = useState<string | null>(null);
   const libraryRef = useRef(authenticationLibrary);
-  libraryRef.current = authenticationLibrary;
+  const setAuthenticationLibrary = useCallback((next: AuthTypeDef[]) => {
+    libraryRef.current = next;
+    setAuthenticationLibraryState(next);
+  }, []);
   // Rehydrate from autosave once on mount. If anything is malformed we
   // fall back to a blank doc so a corrupt entry can never white-screen the
   // app. History entries are best-effort: bad ones are dropped, good ones
@@ -942,7 +979,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // experience. Autosave still picks up subsequent edits per-origin
   // (file:// URLs get a localStorage partition per file).
   const initial = useMemo(() => {
-    const catalogRecoveryFailure = (value: unknown) => {
+    const documentRecoveryFailure = (value: unknown, history: unknown[] = []) => {
       if (!value || typeof value !== "object") return null;
       try {
         if ("catalogDefinitions" in value) validateCatalogDefinitions(value.catalogDefinitions);
@@ -951,6 +988,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             const entities = (value as Record<string, unknown>)[collection];
             if (Array.isArray(entities)) for (const entity of entities) {
               if (entity && typeof entity === "object") normalizeEntityMetadata(entity, target);
+            }
+          }
+        }
+        for (const saved of [value, ...history]) {
+          if (saved && typeof saved === "object") validateThreatNotes(saved as Partial<PsDocument>);
+          if (saved && typeof saved === "object" && "edges" in saved && Array.isArray(saved.edges)) {
+            for (const edge of saved.edges) {
+              if (edge && typeof edge === "object") {
+                normalizeRequiredAccessRights(edge.requiredAccessRights, typeof edge.id === "string" ? edge.id : undefined);
+              }
+            }
+          }
+          if (saved && typeof saved === "object" && "boundaries" in saved && Array.isArray(saved.boundaries)) {
+            for (const boundary of saved.boundaries) {
+              if (boundary && typeof boundary === "object") {
+                for (const { key, label } of BOUNDARY_NETWORK_FIELDS) {
+                  normalizeBoundaryNetworkText(boundary[key], label);
+                }
+              }
             }
           }
         }
@@ -991,7 +1047,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const embedded = unwrap(readEmbeddedDoc());
     if (embedded) {
-      const failure = catalogRecoveryFailure(embedded.doc);
+      const failure = documentRecoveryFailure(embedded.doc);
       if (failure) return failure;
       const doc = safeNorm(embedded.doc);
       if (doc) {
@@ -1001,7 +1057,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const raw = loadAutosaveRaw();
     if (!raw) return null;
-    const failure = catalogRecoveryFailure(raw.doc);
+    const failure = documentRecoveryFailure(raw.doc, [...raw.past, ...raw.future]);
     if (failure) return failure;
     const doc = safeNorm(raw.doc);
     if (!doc) return null;
@@ -1080,21 +1136,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [initial]);
   const [documentRecoveryError, setDocumentRecoveryError] = useState(initial?.recoveryError ?? null);
 
-  const [doc, setDocRaw] = useState<PsDocument>(
-    () => initial?.doc ?? emptyDocument()
-  );
+  const [documentHistory, setDocumentHistory] = useState<DocumentHistoryState>(() => ({
+    doc: initial?.doc ?? emptyDocument(),
+    past: initial?.past ?? [],
+    future: initial?.future ?? [],
+    ordinarySnapshot: null,
+    scopeReasonEdit: null,
+  }));
+  const documentHistoryRef = useRef(documentHistory);
+  const { doc, past, future } = documentHistory;
+  const ordinaryRenderDocRef = useRef(doc);
+  useLayoutEffect(() => {
+    ordinaryRenderDocRef.current = doc;
+  }, [doc]);
+  const docRef = useMemo(() => ({ get current() { return documentHistoryRef.current.doc; } }), []);
+  const pastRef = useMemo(() => ({ get current() { return documentHistoryRef.current.past; } }), []);
+  const futureRef = useMemo(() => ({ get current() { return documentHistoryRef.current.future; } }), []);
+  const updateDocumentHistory = useCallback((transition: (previous: DocumentHistoryState) => DocumentHistoryState) => {
+    // Evaluate once in action order, before publishing an immutable render snapshot.
+    // React may batch renders; it must not replay storage/UI work or reset queued state.
+    const previous = documentHistoryRef.current;
+    const next = transition(previous);
+    if (next === previous) return;
+    documentHistoryRef.current = next;
+    setDocumentHistory(next);
+  }, []);
   const setDoc = useCallback<Dispatch<SetStateAction<PsDocument>>>(update => {
-    setDocRaw(previous => withLibraryDefinitions(
-      typeof update === "function" ? update(previous) : update,
-      libraries, libraryRef.current, classificationDefinitionsRef.current,
-    ));
-  }, [libraries]);
+    const profile = libraryRef.current;
+    const classifications = classificationDefinitionsRef.current;
+    updateDocumentHistory(previous => {
+      const nextDoc = withLibraryDefinitions(
+        typeof update === "function" ? update(previous.doc) : update,
+        libraries, profile, classifications,
+      );
+      return nextDoc === previous.doc ? previous : { ...previous, doc: nextDoc, scopeReasonEdit: null };
+    });
+  }, [libraries, updateDocumentHistory]);
   const nodeTypeCatalog = useMemo(() => libraryNodeTypes(doc, libraries), [doc, libraries]);
   const availableCatalogDefinitions = useMemo(() => [...classificationDefinitions, ...libraries.taxonomy], [classificationDefinitions, libraries]);
-  // Mirror of latest doc so action callbacks can read it synchronously
-  // without depending on the (possibly-stale) closure value.
-  const docRef = useRef<PsDocument>(doc);
-  docRef.current = doc;
   const authenticationCatalog = useMemo(
     () => authenticationCatalogFor(doc, authenticationLibrary, libraries.authentication), [doc, authenticationLibrary, libraries],
   );
@@ -1108,7 +1187,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => initial?.activeScenarioId ?? null
   );
   const activeScenarioIdRef = useRef<string | null>(activeScenarioId);
-  activeScenarioIdRef.current = activeScenarioId;
   const [selection, setSelectionRaw] = useState<Selection>(null);
   const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([]);
   const selectionRef = useRef<Selection>(null);
@@ -1119,10 +1197,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // the multi-selection set — this matches "click without ctrl" semantics
   // for every existing call site (delete handlers, list clicks, etc.).
   const setSelection = useCallback((s: Selection) => {
+    updateDocumentHistory(state => state.scopeReasonEdit &&
+      (s?.kind !== "node" || s.id !== state.scopeReasonEdit.nodeId)
+      ? { ...state, scopeReasonEdit: null } : state);
     setSelectionRaw(s);
     setMultiSelectedIds([]);
-  }, []);
+  }, [updateDocumentHistory]);
   const setActiveScenarioId = useCallback((id: string | null) => {
+    updateDocumentHistory(state => state.scopeReasonEdit && state.scopeReasonEdit.scenarioId !== id
+      ? { ...state, scopeReasonEdit: null } : state);
+    activeScenarioIdRef.current = id;
     setActiveScenarioIdRaw(id);
     if (id === null) return;
     const scenario = docRef.current.scenarios.find(
@@ -1148,7 +1232,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           scenario?.boundaryIds.includes(selectedId),
       ),
     );
-  }, []);
+  }, [updateDocumentHistory]);
   const clearMultiSelection = useCallback(() => {
     setMultiSelectedIds([]);
   }, []);
@@ -1189,9 +1273,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     []
   );
-  const [filter, setFilterState] = useState<FilterState>(
+  const [filter, setFilterStateRaw] = useState<FilterState>(
     () => initial?.filter ?? emptyFilter
   );
+  const filterRef = useRef(filter);
+  const setFilterState = useCallback<Dispatch<SetStateAction<FilterState>>>(update => {
+    const next = typeof update === "function" ? update(filterRef.current) : update;
+    filterRef.current = next;
+    setFilterStateRaw(next);
+  }, []);
   const [editingEdgeTitleId, setEditingEdgeTitleId] = useState<string | null>(
     null
   );
@@ -1252,15 +1342,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     id: string;
   } | null>(null);
   const [viewMode, setViewMode] = useState<"graph" | "sequence">("graph");
-  const [past, setPast] = useState<HistoryEntry[]>(() => initial?.past ?? []);
-  const [future, setFuture] = useState<HistoryEntry[]>(
-    () => initial?.future ?? []
-  );
-  const pastRef = useRef<HistoryEntry[]>(past);
-  pastRef.current = past;
-  const futureRef = useRef<HistoryEntry[]>(future);
-  futureRef.current = future;
-
   // -------- Realtime collaboration --------
   // Null when not joined. Populated by joinRoom() and cleared by
   // leaveRoom(); the useCollab hook below brings up / tears down the
@@ -1278,11 +1359,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       nextDoc: PsDocument,
       options: { resetHistory: boolean },
     ) => {
-      setDocRaw(nextDoc);
-      if (options.resetHistory) {
-        setPast([]);
-        setFuture([]);
-      }
+      updateDocumentHistory(previous => ({
+        ...previous,
+        doc: nextDoc,
+        past: options.resetHistory ? [] : previous.past,
+        future: options.resetHistory ? [] : previous.future,
+        ordinarySnapshot: null,
+        scopeReasonEdit: null,
+      }));
       const nodeIds = new Set(nextDoc.nodes.map((node) => node.id));
       const edgeIds = new Set(nextDoc.edges.map((edge) => edge.id));
       const boundaryIds = new Set(
@@ -1314,7 +1398,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ),
       );
     },
-    [],
+    [updateDocumentHistory],
   );
   const collabState = useCollab({
     room: collabRoom?.room ?? null,
@@ -1342,36 +1426,77 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const clearFilter = useCallback(() => setFilterState(emptyFilter), []);
 
   // -------- History --------
-  const HISTORY_LIMIT = 100;
   const snapshot = useCallback((
     includeLibrary: boolean | "classification" = false,
     prepared?: { doc: PsDocument; past: HistoryEntry[] },
   ) => {
-    const cur = prepared?.doc ?? docRef.current;
     const savedLibrary = includeLibrary === true ? libraryRef.current : undefined;
     const savedClassifications = includeLibrary === "classification" ? classificationLibraryRef.current : undefined;
-    setPast((p) => {
-      const previous = prepared?.past ?? p;
-      // Skip dup snapshots of the same doc reference.
-      if (!includeLibrary && previous.length > 0 && previous[previous.length - 1].doc === cur) return previous;
-      const next = [...previous, { doc: cur, authenticationLibrary: savedLibrary, classificationLibrary: savedClassifications }];
-      if (next.length > HISTORY_LIMIT) next.shift();
-      return next;
+    const renderDoc = ordinaryRenderDocRef.current;
+    updateDocumentHistory(state => {
+      const cur = prepared?.doc ?? state.doc;
+      const previous = prepared?.past ?? state.past;
+      // Preserve ordinary compound affordances, but snapshot their queued predecessor.
+      const duplicate = !includeLibrary && previous.length > 0 &&
+        state.ordinarySnapshot?.renderDoc === renderDoc &&
+        previous[previous.length - 1] === state.ordinarySnapshot.entry;
+      const entry: HistoryEntry = {
+        doc: cur, authenticationLibrary: savedLibrary, classificationLibrary: savedClassifications,
+      };
+      return {
+        ...state,
+        past: duplicate ? previous : appendHistory(previous, entry),
+        future: [],
+        ordinarySnapshot: includeLibrary ? null : duplicate ? state.ordinarySnapshot : { renderDoc, entry },
+        scopeReasonEdit: null,
+      };
     });
-    setFuture([]);
-  }, []);
+  }, [updateDocumentHistory]);
+
+  const restoreHistorySelection = useCallback((entry: HistoryEntry, previousDoc: PsDocument) => {
+    const context = entry.scopeReason;
+    const scenario = context && entry.doc.scenarios.find(item => item.id === context.scenarioId);
+    const currentScenario = context && previousDoc.scenarios.find(item => item.id === context.scenarioId);
+    if (context && activeScenarioIdRef.current === context.scenarioId &&
+        currentScenario?.nodeIds.includes(context.nodeId) && scenario?.nodeIds.includes(context.nodeId) &&
+        previousDoc.nodes.some(node => node.id === context.nodeId) && entry.doc.nodes.some(node => node.id === context.nodeId)) {
+      setSelection({ kind: "node", id: context.nodeId });
+      resetDetailsTab();
+      openInspector("properties");
+    } else {
+      setSelection(null);
+    }
+  }, [openInspector, setSelection]);
 
   const undo = useCallback(() => {
-    const p = pastRef.current;
+    const state = documentHistoryRef.current;
+    const p = state.past;
     if (p.length === 0) return;
     const prev = p[p.length - 1];
-    const current = docRef.current;
+    const current = state.doc;
     const currentLibrary = libraryRef.current;
     const currentClassifications = classificationLibraryRef.current;
     if (prev.authenticationLibrary && prev.classificationLibrary) {
       setClassificationStorageError("Undo was not applied: a history entry cannot change two profile libraries.");
       return;
     }
+    const restoredDoc = withLibraryDefinitions(
+      prev.doc, libraries, prev.authenticationLibrary ?? currentLibrary,
+      prev.classificationLibrary ? classificationDefinitionsForLibrary(prev.classificationLibrary)
+        : classificationDefinitionsRef.current,
+    );
+    const restored: DocumentHistoryState = {
+      ...state,
+      doc: restoredDoc,
+      past: state.past.slice(0, -1),
+      future: appendHistory(state.future, {
+        doc: current, authenticationLibrary: prev.authenticationLibrary ? currentLibrary : undefined,
+        classificationLibrary: prev.classificationLibrary ? currentClassifications : undefined,
+        ...(prev.scopeReason ? { scopeReason: prev.scopeReason } : {}),
+      }),
+      ordinarySnapshot: null,
+      scopeReasonEdit: null,
+    };
     if (prev.authenticationLibrary) {
       try { persistAuthenticationLibrary(prev.authenticationLibrary, currentLibrary, libraries.authentication); }
       catch (cause) { setAuthenticationStorageError((cause as Error).message); return; }
@@ -1380,14 +1505,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try { persistClassificationLibrary(prev.classificationLibrary, currentClassifications, undefined, libraries.classifications); }
       catch (cause) { setClassificationStorageError((cause as Error).message); return; }
     }
-    setFuture((f) => {
-      const next = [...f, { doc: current, authenticationLibrary: prev.authenticationLibrary ? currentLibrary : undefined,
-        classificationLibrary: prev.classificationLibrary ? currentClassifications : undefined }];
-      if (next.length > HISTORY_LIMIT) next.shift();
-      return next;
-    });
-    setPast((cur) => cur.slice(0, -1));
-    setDoc(prev.doc);
+    updateDocumentHistory(() => restored);
     if (prev.authenticationLibrary) setAuthenticationLibrary(prev.authenticationLibrary);
     if (prev.classificationLibrary) {
       setClassificationLibrary(prev.classificationLibrary);
@@ -1395,20 +1513,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setClassificationStorageError(null);
       setClassificationRecoveryRaw(null);
     }
-    setSelection(null);
-  }, []);
+    restoreHistorySelection({ ...prev, doc: restoredDoc }, current);
+  }, [restoreHistorySelection, libraries, updateDocumentHistory, setAuthenticationLibrary, setClassificationLibrary]);
 
   const redo = useCallback(() => {
-    const f = futureRef.current;
+    const state = documentHistoryRef.current;
+    const f = state.future;
     if (f.length === 0) return;
     const next = f[f.length - 1];
-    const current = docRef.current;
+    const current = state.doc;
     const currentLibrary = libraryRef.current;
     const currentClassifications = classificationLibraryRef.current;
     if (next.authenticationLibrary && next.classificationLibrary) {
       setClassificationStorageError("Redo was not applied: a history entry cannot change two profile libraries.");
       return;
     }
+    const restoredDoc = withLibraryDefinitions(
+      next.doc, libraries, next.authenticationLibrary ?? currentLibrary,
+      next.classificationLibrary ? classificationDefinitionsForLibrary(next.classificationLibrary)
+        : classificationDefinitionsRef.current,
+    );
+    const restored: DocumentHistoryState = {
+      ...state,
+      doc: restoredDoc,
+      past: appendHistory(state.past, {
+        doc: current, authenticationLibrary: next.authenticationLibrary ? currentLibrary : undefined,
+        classificationLibrary: next.classificationLibrary ? currentClassifications : undefined,
+        ...(next.scopeReason ? { scopeReason: next.scopeReason } : {}),
+      }),
+      future: state.future.slice(0, -1),
+      ordinarySnapshot: null,
+      scopeReasonEdit: null,
+    };
     if (next.authenticationLibrary) {
       try { persistAuthenticationLibrary(next.authenticationLibrary, currentLibrary, libraries.authentication); }
       catch (cause) { setAuthenticationStorageError((cause as Error).message); return; }
@@ -1417,14 +1553,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try { persistClassificationLibrary(next.classificationLibrary, currentClassifications, undefined, libraries.classifications); }
       catch (cause) { setClassificationStorageError((cause as Error).message); return; }
     }
-    setPast((p) => {
-      const out = [...p, { doc: current, authenticationLibrary: next.authenticationLibrary ? currentLibrary : undefined,
-        classificationLibrary: next.classificationLibrary ? currentClassifications : undefined }];
-      if (out.length > HISTORY_LIMIT) out.shift();
-      return out;
-    });
-    setFuture((cur) => cur.slice(0, -1));
-    setDoc(next.doc);
+    updateDocumentHistory(() => restored);
     if (next.authenticationLibrary) setAuthenticationLibrary(next.authenticationLibrary);
     if (next.classificationLibrary) {
       setClassificationLibrary(next.classificationLibrary);
@@ -1432,8 +1561,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setClassificationStorageError(null);
       setClassificationRecoveryRaw(null);
     }
-    setSelection(null);
-  }, []);
+    restoreHistorySelection({ ...next, doc: restoredDoc }, current);
+  }, [restoreHistorySelection, libraries, updateDocumentHistory, setAuthenticationLibrary, setClassificationLibrary]);
 
   // Replace the current document with a fresh empty one. Snapshots first so
   // the user can recover with Ctrl+Z. Also clears all view state that's
@@ -1456,26 +1585,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // rapid edits coalesce. The cleanup-as-debounce pattern can't guarantee
   // the timeout fires before tab close, so we also flush synchronously on
   // pagehide and when the document becomes hidden.
-  const autosaveBundleRef = useRef({
-    doc,
-    past,
-    future,
-    activeScenarioId,
-    filter,
-  });
-  autosaveBundleRef.current = { doc, past, future, activeScenarioId, filter };
-
   const flushAutosave = useCallback(() => {
     if (documentRecoveryError) return;
-    const b = autosaveBundleRef.current;
+    const b = documentHistoryRef.current;
+    const classifications = classificationDefinitionsRef.current;
     let savedDoc: PsDocument;
     let savedPast: PsDocument[];
     let savedFuture: PsDocument[];
     try {
-      savedDoc = captureCatalogDefinitions(b.doc);
+      savedDoc = captureCatalogDefinitions(b.doc, classifications);
       const captureHistory = (entry: HistoryEntry) => captureCatalogDefinitions(entry.doc,
         entry.classificationLibrary ? classificationDefinitionsForLibrary(entry.classificationLibrary)
-          : classificationDefinitionsRef.current);
+          : classifications);
       savedPast = b.past.map(captureHistory);
       savedFuture = b.future.map(captureHistory);
     } catch (error) {
@@ -1495,7 +1616,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         past: b.past.map(entry => entry.classificationLibrary ?? null),
         future: b.future.map(entry => entry.classificationLibrary ?? null),
       },
-      view: { activeScenarioId: b.activeScenarioId, filter: b.filter },
+      view: { activeScenarioId: activeScenarioIdRef.current, filter: filterRef.current },
     });
   }, [documentRecoveryError]);
 
@@ -1523,6 +1644,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     snapshot();
     const node: PsNode = {
       id: uid("n"),
+      dfdRoleLegacy: false,
       title: "New Node",
       description: "",
       type: "",
@@ -1563,6 +1685,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }),
     }));
   }, [snapshot]);
+
+  const setNodeScopeReason = useCallback((scenarioId: string, nodeId: string, reason: string, editSession?: symbol) => {
+    const state = documentHistoryRef.current;
+    const current = state.doc;
+    const scenario = current.scenarios.find(item => item.id === scenarioId);
+    const node = current.nodes.find(item => item.id === nodeId);
+    if (!node || !scenario?.nodeIds.includes(nodeId)) {
+      window.alert("Select a scenario containing this node before editing its scope.");
+      return;
+    }
+    if (reason.length > 16000) {
+      window.alert("Scope reasons must be 16000 characters or fewer.");
+      return;
+    }
+    if (reason.trim() && resolveNodeReviewScope(node, scenario, current.nodeTypes).role.role === "ExternalInteractor") {
+      window.alert("External Interactors are black boxes, not out-of-scope infrastructure.");
+      return;
+    }
+    const storedReason = Object.hasOwn(scenario.nodeScopeReasons ?? {}, nodeId)
+      ? scenario.nodeScopeReasons?.[nodeId] : undefined;
+    if (storedReason === reason || (storedReason === undefined && reason === "")) return;
+    const group = state.scopeReasonEdit;
+    const continuesEdit = editSession !== undefined && group?.session === editSession &&
+      group.scenarioId === scenarioId && group.nodeId === nodeId && group.doc === current;
+    const next = withLibraryDefinitions({ ...current, scenarios: current.scenarios.map(item => {
+      if (item.id !== scenarioId) return item;
+      const reasons = { ...item.nodeScopeReasons, [nodeId]: reason };
+      if (!reason) delete reasons[nodeId];
+      return { ...item, nodeScopeReasons: reasons };
+    }) }, libraries, libraryRef.current, classificationDefinitionsRef.current);
+    updateDocumentHistory(() => ({
+      doc: next,
+      past: continuesEdit ? state.past : appendHistory(state.past, {
+        doc: current, scopeReason: { scenarioId, nodeId },
+      }),
+      future: [],
+      ordinarySnapshot: null,
+      scopeReasonEdit: editSession === undefined ? null
+        : { session: editSession, scenarioId, nodeId, doc: next },
+    }));
+  }, [updateDocumentHistory, libraries]);
 
   // moveNode is called repeatedly during a drag — snapshot is taken by the
   // drag-start handler in DiagramCanvas, not here.
@@ -1793,6 +1956,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             pruneEdgesFromScenarioBuckets(s, edgesToRemove);
           return {
             ...s,
+            ...normalizeNodeScope(s, new Set(d.nodes.filter(node => node.id !== id).map(node => node.id))),
             nodeIds: s.nodeIds.filter((nid) => nid !== id),
             edgeIds: remainingEdges,
             edgeNumbers: newNumbers,
@@ -1834,6 +1998,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateEdge = useCallback((id: string, patch: Partial<PsEdge>) => {
+    const rightsPatch = "requiredAccessRights" in patch
+      ? { requiredAccessRights: normalizeRequiredAccessRights(patch.requiredAccessRights, id) }
+      : {};
     const current = withLibraryDefinitions(docRef.current, libraries, libraryRef.current, classificationDefinitionsRef.current);
     const catalog = authenticationCatalogFor(current, libraryRef.current, libraries.authentication);
     if ("authenticationTypes" in patch) {
@@ -1864,7 +2031,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...d,
       edges: d.edges.map((e) => {
         if (e.id !== id) return e;
-        const merged = { ...e, ...patch };
+        const merged = { ...e, ...patch, ...rightsPatch };
         // Identity data is independent evidence, including for unresolved or
         // custom methods. Only an explicit field edit removes it.
         return merged;
@@ -1962,28 +2129,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // -------- Data items --------
   const createData = useCallback(
-    (classification: DataClassification = classificationLibrary.defaultId): PsData => {
-      if (!isEnabledClassification(classificationLibrary, classification)) {
+    (classification?: DataClassification): PsData => {
+      const library = classificationLibraryRef.current;
+      const classificationId = classification === undefined ? library.defaultId : classification;
+      if (!isEnabledClassification(library, classificationId)) {
         throw new Error("Choose an enabled classification from the active library for new data.");
       }
       snapshot();
       const item: PsData = {
         id: uid("d"),
         name: "New Data",
-        classification,
+        classification: classificationId,
         sample: "",
       };
       setDoc((d) => ({ ...d, data: [...d.data, item] }));
       return item;
     },
-    [snapshot, classificationLibrary]
+    [snapshot]
   );
 
   const updateData = useCallback(
     (id: string, patch: Partial<PsData>) => {
       const existing = docRef.current.data.find(item => item.id === id);
       if (patch.classification !== undefined && patch.classification !== existing?.classification
-          && !isEnabledClassification(classificationLibrary, patch.classification)) {
+          && !isEnabledClassification(classificationLibraryRef.current, patch.classification)) {
         throw new Error("Choose an enabled classification from the active library; existing out-of-list values are retained.");
       }
       snapshot();
@@ -1992,7 +2161,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         data: d.data.map((x) => (x.id === id ? { ...x, ...patch } : x)),
       }));
     },
-    [snapshot, classificationLibrary]
+    [snapshot]
   );
 
   const deleteData = useCallback(
@@ -2399,9 +2568,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       targetId: string,
       scenarioIds: string[],
       title: string,
-      description: string
+      description: string,
+      threatNote?: { origin: "authored-threat"; justification?: string }
     ): PsIssue => {
-      snapshot();
       const issue: PsIssue = {
         id: uid("i"),
         targetKind,
@@ -2412,7 +2581,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         status: "Active",
         createdAt: Date.now(),
         replies: [],
+        ...(threatNote ? threatNoteFields({ ...threatNote, title, description }) : {}),
       };
+      if (threatNote) validateThreatNotes({ ...docRef.current, issues: [...docRef.current.issues, issue] });
+      snapshot();
       setDoc((d) => ({ ...d, issues: [...d.issues, issue] }));
       return issue;
     },
@@ -2422,8 +2594,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateIssue = useCallback(
     (
       id: string,
-      patch: Partial<Pick<PsIssue, "title" | "description" | "scenarioIds">>
+      patch: Partial<Pick<PsIssue, "title" | "description" | "scenarioIds" | "justification">>
     ) => {
+      const current = docRef.current.issues.find(issue => issue.id === id);
+      if (current && (isAuthoredThreatNote(current) || patch.justification !== undefined)) {
+        validateThreatNotes({ ...docRef.current, issues: docRef.current.issues.map(issue =>
+          issue.id === id ? { ...issue, ...patch } : issue) });
+      }
       snapshot();
       setDoc((d) => ({
         ...d,
@@ -2598,6 +2775,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ) {
         throw new Error(`A deviation with key "${next.key.trim()}" already exists.`);
       }
+      const updatedAt = Date.now();
       snapshot();
       setDoc((d) => ({
         ...d,
@@ -2616,7 +2794,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   ? { sampleCalls: normalizedSampleCalls }
                   : { sampleCalls: undefined }),
                 scenarioIds: Array.from(new Set(next.scenarioIds)),
-                updatedAt: Date.now(),
+                updatedAt,
               }
             : item
         ),
@@ -2627,11 +2805,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setDeviationStatus = useCallback(
     (id: string, status: DeviationStatus) => {
+      const updatedAt = Date.now();
       snapshot();
       setDoc((d) => ({
         ...d,
         deviations: d.deviations.map((item) =>
-          item.id === id ? { ...item, status, updatedAt: Date.now() } : item
+          item.id === id ? { ...item, status, updatedAt } : item
         ),
       }));
     },
@@ -2755,6 +2934,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateBoundary = useCallback(
     (id: string, patch: Partial<PsBoundary>) => {
+      const normalizedPatch = { ...patch };
+      for (const { key, label } of BOUNDARY_NETWORK_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+          normalizedPatch[key] = normalizeBoundaryNetworkText(patch[key], label);
+        }
+      }
       const existing = docRef.current.boundaries.find(boundary => boundary.id === id);
       if (patch.privacySubtype !== undefined) assertCatalogSelection(
         "privacyBoundary", patch.privacySubtype, existing?.type === "privacy" ? existing.privacySubtype : undefined, libraries.taxonomy,
@@ -2767,7 +2952,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...d,
         boundaries: d.boundaries.map((b) => {
           if (b.id !== id) return b;
-          const merged = { ...b, ...patch };
+          const merged = { ...b, ...normalizedPatch };
           // The non-matching subtype is always stripped (privacySubtype is
           // meaningless on a security boundary, and vice versa). The matching
           // subtype is left alone — including when the user explicitly clears
@@ -2943,6 +3128,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         edgeIds: [],
         edgeNumbers: {},
         boundaryIds: [],
+        nodeScopeReasons: {},
         nodeData: {},
         edgeRequestData: {},
         edgeResponseData: {},
@@ -2981,6 +3167,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         edgeIds: [...source.edgeIds],
         edgeNumbers: { ...source.edgeNumbers },
         boundaryIds: [...source.boundaryIds],
+        ...(source.nodeScopeReasons ? { nodeScopeReasons: structuredClone(source.nodeScopeReasons) } : {}),
+        ...(source.nodeScopeReasonsRecovery ? { nodeScopeReasonsRecovery: { ...source.nodeScopeReasonsRecovery } } : {}),
         nodeData: clonedNodeData,
         edgeRequestData: clonedEdgeRequestData,
         edgeResponseData: clonedEdgeResponseData,
@@ -3019,6 +3207,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ? (docRef.current.scenarios.find((scenario) => scenario.id !== id)
               ?.id ?? null)
           : activeScenarioIdRef.current;
+      const updatedAt = Date.now();
       snapshot();
       setDoc((d) => {
         const remainingScenarios = d.scenarios.filter((s) => s.id !== id);
@@ -3032,7 +3221,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const scenariosWithoutDeleted = remainingScenarios.map((s) => {
           const removesNode = s.nodeIds.some((nid) => orphanNodeIds.has(nid));
           const removesEdge = s.edgeIds.some((eid) => orphanEdgeIds.has(eid));
-          if (!removesNode && !removesEdge) {
+          const removesReason = Object.keys(s.nodeScopeReasons ?? {}).some(nid => orphanNodeIds.has(nid));
+          if (!removesNode && !removesEdge && !removesReason) {
             return s;
           }
           const remainingEdgeIds = s.edgeIds.filter(
@@ -3050,6 +3240,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             pruneEdgesFromScenarioBuckets(s, orphanEdgeIds);
           return {
             ...s,
+            ...normalizeNodeScope(s, new Set(d.nodes.filter(node => !orphanNodeIds.has(node.id)).map(node => node.id))),
             nodeIds: s.nodeIds.filter((nid) => !orphanNodeIds.has(nid)),
             edgeIds: remainingEdgeIds,
             edgeNumbers,
@@ -3079,19 +3270,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               !(c.targetKind === "node" && orphanNodeIds.has(c.targetId)) &&
               !(c.targetKind === "edge" && orphanEdgeIds.has(c.targetId)),
           ),
-          // Issues can reference multiple scenarios — strip this one. If
-          // the issue had no other scenarios it still applies to the
-          // underlying node/edge, so leave it intact unless that target
-          // is itself being cascade-deleted.
+          // Ordinary issues keep historical behavior; authored notes never
+          // widen to all scenarios when their final selected scenario is lost.
           issues: d.issues
-            .map((i) =>
-              i.scenarioIds.includes(id)
-                ? {
-                    ...i,
-                    scenarioIds: i.scenarioIds.filter((sid) => sid !== id),
-                  }
-                : i,
-            )
+            .flatMap((i) => removeThreatNoteScenario(i, id))
             .filter(
               (i) =>
                 !(i.targetKind === "node" && orphanNodeIds.has(i.targetId)) &&
@@ -3106,7 +3288,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   scenarioIds: deviation.scenarioIds.filter(
                     (scenarioId) => scenarioId !== id,
                   ),
-                  updatedAt: Date.now(),
+                  updatedAt,
                 }
               : deviation,
           ),
@@ -3134,6 +3316,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeNodeFromScenario = useCallback(
     (scenarioId: string, nodeId: string) => {
+      const updatedAt = Date.now();
       snapshot();
       setDoc((d) => {
         // also remove edges that touch this node from the scenario
@@ -3174,19 +3357,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               (!(c.targetKind === "node" && c.targetId === nodeId) &&
                 !(c.targetKind === "edge" && removedEdges.has(c.targetId)))
           ),
-          // For issues, strip this scenario id from any issue targeting the
-          // removed node OR any edge that left the scenario with it. The
-          // issue itself is preserved (the underlying node/edge still
-          // exists in the doc and may be referenced from other scenarios).
-          issues: d.issues.map((i) => {
+          // Remove scoped notes rather than silently broadening applicability.
+          issues: d.issues.flatMap((i) => {
             const affected =
               (i.targetKind === "node" && i.targetId === nodeId) ||
               (i.targetKind === "edge" && removedEdges.has(i.targetId));
-            if (!affected || !i.scenarioIds.includes(scenarioId)) return i;
-            return {
-              ...i,
-              scenarioIds: i.scenarioIds.filter((sid) => sid !== scenarioId),
-            };
+            return affected ? removeThreatNoteScenario(i, scenarioId) : [i];
           }),
           deviations: d.deviations.map((deviation) => {
             const affected =
@@ -3203,7 +3379,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               scenarioIds: deviation.scenarioIds.filter(
                 (id) => id !== scenarioId,
               ),
-              updatedAt: Date.now(),
+              updatedAt,
             };
           }),
         };
@@ -3240,6 +3416,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeEdgeFromScenario = useCallback(
     (scenarioId: string, edgeId: string) => {
+      const updatedAt = Date.now();
       snapshot();
       setDoc((d) => ({
         ...d,
@@ -3271,17 +3448,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               c.targetId === edgeId
             )
         ),
-        // Strip this scenario id from any issue targeting this edge. The
-        // edge still exists in the doc, so the issue is preserved.
-        issues: d.issues.map((i) =>
+        issues: d.issues.flatMap((i) =>
           i.targetKind === "edge" &&
           i.targetId === edgeId &&
           i.scenarioIds.includes(scenarioId)
-            ? {
-                ...i,
-                scenarioIds: i.scenarioIds.filter((sid) => sid !== scenarioId),
-              }
-            : i
+            ? removeThreatNoteScenario(i, scenarioId)
+            : [i]
         ),
         deviations: d.deviations.map((deviation) =>
           deviation.targetKind === "edge" &&
@@ -3292,7 +3464,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 scenarioIds: deviation.scenarioIds.filter(
                   (id) => id !== scenarioId,
                 ),
-                updatedAt: Date.now(),
+                updatedAt,
               }
             : deviation
         ),
@@ -3666,9 +3838,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     const validated = validateClassificationLibrary(next);
     const beforeDefinitions = classificationDefinitionsForLibrary(before);
-    const preservedDoc = captureCatalogDefinitions(docRef.current, beforeDefinitions);
+    const state = documentHistoryRef.current;
+    const preservedDoc = captureCatalogDefinitions(state.doc, beforeDefinitions);
     const nextDoc = captureCatalogDefinitions(preservedDoc, classificationDefinitionsForLibrary(validated));
-    const preservedPast = pastRef.current.map(entry => ({
+    const preservedPast = state.past.map(entry => ({
       ...entry,
       doc: captureCatalogDefinitions(entry.doc, entry.classificationLibrary
         ? classificationDefinitionsForLibrary(entry.classificationLibrary) : beforeDefinitions),
@@ -3919,6 +4092,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const newId = uid("n");
         newNodes.push({
           id: newId,
+          dfdRoleLegacy: false,
           title: group.serviceName,
           description: group.serviceId
             ? `Imported from Privacy Manager (serviceId ${group.serviceId})`
@@ -4232,6 +4406,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setViewMode,
     createNode,
     updateNode,
+    setNodeScopeReason,
     deleteNode,
     moveNode,
     finishNodeMove,
@@ -4492,6 +4667,7 @@ export function normalizeDoc(
   },
   availableNodeTypes: readonly NodeTypeRef[] = [],
 ): PsDocument {
+  validateThreatNotes(doc);
   const base = emptyDocument();
   const authenticationDefinitions = doc.authenticationDefinitions === undefined
     ? [] : validatePortableAuthenticationDefinitions(doc.authenticationDefinitions);
@@ -4655,6 +4831,7 @@ export function normalizeDoc(
 
     return {
       id: s.id ?? uid("s"),
+      ...normalizeNodeScope(s, new Set((doc.nodes ?? []).map(node => node.id))),
       name: s.name ?? "Scenario",
       description: s.description ?? "",
       nodeIds: (s.nodeIds ?? []).filter(
@@ -4681,6 +4858,12 @@ export function normalizeDoc(
     const rawSize = raw.size;
     const out: PsNode = {
       id: n.id ?? uid("n"),
+      ...(raw.dfdRoleOverride !== undefined ? { dfdRoleOverride: normalizeDfdValue(raw.dfdRoleOverride, 128) } : {}),
+      dfdRoleLegacy: typeof raw.dfdRoleLegacy === "boolean" ? raw.dfdRoleLegacy
+        : raw.dfdRoleOverride === undefined && !(rawNodeTypes as unknown[]).some(type =>
+          type !== null && typeof type === "object" && "id" in type && type.id === n.type
+          && "definition" in type && type.definition !== null && typeof type.definition === "object"
+          && "defaultDfdRole" in type.definition && type.definition.defaultDfdRole !== undefined),
       ...normalizeEntityMetadata(n, "node"),
       title: n.title ?? "",
       description: n.description ?? "",
@@ -4756,6 +4939,10 @@ export function normalizeDoc(
         : [],
       ...(privacySubtype ? { privacySubtype } : {}),
       ...(securitySubtype ? { securitySubtype } : {}),
+      ...Object.fromEntries(BOUNDARY_NETWORK_FIELDS.flatMap(({ key, label }) => {
+        const value = normalizeBoundaryNetworkText(b[key], label);
+        return value === undefined ? [] : [[key, value]];
+      })),
     };
   });
 
@@ -4798,6 +4985,7 @@ export function normalizeDoc(
         targetHandle: e.targetHandle,
         title: e.title ?? "",
         description: e.description ?? "",
+        requiredAccessRights: normalizeRequiredAccessRights(e.requiredAccessRights, e.id),
         authenticationTypes,
         productionIdentity,
         audience: e.audience,
@@ -4871,6 +5059,7 @@ export function normalizeDoc(
         );
         return {
           id: i.id ?? uid("i"),
+          ...threatNoteFields(i),
           kind: typeof i.kind === "string" && i.kind ? i.kind : undefined,
           ...(typeof i.kind === "string" && i.kind && i.notEvaluatedReason !== undefined
             ? { notEvaluatedReason: normalizeIssueNotEvaluatedReason(i.notEvaluatedReason) } : {}),

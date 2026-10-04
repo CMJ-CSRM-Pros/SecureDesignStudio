@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SERVICES } from "../services";
 import { useStore } from "../store";
 import { referencedCatalogDefinitions } from "../catalogDefinitions";
+import { buildDfdReviewContext } from "../dfdReviewContext";
 import {
   askDesignAssistant,
   type AssistantFinding,
@@ -125,49 +126,23 @@ export function DesignAssistantPanel() {
   const assistantUnavailable = !SERVICES.assistant.enabled;
 
   const context = useMemo(() => {
-    if (!activeScenario) {
-      return {
-        scenario: null,
-        nodes: [],
-        edges: [],
-        boundaries: [],
-        data: [],
-        selection,
-      };
-    }
-    const nodeIds = new Set(activeScenario.nodeIds);
-    const edgeIds = new Set(activeScenario.edgeIds);
-    const authIds = new Set(doc.edges.filter(edge => edgeIds.has(edge.id)).flatMap(edge => edge.authenticationTypes ?? []));
-    const boundaryIds = new Set(activeScenario.boundaryIds);
-    const dataIds = new Set<string>();
-    Object.values(activeScenario.edgeRequestData).forEach((ids) =>
-      ids.forEach((id) => dataIds.add(id)),
-    );
-    Object.values(activeScenario.edgeResponseData).forEach((ids) =>
-      ids.forEach((id) => dataIds.add(id)),
-    );
-    Object.values(activeScenario.nodeData).forEach((retentions) =>
-      Object.keys(retentions).forEach((id) => dataIds.add(id)),
-    );
+    const projection = buildDfdReviewContext(doc, activeScenario);
+    const authIds = new Set(projection.edges.flatMap(edge => edge.authenticationTypes ?? []));
     const scopedDoc = {
       ...doc,
-      nodes: doc.nodes.filter((node) => nodeIds.has(node.id)),
-      edges: doc.edges.filter((edge) => edgeIds.has(edge.id)),
-      boundaries: doc.boundaries.filter((boundary) => boundaryIds.has(boundary.id)),
-      data: doc.data.filter((item) => dataIds.has(item.id)),
+      nodes: doc.nodes.filter(node => projection.nodes.some(item => item.id === node.id)),
+      edges: projection.edges,
+      boundaries: projection.boundaries,
+      data: projection.data,
       deviations: [],
-      nodeTypes: doc.nodeTypes.filter((type) => doc.nodes.some((node) => nodeIds.has(node.id) && node.type === type.id)),
+      nodeTypes: [],
     };
     return {
-      scenario: activeScenario,
-      nodes: scopedDoc.nodes,
-      edges: scopedDoc.edges,
+      ...projection,
       authenticationDefinitions: authenticationCatalog.filter(def => authIds.has(def.id)),
       authenticationCaution: "Definitions are modeling metadata, not proof of security or target acceptance. Custom methods are unverified; unresolved and legacy selections require owner review.",
       catalogDefinitions: referencedCatalogDefinitions(scopedDoc, classificationDefinitions),
       catalogCaution: "Saved labels and claimed library provenance are unverified display metadata, not installed capabilities or evidence of compliance.",
-      boundaries: scopedDoc.boundaries,
-      data: scopedDoc.data,
       selection,
     };
   }, [activeScenario, doc, selection, authenticationCatalog, classificationDefinitions]);
@@ -352,7 +327,7 @@ export function DesignAssistantPanel() {
         <div id="ps-assistant-scenario-notice" className="ps-assistant-notice" role="status">
           {doc.scenarios.length > 0
             ? 'AI Analysis and Chat are disabled because no scenario is selected. Choose a scenario from the Scenario selector in the command bar instead of "(Show all)".'
-            : "AI Analysis and Chat require a scenario. This model has no scenarios. Create one with File > New scenario, then add the nodes and flows you want to review."}
+            : "AI Analysis and Chat require a scenario. This model has no scenarios. Create one with Model > New scenario, then add the nodes and flows you want to review."}
         </div>
       )}
 

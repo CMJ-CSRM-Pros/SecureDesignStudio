@@ -252,6 +252,10 @@ nodes, edges and boundaries, referenced authentication and catalog-display
 definitions (including any saved, unverified library metadata), attached
 data (including sample fields), retention, and selection metadata. Filters
 and selection do **not** narrow this to just visible or selected objects.
+DFD scope omits excluded node-interior fields and excluded-flow data
+attachments. Endpoint-only nodes still carry identity; scope coverage,
+stored reasons and structural diagnostics are sent as model data.
+Out-of-scope is a review boundary, not a confidentiality filter.
 The local API forwards context to the configured model service.
 
 Use only information approved for that destination. Keep secrets and real

@@ -8,6 +8,7 @@ import {
 } from "../types";
 import { safeNavigationHref } from "../urlSafety";
 import { inventoryIdError } from "../inventoryIdentity";
+import { isDfdRole } from "../dfdSemantics";
 import nodeIconKeys from "../data/nodeIconKeys.json";
 import {
   LIBRARY_FORMAT, LIBRARY_API_VERSION, MAX_LIBRARY_BYTES,
@@ -126,9 +127,12 @@ function nodeType(value: unknown): NodeTypeRef {
     "serviceTreeId", "endpointRegex", "allowedAuthMethods", "allowedDataTypes", "policyStatus",
     "description", "category", "templateHints", "defaultPrivacyBoundary",
     "catalogSource", "resourceProviders", "documentationUrl", "icon",
-    "geoBoundary", "postSubscriptionRetention", "gdprHandling",
+    "geoBoundary", "postSubscriptionRetention", "gdprHandling", "defaultDfdRole",
   ], "Library node definition");
   const serviceTreeId = definition.serviceTreeId ?? "";
+  if (definition.defaultDfdRole !== undefined && !isDfdRole(definition.defaultDfdRole)) {
+    throw new Error("Invalid default DFD role.");
+  }
   const identityError = inventoryIdError(serviceTreeId);
   if (identityError) throw new Error(identityError);
   const endpointRegex = text(definition.endpointRegex ?? "^$", "Endpoint expression", 1000);
@@ -191,6 +195,7 @@ function nodeType(value: unknown): NodeTypeRef {
   return {
     id: raw.id, label: text(raw.label, "Node label"),
     definition: {
+      ...(isDfdRole(definition.defaultDfdRole) ? { defaultDfdRole: definition.defaultDfdRole } : {}),
       serviceTreeId: (serviceTreeId as string).trim(), endpointRegex,
       allowedAuthMethods: allowedAuthMethods as NonNullable<NodeTypeRef["definition"]>["allowedAuthMethods"],
       allowedDataTypes: allowedDataTypes as NonNullable<NodeTypeRef["definition"]>["allowedDataTypes"],

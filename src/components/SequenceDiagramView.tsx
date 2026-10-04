@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { authTypeLabel } from "../authentication";
 import { nodeTypeIconUrl } from "../nodeTypeIcons";
 import { nodeTypeLabel, type PsNode, type PsEdge } from "../types";
+import { DFD_ROLE_LABELS, DFD_SCOPE_LABELS, nodeDfdSummary, resolveNodeReviewScope } from "../dfdSemantics";
 
 // SequenceDiagramView renders the active scenario's edges as a UML-style
 // sequence diagram. The underlying data model is unchanged — this is a
@@ -15,7 +16,7 @@ const PARTICIPANT_WIDTH = 180;
 const PARTICIPANT_GAP = 60; // gutter between lifelines
 const LEFT_MARGIN = 40;
 const RIGHT_MARGIN = 40;
-const HEADER_HEIGHT = 64;
+const HEADER_HEIGHT = 104;
 // One row per event (call or return). Self-loop CALL rows are taller so the
 // curled-back arrow has room for its label.
 const ROW_HEIGHT = 56;
@@ -311,6 +312,7 @@ export function SequenceDiagramView() {
         {/* Participant headers */}
         {participants.map((p, i) => {
           const x = xForParticipant(i);
+          const scope = resolveNodeReviewScope(p, activeScenario, doc.nodeTypes);
           const iconUrl = nodeTypeIconUrl(p.type, doc.nodeTypes);
           const headerSelected =
             selection?.kind === "node" && selection.id === p.id;
@@ -318,6 +320,16 @@ export function SequenceDiagramView() {
             <g
               key={`head-${p.id}`}
               data-seq-node={p.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`${p.title}. ${nodeDfdSummary(p, doc, activeScenario)}`}
+              onKeyDown={event => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSelection({ kind: "node", id: p.id });
+                }
+              }}
               className={
                 "ps-seq-participant" +
                 (headerSelected ? " ps-seq-participant--selected" : "")
@@ -327,17 +339,24 @@ export function SequenceDiagramView() {
                 setSelection({ kind: "node", id: p.id });
               }}
             >
+              <title>{nodeDfdSummary(p, doc, activeScenario)}</title>
               <rect
                 x={x - PARTICIPANT_WIDTH / 2}
                 y={12}
                 width={PARTICIPANT_WIDTH}
                 height={HEADER_HEIGHT - 24}
-                rx={6}
+                rx={scope.role.role === "Process" ? 18 : scope.role.role === "DataStore" ? 12 : 0}
                 ry={6}
                 fill={p.color ?? "#ffffff"}
                 stroke={headerSelected ? "#2563eb" : "#334155"}
                 strokeWidth={headerSelected ? 2 : 1}
+                strokeDasharray={scope.disposition === "outOfScope" ? "5 3" : undefined}
               />
+              {(scope.disposition === "outOfScope" || scope.disposition === "external") && <rect
+                x={x - PARTICIPANT_WIDTH / 2 + 5} y={20} width={4} height={HEADER_HEIGHT - 40}
+                fill={scope.disposition === "external" ? "var(--ps-external-color, #7c3aed)" : "var(--ps-oos-color, #b45309)"}
+                aria-hidden="true"
+              />}
               {iconUrl && (
                 <image
                   href={iconUrl}
@@ -351,7 +370,7 @@ export function SequenceDiagramView() {
               )}
               <text
                 x={x + (iconUrl ? 10 : 0)}
-                y={HEADER_HEIGHT / 2 - 2}
+                y={HEADER_HEIGHT / 2 - 14}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize={13}
@@ -363,7 +382,7 @@ export function SequenceDiagramView() {
               {p.type && (
                 <text
                   x={x + (iconUrl ? 10 : 0)}
-                  y={HEADER_HEIGHT / 2 + 14}
+                  y={HEADER_HEIGHT / 2}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fontSize={11}
@@ -372,6 +391,12 @@ export function SequenceDiagramView() {
                   {truncate(nodeTypeLabel(p.type, doc.nodeTypes), 26)}
                 </text>
               )}
+              <text x={x} y={HEADER_HEIGHT / 2 + 15} textAnchor="middle" fontSize={9} fill="#334155">
+                {DFD_ROLE_LABELS[scope.role.role]}
+              </text>
+              <text x={x} y={HEADER_HEIGHT / 2 + 27} textAnchor="middle" fontSize={9} fill="#334155">
+                {DFD_SCOPE_LABELS[scope.disposition]}
+              </text>
             </g>
           );
         })}

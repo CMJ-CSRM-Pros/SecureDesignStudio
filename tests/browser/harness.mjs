@@ -250,7 +250,8 @@ export async function startHarness() {
         faults.push(`Unexpected ${dialog.type()}: ${dialog.message()}`);
         await dialog.dismiss();
       });
-      await page.goto(`${origin}${hash}`);
+      // Cold Vite module transformation is startup work, not a six-second UI action.
+      await page.goto(`${origin}${hash}`, { timeout: 20000 });
       await page.getByLabel("Document status").getByText("Local mode", { exact: true }).waitFor({ state: "visible" });
       assert.equal(await page.locator(".ps-command-version").textContent(), `v${source.version}`,
         "The served app displays the current worktree version");
