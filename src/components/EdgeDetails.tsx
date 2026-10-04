@@ -15,9 +15,7 @@ import type {
 } from "../types";
 import {
   authTypeDescription,
-  authTypeLabel,
   authBehavior,
-  builtInAuthentication,
   isKnownInstalledAuthentication,
   isAuthenticationType,
   dataClassificationDescription,
