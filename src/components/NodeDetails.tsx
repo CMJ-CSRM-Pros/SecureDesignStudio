@@ -60,7 +60,6 @@ export function NodeDetails({ node }: { node: PsNode }) {
     deleteNode,
     doc,
     nodeTypeCatalog,
-    authenticationCatalog,
     classificationDefinitions,
     addNodeType,
     activeScenarioId,
