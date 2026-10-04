@@ -14,7 +14,7 @@ import {
 import { resetDetailsTab } from "./detailsTabStore";
 import { generateKey } from "../collab/crypto";
 import { diffDocuments } from "../diff";
-import { exportTm7 } from "../tm7Export";
+import { prepareTm7Export } from "../tm7Export";
 import { exportVsdx } from "../vsdxExport";
 import { importTmcExport, TmcImportError } from "../tmcImport";
 import { parseTm7, Tm7ImportError } from "../tm7Import";
@@ -651,19 +651,32 @@ export function Toolbar() {
 
   const onExportTm7 = () => {
     setOpenMenu(null);
-    // TMT will derive the model name from the file name on Open, but we
-    // also stash it in MetaInformation so the in-app title matches when
-    // the file is later renamed.
-    const xml = exportTm7(withCatalogDefinitions(withAuthenticationDefinitions(doc, authenticationCatalog), availableCatalogDefinitions), { modelName: "SecureDesignStudio model", inventoryLabel: inventoryField.label });
-    const blob = new Blob([xml], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "secure-design-studio-diagram.tm7";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      const result = prepareTm7Export(withCatalogDefinitions(withAuthenticationDefinitions(doc, authenticationCatalog), availableCatalogDefinitions),
+        { modelName: "SecureDesignStudio model", inventoryLabel: inventoryField.label });
+      if (!window.confirm([
+        "Export the supported TM7 drawing projection?",
+        "Save a .tma copy first to retain full detail. Only explicitly authored threat notes become native threat records; review the format limitations below.",
+        ...result.diagnostics.map(message => `- ${message}`),
+        "", "Continue with download?",
+      ].join("\n"))) return;
+      const blob = new Blob([result.xml], { type: "application/xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      try {
+        a.href = url;
+        a.download = "secure-design-studio-diagram.tm7";
+        document.body.appendChild(a);
+        a.click();
+      } finally {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      window.alert(`Failed to export TM7 file: ${(err as Error).message}`);
+    } finally {
+      restoreFileCommandFocus();
+    }
   };
 
   // "Export as VSDX" — produces a Microsoft Visio file (one page per
@@ -1154,19 +1167,7 @@ export function Toolbar() {
 
   const onImportTm7Click = () => {
     setOpenMenu(null);
-    // TM7 import REPLACES the current document, matching TMC import.
-    const hasContent =
-      doc.scenarios.length > 0 || doc.nodes.length > 0 || doc.edges.length > 0;
-    if (hasContent) {
-      const ok = window.confirm(
-        "Importing a TM7 file will REPLACE the current diagram " +
-          "(undoable with Ctrl+Z). Continue?",
-      );
-      if (!ok) {
-        restoreFileCommandFocus();
-        return;
-      }
-    }
+    // Confirm only after parsing, so replacement consent includes actual losses.
     tm7FileRef.current?.click();
   };
 
@@ -1176,18 +1177,9 @@ export function Toolbar() {
     try {
       const text = await f.text();
       const result = parseTm7(text);
-      importJson({
-        format: SECURE_DESIGN_STUDIO_DOCUMENT_FORMAT,
-        version: 2,
-        doc: result.doc,
-        view: {
-          activeScenarioId: result.activeScenarioId,
-          filter: { text: "", nodeType: "", authType: "", dataClassification: "" },
-        },
-      });
       const s = result.summary;
       const lines = [
-        `Imported ${s.scenarioCount} scenario${
+        `Import ${s.scenarioCount} scenario${
           s.scenarioCount === 1 ? "" : "s"
         } from TM7 (${s.surfaceCount} drawing surface${
           s.surfaceCount === 1 ? "" : "s"
@@ -1217,9 +1209,22 @@ export function Toolbar() {
       }
       lines.push(
         "",
-        "Node types are blank (TM7 stencils don't map to SecureDesignStudio policy types) — assign them in the right panel.",
+        "Supported native DFD roles and per-tab node scope are mapped. Service types remain blank; assign them in Properties.",
+        ...result.diagnostics.map(message => `- ${message}`),
+        "",
+        "Keep the original TM7 and save a .tma copy of the current diagram. Unsupported content is not retained.",
+        "REPLACE the current diagram (undoable with Ctrl+Z)?",
       );
-      window.alert(lines.join("\n"));
+      if (!window.confirm(lines.join("\n"))) return;
+      importJson({
+        format: SECURE_DESIGN_STUDIO_DOCUMENT_FORMAT,
+        version: 2,
+        doc: result.doc,
+        view: {
+          activeScenarioId: result.activeScenarioId,
+          filter: { text: "", nodeType: "", authType: "", dataClassification: "" },
+        },
+      });
     } catch (err) {
       if (err instanceof Tm7ImportError) {
         window.alert(`Failed to import TM7 file: ${err.message}`);

@@ -1297,6 +1297,7 @@
   {
     "id": "azure.databases.sql",
     "label": "Azure SQL",
+    "defaultDfdRole": "DataStore",
     "category": "Azure / Databases",
     "catalogSource": "Microsoft Azure",
     "icon": "azure/02390-icon-service-Azure-SQL.svg",

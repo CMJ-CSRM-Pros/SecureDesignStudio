@@ -1,39 +1,987 @@
 {
-  "format":"secure-design-studio-diagram","version":2,
-  "doc":{
-    "version":1,
-    "nodeTypes":[{"id":"TenantUser","label":"Tenant user"},{"id":"WebApp","label":"Web application"},{"id":"ApiGateway","label":"API gateway"},{"id":"TenantService","label":"Tenant service"},{"id":"Database","label":"Database"},{"id":"SupportTool","label":"Support tool"}],
-    "nodes":[
-      {"id":"n_tenant_a","title":"Tenant A User","description":"User belonging to Tenant A.","type":"TenantUser","serviceTreeId":"50000000-0000-4000-8000-000000000001","endpointRegex":"","position":{"x":20,"y":130}},
-      {"id":"n_tenant_b","title":"Tenant B User","description":"User belonging to Tenant B.","type":"TenantUser","serviceTreeId":"50000000-0000-4000-8000-000000000002","endpointRegex":"","position":{"x":20,"y":310}},
-      {"id":"n_web","title":"SaaS Web App","description":"Shared multi-tenant frontend.","type":"WebApp","serviceTreeId":"50000000-0000-4000-8000-000000000003","endpointRegex":"^https://app.saas.example.test","position":{"x":255,"y":220}},
-      {"id":"n_gateway","title":"Tenant API Gateway","description":"Validates tenant claims and routes requests.","type":"ApiGateway","serviceTreeId":"50000000-0000-4000-8000-000000000004","endpointRegex":"^https://api.saas.example.test","position":{"x":500,"y":160}},
-      {"id":"n_service","title":"Tenant Data Service","description":"Applies row-level tenant authorization.","type":"TenantService","serviceTreeId":"50000000-0000-4000-8000-000000000005","endpointRegex":"","position":{"x":730,"y":110}},
-      {"id":"n_db","title":"Shared Tenant Database","description":"Shared database partitioned by tenant identifier.","type":"Database","serviceTreeId":"50000000-0000-4000-8000-000000000006","endpointRegex":"","position":{"x":950,"y":110}},
-      {"id":"n_support","title":"Support Export Tool","description":"Administrative tool outside the tenant boundary; risky scenario exports multiple tenants without scoped authorization.","type":"SupportTool","serviceTreeId":"","endpointRegex":"^https://support.saas.example.test","position":{"x":730,"y":340}}
+  "format": "secure-design-studio-diagram",
+  "version": 2,
+  "doc": {
+    "version": 1,
+    "authenticationDefinitions": [
+      {
+        "id": "EntraDelegatedUserAccess",
+        "label": "Entra user",
+        "description": "Calls the receiving service with an Entra access token for a signed-in user and delegated permissions.",
+        "shortLabel": "Entra user",
+        "behavior": {
+          "productionIdentity": "required",
+          "audience": true,
+          "constraints": false,
+          "anonymous": false,
+          "managedIdentity": false
+        },
+        "disabled": false,
+        "legacy": false,
+        "aliases": [
+          "Microsoft Entra ID - delegated user access"
+        ]
+      },
+      {
+        "id": "EntraOnBehalfOf",
+        "label": "Entra on-behalf-of (OBO)",
+        "description": "Exchanges an incoming user token for a token intended for a downstream service, preserving delegated user context.",
+        "shortLabel": "OBO",
+        "behavior": {
+          "productionIdentity": "required",
+          "audience": true,
+          "constraints": false,
+          "anonymous": false,
+          "managedIdentity": false
+        },
+        "disabled": false,
+        "legacy": false,
+        "aliases": []
+      },
+      {
+        "id": "EntraManagedIdentity",
+        "label": "Managed identity",
+        "description": "An Azure-managed system-assigned or user-assigned identity obtains an Entra access token without a manually managed application secret.",
+        "shortLabel": "Managed identity",
+        "behavior": {
+          "productionIdentity": "required",
+          "audience": true,
+          "constraints": false,
+          "anonymous": false,
+          "managedIdentity": true
+        },
+        "disabled": false,
+        "legacy": false,
+        "aliases": []
+      }
     ],
-    "edges":[
-      {"id":"e_a","source":"n_tenant_a","target":"n_web","title":"Tenant A request","description":"Tenant A user opens the application.","authenticationTypes":["UserWithAad"],"audience":"api://saas-web","productionIdentity":{"kind":"AppId","appId":"51000000-0000-4000-8000-000000000001","tenant":"Customer"},"waypoints":[{"id":"wp1","x":140,"y":160}]},
-      {"id":"e_b","source":"n_tenant_b","target":"n_web","title":"Tenant B request","description":"Tenant B user opens the application.","authenticationTypes":["UserWithAad"],"audience":"api://saas-web","productionIdentity":{"kind":"AppId","appId":"51000000-0000-4000-8000-000000000002","tenant":"Customer"},"waypoints":[{"id":"wp2","x":140,"y":280}]},
-      {"id":"e_gateway","source":"n_web","target":"n_gateway","title":"Call tenant API","description":"Carries tenant and user constraints.","authenticationTypes":["S2SWithAadAndCdt"],"audience":"api://tenant-gateway","constraints":"tenantId and userObjectId","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp3","x":375,"y":190}]},
-      {"id":"e_service","source":"n_gateway","target":"n_service","title":"Route tenant request","description":"Routes a tenant-scoped query.","authenticationTypes":["S2SWithAadAndCdt"],"audience":"api://tenant-service","constraints":"tenantId","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp4","x":615,"y":135}]},
-      {"id":"e_db","source":"n_service","target":"n_db","title":"Query tenant partition","description":"Queries the shared database with tenant filtering.","authenticationTypes":["S2SWithAad"],"audience":"https://database.windows.net","productionIdentity":{"kind":"ManagedIdentity"},"waypoints":[{"id":"wp5","x":840,"y":110}]},
-      {"id":"e_export","source":"n_gateway","target":"n_support","title":"Bulk support export","description":"Intentionally risky administrative export omits tenant constraints and sends data to an unowned tool.","authenticationTypes":["S2SWithAad"],"audience":"api://support-export","waypoints":[{"id":"wp6","x":615,"y":280}]}
+    "catalogDefinitions": [
+      {
+        "kind": "classification",
+        "id": "Access Control Data",
+        "label": "Access Control Data",
+        "description": "Authorization records such as permissions, roles, group memberships, or access control lists. An additional modeling category, distinct from Administrator Data about people performing administrative duties. Records can reveal security-sensitive structure and identify individuals."
+      },
+      {
+        "kind": "classification",
+        "id": "Customer Content",
+        "label": "Customer Content",
+        "description": "Content a customer provides or generates, such as documents, messages, files, or AI interactions. This existing modeling category is narrower than Customer Data, which also covers configuration and other service data. Assess the actual content for personal or sensitive information; the category alone does not set retention, access rules, or a universal sensitivity rank."
+      },
+      {
+        "kind": "classification",
+        "id": "OII",
+        "label": "OII",
+        "description": "Organization Identifiable Information. Information identifying a tenant or organization, such as a tenant ID or organization name. An additional modeling category, not a named Purview content type. Related contacts, sole-trader records, or combined information can also identify individuals."
+      },
+      {
+        "kind": "classification",
+        "id": "EUPI",
+        "label": "EUPI",
+        "description": "End User Pseudonymized Identifiers. Identifiers representing an end user, such as UserID, UserKey, or mailbox GUID, as described in [Privacy in Microsoft Purview](https://learn.microsoft.com/en-us/purview/purview-privacy#end-user-pseudonymized-identifier-eupi). They may be linked to a person using additional information. Pseudonymized does not mean anonymous."
+      },
+      {
+        "kind": "classification",
+        "id": "Support Data",
+        "label": "Support Data",
+        "description": "Data exchanged or collected during a support engagement, such as case notes, diagnostic dumps, or customer-provided artifacts. This modeling category can contain customer content and personal or sensitive data. See [Microsoft Support and Professional Services guidance](https://learn.microsoft.com/en-us/compliance/regulatory/gdpr-dsr-prof-services); Support Data is not a synonym for all Professional Services Data."
+      },
+      {
+        "kind": "classification",
+        "id": "Administrator Data",
+        "label": "Administrator Data",
+        "description": "Information about an administrator processed in connection with administrative duties, such as their email address, UPN, IP address, user name, or display name when configuring policies or connectors, assigning labels or tasks, or placing data on legal hold. Aligned with [Administrator data in Microsoft Purview](https://learn.microsoft.com/en-us/purview/purview-privacy#administrator-data). Distinct from the permission records in Access Control Data; it may also be identifiable personal data."
+      },
+      {
+        "kind": "tenant",
+        "id": "Customer",
+        "label": "Customer"
+      }
     ],
-    "boundaries":[
-      {"id":"b_tenant","type":"privacy","title":"Tenant isolation boundary","position":{"x":220,"y":35},"size":{"width":820,"height":310}},
-      {"id":"b_admin","type":"security","title":"Privileged administration boundary","position":{"x":680,"y":285},"size":{"width":260,"height":150}}
+    "nodeTypes": [
+      {
+        "id": "TenantUser",
+        "label": "Tenant user",
+        "definition": {
+          "defaultDfdRole": "ExternalInteractor",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Custom",
+          "catalogSource": "Document",
+          "resourceProviders": [],
+          "icon": "generic/component.svg",
+          "description": "Fictional external participant category; its implementation is not a Microsoft service or an asserted policy."
+        }
+      },
+      {
+        "id": "azure.compute.app-service-app",
+        "label": "App Service app",
+        "definition": {
+          "defaultDfdRole": "Process",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Azure / Compute",
+          "catalogSource": "Document",
+          "resourceProviders": [
+            "Microsoft.Web/sites"
+          ],
+          "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+          "icon": "azure/10035-icon-service-App-Services.svg",
+          "description": "App Service app catalog entry from Microsoft Azure. Resource provider: Microsoft.Web/sites. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+        }
+      },
+      {
+        "id": "azure.databases.sql",
+        "label": "Azure SQL",
+        "definition": {
+          "defaultDfdRole": "DataStore",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Azure / Databases",
+          "catalogSource": "Document",
+          "resourceProviders": [
+            "Microsoft.Sql/servers",
+            "Microsoft.Sql/servers/databases",
+            "Microsoft.Sql/servers/elasticpool",
+            "Microsoft.Sql/servers/jobAgents",
+            "Microsoft.Sql/managedInstances"
+          ],
+          "documentationUrl": "https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations",
+          "icon": "azure/02390-icon-service-Azure-SQL.svg",
+          "description": "Azure SQL catalog entry from Microsoft Azure. Resource providers: Microsoft.Sql/servers, Microsoft.Sql/servers/databases, Microsoft.Sql/servers/elasticpool, Microsoft.Sql/servers/jobAgents, Microsoft.Sql/managedInstances. Authentication and data-handling policies are not yet curated. See [Microsoft documentation](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)."
+        }
+      },
+      {
+        "id": "SupportTool",
+        "label": "Support tool",
+        "definition": {
+          "defaultDfdRole": "ExternalInteractor",
+          "serviceTreeId": "",
+          "endpointRegex": "^$",
+          "templateHints": [],
+          "allowedAuthMethods": [],
+          "allowedDataTypes": [],
+          "policyStatus": "Unspecified",
+          "category": "Custom",
+          "catalogSource": "Document",
+          "resourceProviders": [],
+          "icon": "generic/component.svg",
+          "description": "Fictional external participant category; its implementation is not a Microsoft service or an asserted policy."
+        }
+      }
     ],
-    "scenarios":[
-      {"id":"s_secure","name":"Tenant-scoped data access","description":"Baseline request preserves tenant claims through every hop and queries only one partition.","nodeIds":["n_tenant_a","n_web","n_gateway","n_service","n_db"],"edgeIds":["e_a","e_gateway","e_service","e_db"],"edgeNumbers":{"e_a":1,"e_gateway":2,"e_service":3,"e_db":4},"boundaryIds":["b_tenant"],"nodeData":{"n_web":{"d_identity":"ProcessingNoStorage"},"n_gateway":{"d_identity":"ProcessingNoStorage"},"n_service":{"d_tenant":"ProcessingNoStorage"},"n_db":{"d_tenant":"StorageOver48Hours"}},"edgeRequestData":{"e_a":["d_identity"],"e_gateway":["d_identity"],"e_service":["d_identity"],"e_db":["d_tenant"]},"edgeResponseData":{"e_a":[],"e_gateway":["d_tenant"],"e_service":["d_tenant"],"e_db":["d_tenant"]}},
-      {"id":"s_risky","name":"Risky cross-tenant support export","description":"Intentionally insecure: a privileged bulk export crosses tenant boundaries, lacks tenant constraints, lacks production identity, and stores data without retention.","nodeIds":["n_tenant_a","n_tenant_b","n_web","n_gateway","n_service","n_db","n_support"],"edgeIds":["e_a","e_b","e_gateway","e_service","e_db","e_export"],"edgeNumbers":{"e_a":1,"e_b":2,"e_gateway":3,"e_service":4,"e_db":5,"e_export":6},"boundaryIds":["b_tenant","b_admin"],"nodeData":{"n_gateway":{"d_identity":"ProcessingNoStorage"},"n_support":{"d_tenant":""}},"edgeRequestData":{"e_a":["d_identity"],"e_b":["d_identity"],"e_gateway":["d_identity"],"e_service":["d_identity"],"e_db":["d_tenant"],"e_export":["d_tenant","d_identity"]},"edgeResponseData":{"e_a":[],"e_b":[],"e_gateway":[],"e_service":[],"e_db":["d_tenant"],"e_export":[]}}
+    "nodes": [
+      {
+        "id": "n_tenant_a",
+        "dfdRoleLegacy": false,
+        "title": "Tenant A User",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. External user in tenant-synthetic-a. May read only A records; separate scenario data must not substitute for runtime authorization.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "TenantUser",
+        "serviceTreeId": "",
+        "endpointRegex": "",
+        "position": {
+          "x": 40,
+          "y": 160
+        },
+        "size": {
+          "width": 130,
+          "height": 78
+        },
+        "color": "#fed7aa"
+      },
+      {
+        "id": "n_tenant_b",
+        "dfdRoleLegacy": false,
+        "title": "Tenant B User",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. External user in tenant-synthetic-b, using the same service instances and distinct authorized records/claims.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "TenantUser",
+        "serviceTreeId": "",
+        "endpointRegex": "",
+        "position": {
+          "x": 40,
+          "y": 490
+        },
+        "size": {
+          "width": 130,
+          "height": 78
+        },
+        "color": "#fed7aa"
+      },
+      {
+        "id": "n_web",
+        "dfdRoleLegacy": false,
+        "title": "SaaS Web App",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Shared in-scope App Service frontend. Preserves delegated user context without cross-user caches. Does not select tenant authority from an untrusted URL parameter.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "azure.compute.app-service-app",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://web\\.multitenantsaasplatform\\.example(?:/|$)",
+        "position": {
+          "x": 360,
+          "y": 300
+        },
+        "size": {
+          "width": 130,
+          "height": 74
+        },
+        "color": "#bfdbfe"
+      },
+      {
+        "id": "n_gateway",
+        "dfdRoleLegacy": false,
+        "title": "Authorization Gateway",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. App Service authorization/orchestration API. Validates delegated subject/tenant/audience. Support export additionally requires time-bound tenant/case approval; no unscoped application-only administrative bypass.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "azure.compute.app-service-app",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://gateway\\.multitenantsaasplatform\\.example(?:/|$)",
+        "position": {
+          "x": 730,
+          "y": 300
+        },
+        "size": {
+          "width": 153,
+          "height": 74
+        },
+        "color": "#bfdbfe"
+      },
+      {
+        "id": "n_service",
+        "dfdRoleLegacy": false,
+        "title": "Tenant Data API",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Owns per-record access and approved support export. Independently validates delegated claims and tenant/case policy; constructs parameterized SQL tenant context and refuses missing/ambiguous scope.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "azure.compute.app-service-app",
+        "serviceTreeId": "",
+        "endpointRegex": "",
+        "position": {
+          "x": 1500,
+          "y": 300
+        },
+        "size": {
+          "width": 130,
+          "height": 74
+        },
+        "color": "#bfdbfe"
+      },
+      {
+        "id": "n_db",
+        "dfdRoleLegacy": false,
+        "title": "Tenant SQL Database",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Shared application-owned Azure SQL database with tenant predicates/row-level policy and separate read/export procedures. Workload role may execute only these procedures; no cross-tenant bulk role, DDL or db_owner. Pool reuse must clear/rebind tenant session context.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "azure.databases.sql",
+        "serviceTreeId": "",
+        "endpointRegex": "",
+        "position": {
+          "x": 1500,
+          "y": 100
+        },
+        "size": {
+          "width": 146,
+          "height": 78
+        },
+        "color": "#bbf7d0"
+      },
+      {
+        "id": "n_support",
+        "dfdRoleLegacy": false,
+        "title": "Support Reviewer",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. External privileged support operator using a controlled administration client. Must authenticate as a user, obtain time-bound tenant/case approval and view only the approved Tenant A response. No durable local export is intended; downloaded copies would require a separate reviewed workflow.\n\nPrivacy/retention: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized.",
+        "type": "SupportTool",
+        "serviceTreeId": "",
+        "endpointRegex": "^https://support\\.multitenantsaasplatform\\.example(?:/|$)",
+        "position": {
+          "x": 730,
+          "y": 570
+        },
+        "size": {
+          "width": 136,
+          "height": 78
+        },
+        "color": "#fed7aa"
+      }
     ],
-    "data":[
-      {"id":"d_identity","name":"Tenant and user claims","classification":"EUII","sample":"Synthetic tenant ID and user object ID"},
-      {"id":"d_tenant","name":"Tenant business records","classification":"Customer Content","sample":"Synthetic records from multiple tenants"}
+    "edges": [
+      {
+        "id": "e_a",
+        "source": "n_tenant_a",
+        "target": "n_web",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Read own A records",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Tenant A claims and A-only records travel through shared services; response carries business content, not authority. Production App ID identifies the fictional shared tenant browser client, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: SaaS Web App validates records.read and subject/tenant membership; only own-tenant records may be displayed.",
+        "authenticationTypes": [
+          "EntraDelegatedUserAccess"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "11111111-1111-4111-8111-111111111111",
+          "tenant": "Customer"
+        },
+        "audience": "api://saas-web.example",
+        "waypoints": [
+          {
+            "id": "w_a",
+            "x": 275,
+            "y": 252
+          }
+        ]
+      },
+      {
+        "id": "e_b",
+        "source": "n_tenant_b",
+        "target": "n_web",
+        "sourceHandle": "right",
+        "targetHandle": "bottom",
+        "title": "Read own B records",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Separate Tenant B input/output demonstrates shared flow definitions with per-scenario payloads. Production App ID identifies the fictional shared tenant browser client, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: SaaS Web App validates records.read and Tenant B membership independently; no cached Tenant A response.",
+        "authenticationTypes": [
+          "EntraDelegatedUserAccess"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "11111111-1111-4111-8111-111111111111",
+          "tenant": "Customer"
+        },
+        "audience": "api://saas-web.example",
+        "waypoints": [
+          {
+            "id": "w_b",
+            "x": 275,
+            "y": 435
+          }
+        ]
+      },
+      {
+        "id": "e_gateway",
+        "source": "n_web",
+        "target": "n_gateway",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Validate tenant claims",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Same right for both tenant scenarios, evaluated relative to their independently validated claims. Production App ID identifies the fictional SaaS Web App workload client, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: Authorization Gateway validates records.read for the delegated subject and tenant; reject a URL tenant that differs from claims.",
+        "authenticationTypes": [
+          "EntraOnBehalfOf"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "33333333-3333-4333-8333-333333333333",
+          "tenant": "Customer"
+        },
+        "audience": "api://tenant-gateway.example",
+        "waypoints": [
+          {
+            "id": "w_gateway",
+            "x": 625,
+            "y": 250
+          }
+        ]
+      },
+      {
+        "id": "e_service",
+        "source": "n_gateway",
+        "target": "n_service",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Authorize tenant rows",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Downstream audience is specific to Data API. Both request context and returned records stay within the authorized tenant. Production App ID identifies the fictional Authorization Gateway workload client, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: Tenant Data API enforces delegated records.read, subject and tenant on every call, not trust in the gateway alone.",
+        "authenticationTypes": [
+          "EntraOnBehalfOf"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "44444444-4444-4444-8444-444444444444",
+          "tenant": "Customer"
+        },
+        "audience": "api://tenant-data.example",
+        "waypoints": [
+          {
+            "id": "w_service",
+            "x": 1180,
+            "y": 250
+          }
+        ]
+      },
+      {
+        "id": "e_db",
+        "source": "n_service",
+        "target": "n_db",
+        "sourceHandle": "right",
+        "targetHandle": "right",
+        "title": "Read tenant partition",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. MI is workload authentication, not user delegation. Clear/rebind tenant context on each pooled connection; reject absent context.",
+        "requiredAccessRights": "Reference requirement: Tenant SQL Database grants Data API EXECUTE on tenant-read procedure only; bound tenant context and row-level predicate enforce scope. No unscoped table SELECT or db_owner.",
+        "authenticationTypes": [
+          "EntraManagedIdentity"
+        ],
+        "productionIdentity": {
+          "kind": "ManagedIdentity"
+        },
+        "audience": "https://database.windows.net",
+        "waypoints": [
+          {
+            "id": "w_db",
+            "x": 1760,
+            "y": 240
+          }
+        ]
+      },
+      {
+        "id": "e_export",
+        "source": "n_support",
+        "target": "n_gateway",
+        "sourceHandle": "left",
+        "targetHandle": "bottom",
+        "title": "Request approved support view",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. The external support operator receives only an approved Tenant A subset in the RESPONSE. No cross-tenant batch or durable local copy is part of this design. Production App ID identifies the fictional Support Reviewer client application, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: Authorization Gateway requires support.export, privileged user identity and approved time-bound Tenant A/case binding; deny arbitrary tenants and unapproved fields.",
+        "authenticationTypes": [
+          "EntraDelegatedUserAccess"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "77777777-7777-4777-8777-777777777777",
+          "tenant": "Customer"
+        },
+        "audience": "api://tenant-gateway.example",
+        "waypoints": [
+          {
+            "id": "w_export_out",
+            "x": 620,
+            "y": 590
+          },
+          {
+            "id": "w_export",
+            "x": 600,
+            "y": 480
+          },
+          {
+            "id": "w_export_in",
+            "x": 700,
+            "y": 410
+          }
+        ]
+      },
+      {
+        "id": "e_bulk",
+        "source": "n_gateway",
+        "target": "n_service",
+        "sourceHandle": "right",
+        "targetHandle": "left",
+        "title": "Authorize case-bound subset",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Preserve support user accountability through OBO, rather than switching to a privileged application-only bypass. Production App ID identifies the fictional Authorization Gateway workload client, not the human. Human identity and permissions come from validated subject/delegated claims; each calling application has its own registration.",
+        "requiredAccessRights": "Reference requirement: Tenant Data API independently validates delegated support.export and the tenant/case approval; constrain fields and record count.",
+        "authenticationTypes": [
+          "EntraOnBehalfOf"
+        ],
+        "productionIdentity": {
+          "kind": "AppId",
+          "appId": "44444444-4444-4444-8444-444444444444",
+          "tenant": "Customer"
+        },
+        "audience": "api://tenant-data.example",
+        "waypoints": [
+          {
+            "id": "w_bulk",
+            "x": 1180,
+            "y": 395
+          }
+        ]
+      },
+      {
+        "id": "e_bulk_db",
+        "source": "n_service",
+        "target": "n_db",
+        "sourceHandle": "top",
+        "targetHandle": "left",
+        "title": "Read approved SQL subset",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Returns a minimum Tenant A projection from the same partitioned database; the workload identity does not authorize wider access.",
+        "requiredAccessRights": "Reference requirement: Tenant SQL Database grants EXECUTE on support-read procedure only; validated tenant/case and field allowlist bound the result. No cross-tenant bulk privilege.",
+        "authenticationTypes": [
+          "EntraManagedIdentity"
+        ],
+        "productionIdentity": {
+          "kind": "ManagedIdentity"
+        },
+        "audience": "https://database.windows.net",
+        "waypoints": [
+          {
+            "id": "w_bulk_db",
+            "x": 1310,
+            "y": 160
+          }
+        ]
+      }
     ],
-    "comments":[{"id":"c_export","scenarioId":"s_risky","targetKind":"edge","targetId":"e_export","text":"Ask how a malicious support operator or confused-deputy bug could expose another tenant's records.","status":"Active","createdAt":1789000004000,"replies":[]}],
-    "issues":[],"workItems":[]
+    "boundaries": [
+      {
+        "id": "b_tenant",
+        "type": "privacy",
+        "title": "Tenant data plane | logical partitions, not one tenant",
+        "position": {
+          "x": 320,
+          "y": 40
+        },
+        "size": {
+          "width": 1570,
+          "height": 395
+        },
+        "nodeIds": [
+          "n_web",
+          "n_gateway",
+          "n_service",
+          "n_db"
+        ]
+      },
+      {
+        "id": "b_admin",
+        "type": "security",
+        "title": "External support operator",
+        "position": {
+          "x": 690,
+          "y": 520
+        },
+        "size": {
+          "width": 250,
+          "height": 155
+        },
+        "nodeIds": [
+          "n_support"
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "s_secure",
+        "name": "01 | Reference - Tenant A read",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized. All subject processes and stores are in scope; external participants are visible black boxes, not excluded infrastructure. Numbering orders requests; response buckets return on the same call, not a second login.",
+        "nodeIds": [
+          "n_tenant_a",
+          "n_web",
+          "n_gateway",
+          "n_service",
+          "n_db"
+        ],
+        "edgeIds": [
+          "e_a",
+          "e_gateway",
+          "e_service",
+          "e_db"
+        ],
+        "edgeNumbers": {
+          "e_a": 1,
+          "e_gateway": 2,
+          "e_service": 3,
+          "e_db": 4
+        },
+        "boundaryIds": [
+          "b_tenant"
+        ],
+        "nodeData": {
+          "n_web": {
+            "d_identity": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant": "ProcessingNoStorage"
+          },
+          "n_tenant_a": {
+            "d_tenant": "ProcessingNoStorage"
+          },
+          "n_gateway": {
+            "d_identity": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant": "ProcessingNoStorage"
+          },
+          "n_service": {
+            "d_identity": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant": "ProcessingNoStorage"
+          },
+          "n_db": {
+            "d_tenant_id": "StorageOver48Hours",
+            "d_subject": "ProcessingNoStorage",
+            "d_tenant": "StorageOver48Hours"
+          }
+        },
+        "edgeRequestData": {
+          "e_a": [
+            "d_identity",
+            "d_tenant_id",
+            "d_subject"
+          ],
+          "e_gateway": [
+            "d_identity",
+            "d_tenant_id",
+            "d_subject"
+          ],
+          "e_service": [
+            "d_identity",
+            "d_tenant_id",
+            "d_subject"
+          ],
+          "e_db": [
+            "d_tenant_id",
+            "d_subject"
+          ]
+        },
+        "edgeResponseData": {
+          "e_a": [
+            "d_tenant"
+          ],
+          "e_gateway": [
+            "d_tenant"
+          ],
+          "e_service": [
+            "d_tenant"
+          ],
+          "e_db": [
+            "d_tenant"
+          ]
+        }
+      },
+      {
+        "id": "s_tenant_b",
+        "name": "02 | Reference - Tenant B read",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized. All subject processes and stores are in scope; external participants are visible black boxes, not excluded infrastructure. Numbering orders requests; response buckets return on the same call, not a second login.",
+        "nodeIds": [
+          "n_tenant_b",
+          "n_web",
+          "n_gateway",
+          "n_service",
+          "n_db"
+        ],
+        "edgeIds": [
+          "e_b",
+          "e_gateway",
+          "e_service",
+          "e_db"
+        ],
+        "edgeNumbers": {
+          "e_b": 1,
+          "e_gateway": 2,
+          "e_service": 3,
+          "e_db": 4
+        },
+        "boundaryIds": [
+          "b_tenant"
+        ],
+        "nodeData": {
+          "n_web": {
+            "d_identity_b": "ProcessingNoStorage",
+            "d_tenant_id_b": "ProcessingNoStorage",
+            "d_subject_b": "ProcessingNoStorage",
+            "d_tenant_b": "ProcessingNoStorage"
+          },
+          "n_tenant_b": {
+            "d_tenant_b": "ProcessingNoStorage"
+          },
+          "n_gateway": {
+            "d_identity_b": "ProcessingNoStorage",
+            "d_tenant_id_b": "ProcessingNoStorage",
+            "d_subject_b": "ProcessingNoStorage",
+            "d_tenant_b": "ProcessingNoStorage"
+          },
+          "n_service": {
+            "d_identity_b": "ProcessingNoStorage",
+            "d_tenant_id_b": "ProcessingNoStorage",
+            "d_subject_b": "ProcessingNoStorage",
+            "d_tenant_b": "ProcessingNoStorage"
+          },
+          "n_db": {
+            "d_tenant_id_b": "StorageOver48Hours",
+            "d_subject_b": "ProcessingNoStorage",
+            "d_tenant_b": "StorageOver48Hours"
+          }
+        },
+        "edgeRequestData": {
+          "e_b": [
+            "d_identity_b",
+            "d_tenant_id_b",
+            "d_subject_b"
+          ],
+          "e_gateway": [
+            "d_identity_b",
+            "d_tenant_id_b",
+            "d_subject_b"
+          ],
+          "e_service": [
+            "d_identity_b",
+            "d_tenant_id_b",
+            "d_subject_b"
+          ],
+          "e_db": [
+            "d_tenant_id_b",
+            "d_subject_b"
+          ]
+        },
+        "edgeResponseData": {
+          "e_b": [
+            "d_tenant_b"
+          ],
+          "e_gateway": [
+            "d_tenant_b"
+          ],
+          "e_service": [
+            "d_tenant_b"
+          ],
+          "e_db": [
+            "d_tenant_b"
+          ]
+        }
+      },
+      {
+        "id": "s_risky",
+        "name": "03 | Reference - approved support view",
+        "description": "Synthetic reference design, not an observed deployment or security/compliance certification. Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized. All subject processes and stores are in scope; external participants are visible black boxes, not excluded infrastructure. Numbering orders requests; response buckets return on the same call, not a second login. SQL retains the underlying Tenant A business records; d_export is a transient minimum projection of those records, not a new cross-tenant dataset or support-side durable copy.",
+        "nodeIds": [
+          "n_support",
+          "n_gateway",
+          "n_service",
+          "n_db"
+        ],
+        "edgeIds": [
+          "e_export",
+          "e_bulk",
+          "e_bulk_db"
+        ],
+        "edgeNumbers": {
+          "e_export": 1,
+          "e_bulk": 2,
+          "e_bulk_db": 3
+        },
+        "boundaryIds": [
+          "b_tenant",
+          "b_admin"
+        ],
+        "nodeData": {
+          "n_gateway": {
+            "d_export_query": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_case": "ProcessingNoStorage",
+            "d_admin": "ProcessingNoStorage",
+            "d_export": "ProcessingNoStorage"
+          },
+          "n_support": {
+            "d_export": "ProcessingNoStorage"
+          },
+          "n_service": {
+            "d_export_query": "ProcessingNoStorage",
+            "d_tenant_id": "ProcessingNoStorage",
+            "d_case": "ProcessingNoStorage",
+            "d_admin": "ProcessingNoStorage",
+            "d_export": "ProcessingNoStorage"
+          },
+          "n_db": {
+            "d_export_query": "ProcessingNoStorage",
+            "d_tenant_id": "StorageOver48Hours",
+            "d_case": "ProcessingNoStorage",
+            "d_tenant": "StorageOver48Hours",
+            "d_export": "ProcessingNoStorage"
+          }
+        },
+        "edgeRequestData": {
+          "e_export": [
+            "d_export_query",
+            "d_tenant_id",
+            "d_case",
+            "d_admin"
+          ],
+          "e_bulk": [
+            "d_export_query",
+            "d_tenant_id",
+            "d_case",
+            "d_admin"
+          ],
+          "e_bulk_db": [
+            "d_export_query",
+            "d_tenant_id",
+            "d_case"
+          ]
+        },
+        "edgeResponseData": {
+          "e_export": [
+            "d_export"
+          ],
+          "e_bulk": [
+            "d_export"
+          ],
+          "e_bulk_db": [
+            "d_export"
+          ]
+        }
+      }
+    ],
+    "data": [
+      {
+        "id": "d_identity",
+        "name": "Tenant A permission claims",
+        "classification": "Access Control Data",
+        "sample": "{\"scope\":\"records.read\",\"policy\":\"own-tenant\"}; synthetic; no bearer token"
+      },
+      {
+        "id": "d_tenant",
+        "name": "Tenant A business records",
+        "classification": "Customer Content",
+        "sample": "[{\"record\":\"record-synthetic-a\",\"content\":\"Fictional Tenant A data\"}]"
+      },
+      {
+        "id": "d_identity_b",
+        "name": "Tenant B permission claims",
+        "classification": "Access Control Data",
+        "sample": "{\"scope\":\"records.read\",\"policy\":\"own-tenant\"}; synthetic; no bearer token"
+      },
+      {
+        "id": "d_tenant_b",
+        "name": "Tenant B business records",
+        "classification": "Customer Content",
+        "sample": "[{\"record\":\"record-synthetic-b\",\"content\":\"Fictional Tenant B data\"}]"
+      },
+      {
+        "id": "d_tenant_id",
+        "name": "Tenant A partition",
+        "classification": "OII",
+        "sample": "tenant-synthetic-a"
+      },
+      {
+        "id": "d_tenant_id_b",
+        "name": "Tenant B partition",
+        "classification": "OII",
+        "sample": "tenant-synthetic-b"
+      },
+      {
+        "id": "d_subject",
+        "name": "Pseudonymous subject reference",
+        "classification": "EUPI",
+        "sample": "subject-synthetic-001; linkable, not anonymous"
+      },
+      {
+        "id": "d_subject_b",
+        "name": "Tenant B subject",
+        "classification": "EUPI",
+        "sample": "user-synthetic-b"
+      },
+      {
+        "id": "d_export_query",
+        "name": "Approved export permission",
+        "classification": "Access Control Data",
+        "sample": "{\"scope\":\"support.export\",\"tenant\":\"tenant-synthetic-a\",\"approval\":\"time-bound-synthetic\"}"
+      },
+      {
+        "id": "d_case",
+        "name": "Approved support case",
+        "classification": "Support Data",
+        "sample": "{\"case\":\"case-synthetic-01\",\"purpose\":\"customer-requested-diagnosis\"}"
+      },
+      {
+        "id": "d_admin",
+        "name": "Support administrator identity",
+        "classification": "Administrator Data",
+        "sample": "{\"upn\":\"support-reviewer@admin.example\"}"
+      },
+      {
+        "id": "d_export",
+        "name": "Minimum Tenant A support response",
+        "classification": "Customer Content",
+        "sample": "[{\"record\":\"record-synthetic-a\",\"content\":\"Approved Tenant A subset\"}]"
+      }
+    ],
+    "comments": [
+      {
+        "id": "c_reference_1",
+        "scenarioId": "s_secure",
+        "targetKind": "node",
+        "targetId": "n_service",
+        "text": "01 | Reference - Tenant A read: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized. These are recommended design controls, not a claim that the synthetic system has been deployed or assessed.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      },
+      {
+        "id": "c_reference_2",
+        "scenarioId": "s_tenant_b",
+        "targetKind": "node",
+        "targetId": "n_service",
+        "text": "02 | Reference - Tenant B read: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized. These are recommended design controls, not a claim that the synthetic system has been deployed or assessed.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      },
+      {
+        "id": "c_reference_3",
+        "scenarioId": "s_risky",
+        "targetKind": "node",
+        "targetId": "n_service",
+        "text": "03 | Reference - approved support view: Business content persists only in its own tenant partition while active, with an illustrative 30-day account-closure/backup-expiry policy. Tenant IDs are OII, user references EUPI, permission claims Access Control Data, support identity Administrator Data and case material Support Data. Support response and approval/query context are processing-only; no cross-tenant batch or local download is authorized. These are recommended design controls, not a claim that the synthetic system has been deployed or assessed.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      }
+    ],
+    "issues": [
+      {
+        "id": "i_sample_1",
+        "origin": "authored-threat",
+        "justification": "The design requires these controls; implementation and negative-test evidence remain to be reviewed. Active is not an observed exploit or risk acceptance.",
+        "targetKind": "node",
+        "targetId": "n_service",
+        "scenarioIds": [
+          "s_secure",
+          "s_tenant_b",
+          "s_risky"
+        ],
+        "title": "Pooled connection tenant bleed",
+        "description": "Reference review concern: Test A/B alternation on reused SQL connections, forged tenant parameters and missing tenant context against row-level predicates.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      },
+      {
+        "id": "i_sample_2",
+        "origin": "authored-threat",
+        "justification": "Verify the named boundary-crossing controls before implementation approval. A declared requirement or clean deterministic result is not assurance.",
+        "targetKind": "edge",
+        "targetId": "e_export",
+        "scenarioIds": [
+          "s_risky"
+        ],
+        "title": "Excessive support disclosure",
+        "description": "Reference review concern: Test approval expiry, substituted tenant/case, excessive columns/row counts and delegated operator identity before returning any support subset.",
+        "status": "Active",
+        "createdAt": 1790969400000,
+        "replies": []
+      }
+    ],
+    "deviations": [],
+    "workItems": [
+      {
+        "id": "wi_reference_controls",
+        "description": "Verify pooled connection tenant bleed and excessive support disclosure controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
+        "link": ""
+      }
+    ]
   },
-  "view":{"activeScenarioId":"s_risky","filter":{"text":"","nodeType":"","authType":"","dataClassification":""}}
+  "view": {
+    "activeScenarioId": "s_secure",
+    "filter": {
+      "text": "",
+      "nodeType": "",
+      "authType": "",
+      "dataClassification": ""
+    }
+  }
 }

@@ -1,12 +1,16 @@
 import type { CatalogDefinitionSnapshot, PsDocument, Scenario } from "./types";
+import { DFD_ROLE_LABELS, nodeDfdSummary, flowDfdSummary, resolveNodeReviewScope, formatDfdValue } from "./dfdSemantics";
 import {
   RETENTION_LABELS,
   ISSUE_NOT_EVALUATED_LABELS,
   deviationKindLabel,
   privacyBoundaryTypeLabel,
   securityBoundaryTypeLabel,
+  BOUNDARY_NETWORK_FIELDS,
+  formatBoundaryNetworkText,
   authTypeLabel,
   authenticationCatalogFor,
+  formatRequiredAccessRights,
   dataClassificationLabel,
   formatProductionIdentity,
   nodeTypeLabel,
@@ -111,7 +115,8 @@ export async function captureDiagramPng(
     .map((node) => {
       const x = offset(node.position.x, minX);
       const y = offset(node.position.y, minY);
-      return `<g><rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="6" fill="${node.color ?? "#ffffff"}" stroke="#334155" stroke-width="2"/><text x="${x + 12}" y="${y + 28}" font-size="14" font-weight="600" fill="#0f172a">${escapeHtml(node.title)}</text><text x="${x + 12}" y="${y + 50}" font-size="11" fill="#64748b">${escapeHtml(nodeTypeLabel(node.type, doc.nodeTypes))}</text></g>`;
+      const scope = resolveNodeReviewScope(node, scenario, doc.nodeTypes);
+      return `<g><title>${escapeHtml(nodeDfdSummary(node, doc, scenario))}</title><rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="${scope.role.role === "Process" ? 18 : scope.role.role === "DataStore" ? 12 : 0}" fill="${node.color ?? "#ffffff"}" stroke="#334155" stroke-width="2"${scope.disposition === "outOfScope" ? ' stroke-dasharray="5 3"' : ""}/><text x="${x + 12}" y="${y + 22}" font-size="14" font-weight="600" fill="#0f172a">${escapeHtml(node.title)}</text><text x="${x + 12}" y="${y + 39}" font-size="11" fill="#64748b">${escapeHtml(nodeTypeLabel(node.type, doc.nodeTypes))}</text><text x="${x + 12}" y="${y + 53}" font-size="10" fill="#334155">${escapeHtml(DFD_ROLE_LABELS[scope.role.role])} / ${escapeHtml(scope.disposition)}</text></g>`;
     })
     .join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#475569"/></marker><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#dbe3ec"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafc"/><rect width="100%" height="100%" fill="url(#grid)"/>${boundarySvg}${edgeSvg}${nodeSvg}</svg>`;
@@ -207,6 +212,9 @@ export function buildReviewReportHtml(options: {
   const nodeRows = nodes.map((node) => [
     escapeHtml(node.title),
     escapeHtml(nodeTypeLabel(node.type, doc.nodeTypes)),
+    escapeHtml(nodeDfdSummary(node, doc, scenario)),
+    escapeHtml(formatDfdValue(scenario.nodeScopeReasons?.[node.id]) || "Not specified"),
+    escapeHtml(resolveNodeReviewScope(node, scenario, doc.nodeTypes).diagnostics.join(" ") || "None"),
     escapeHtml(node.description || "—"),
     escapeHtml(node.serviceTreeId || (options.inventoryRequired ? "Missing" : "Not specified")),
     escapeHtml(node.endpointRegex || "—"),
@@ -223,9 +231,11 @@ export function buildReviewReportHtml(options: {
       escapeHtml(edge.title),
       escapeHtml(nodeById.get(edge.source)?.title ?? edge.source),
       escapeHtml(nodeById.get(edge.target)?.title ?? edge.target),
+      escapeHtml(flowDfdSummary(edge, doc, scenario)),
       escapeHtml((edge.authenticationTypes ?? []).map(id => authTypeLabel(id, authenticationCatalogFor(doc))).join(", ") || "Not specified"),
       escapeHtml(edge.audience || "—"),
       escapeHtml(edge.productionIdentity ? formatProductionIdentity(edge.productionIdentity, doc.catalogDefinitions) : "Unspecified"),
+      `<span class="flow-rights">${escapeHtml(formatRequiredAccessRights(edge.requiredAccessRights) || "Unspecified")}</span>`,
       dataNames(scenario.edgeRequestData[edge.id]),
       dataNames(scenario.edgeResponseData[edge.id]),
     ]);
@@ -246,7 +256,7 @@ export function buildReviewReportHtml(options: {
   });
   const issueRows = issues.map((issue) => [
     escapeHtml(issue.status),
-    escapeHtml(issue.kind ? "Analyze" : "Manual / accepted AI"),
+    escapeHtml(issue.origin === "authored-threat" && !issue.kind ? "Authored threat note" : issue.kind ? "Analyze" : "Manual / accepted AI"),
     escapeHtml(issue.kind
       ? issue.notEvaluatedReason ? ISSUE_NOT_EVALUATED_LABELS[issue.notEvaluatedReason] : "No evaluation limitation recorded"
       : "Not applicable"),
@@ -256,7 +266,8 @@ export function buildReviewReportHtml(options: {
         ? nodeById.get(issue.targetId)?.title ?? issue.targetId
         : doc.edges.find((edge) => edge.id === issue.targetId)?.title ?? issue.targetId,
     ),
-    escapeHtml(issue.description),
+    `<span class="flow-rights">${escapeHtml(issue.description)}${issue.origin === "authored-threat" && !issue.kind
+      ? `\n\nJustification: ${escapeHtml(issue.justification || "(not supplied)")}` : ""}</span>`,
   ]);
   const metadataRows = [
     ...nodes.map(entity => ({ entity, kind: "Node" })),
@@ -313,19 +324,23 @@ export function buildReviewReportHtml(options: {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(scenario.name)} review report</title>
 <style>
+.flow-rights{white-space:pre-wrap;overflow-wrap:anywhere}
 :root{font-family:Segoe UI,Arial,sans-serif;color:#242424;background:#fff}*{box-sizing:border-box}body{margin:0}main{max-width:1180px;margin:0 auto;padding:32px}header{border-bottom:3px solid #0f6cbd;padding-bottom:18px;margin-bottom:24px}h1{font-size:26px;margin:0 0 6px}h2{font-size:18px;margin:28px 0 10px;color:#0f548c}p{line-height:1.5}.meta{display:flex;gap:18px;flex-wrap:wrap;color:#616161;font-size:13px}.summary{display:grid;grid-template-columns:repeat(6,minmax(100px,1fr));gap:10px}.metric{border:1px solid #d1d1d1;padding:12px}.metric strong{display:block;font-size:22px;color:#0f6cbd}.diagram{width:100%;max-height:650px;object-fit:contain;border:1px solid #d1d1d1;background:#fafafa}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #d1d1d1;padding:7px;text-align:left;vertical-align:top}th{background:#f3f3f3}.empty{color:#616161}footer{margin-top:32px;padding-top:12px;border-top:1px solid #d1d1d1;color:#616161;font-size:11px}@media print{main{max-width:none;padding:12mm}.no-print{display:none}h2{break-after:avoid}tr,img{break-inside:avoid}.table-wrap{overflow:visible}}
 </style></head><body><main>
 <header><h1>SecureDesignStudio Review Report</h1><div class="meta"><span>Document: ${escapeHtml(documentFileName)}</span><span>Scenario: ${escapeHtml(scenario.name)}</span><span>Generated: ${escapeHtml(generatedAt)}</span></div></header>
 <section><h2>Executive summary</h2><p>${escapeHtml(scenario.description || "No scenario description provided.")}</p><div class="summary"><div class="metric"><strong>${nodes.length}</strong>Nodes</div><div class="metric"><strong>${edges.length}</strong>Flows</div><div class="metric"><strong>${boundaries.length}</strong>Boundaries</div><div class="metric"><strong>${issues.length}</strong>Issues</div><div class="metric"><strong>${deviations.length}</strong>Deviations</div><div class="metric"><strong>${data.length}</strong>Data items</div></div></section>
 ${diagramDataUrl ? `<section><h2>Scenario diagram</h2><img class="diagram" src="${diagramDataUrl}" alt="${escapeHtml(scenario.name)} diagram"></section>` : ""}
-<section><h2>Boundaries</h2>${table(["Title", "Type", "Subtype"], boundaries.map((boundary) => [
+<section><h2>Boundaries</h2><p>Network notes are declared intent, not verified enforcement or compliance. Blank means undocumented. Notes retained on privacy boundaries are inactive and are not shown here.</p>${table(["Title", "Type", "Subtype", ...BOUNDARY_NETWORK_FIELDS.map(field => field.label)], boundaries.map((boundary) => [
   escapeHtml(boundary.title), escapeHtml(boundary.type),
   escapeHtml(boundary.type === "privacy"
     ? boundary.privacySubtype ? privacyBoundaryTypeLabel(boundary.privacySubtype, doc.catalogDefinitions) : "Unspecified"
     : boundary.securitySubtype ? securityBoundaryTypeLabel(boundary.securitySubtype, doc.catalogDefinitions) : "Unspecified"),
+  ...BOUNDARY_NETWORK_FIELDS.map(({ key }) => boundary.type === "security"
+    ? `<span style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(formatBoundaryNetworkText(boundary[key]) || "Undocumented")}</span>`
+    : "Inactive (security only)"),
 ]))}</section>
-<section><h2>Node inventory</h2>${table(["Node", "Type", "Description", options.inventoryLabel ?? "Inventory ID", "Endpoint pattern"], nodeRows)}</section>
-<section><h2>Data flow inventory</h2>${table(["#", "Flow", "Source", "Target", "Authentication", "Audience", "Production identity", "Request data", "Response data"], edgeRows)}</section>
+<section><h2>Node inventory</h2><p>DFD role is independent of service type. Scope excludes interiors only from LLM review, never fixed checks. Stored reasons on External Interactors are inactive.</p>${table(["Node", "Type", "DFD role / scope", "Stored scope reason", "Diagnostics", "Description", options.inventoryLabel ?? "Inventory ID", "Endpoint pattern"], nodeRows)}</section>
+<section><h2>Data flow inventory</h2><p>Required access rights are declared design intent, not verified deployed grants or compliance. Blank means unspecified, not no permissions required.</p>${table(["#", "Flow", "Source", "Target", "Scope context", "Authentication", "Audience", "Production identity", "Required access rights", "Request data", "Response data"], edgeRows)}</section>
 <section><h2>Data inventory and retention</h2>${table(["Data element", "Classification", "Sample", "Stored / processed at"], dataRows)}</section>
 ${metadataRows.length ? `<section><h2>Custom metadata</h2>${table(["Type", "Element", "Field", "Value"], metadataRows)}</section>` : ""}
 <section><h2>Security and privacy findings</h2><p>Active/Resolved is the review status, not an analysis result. Not re-evaluated findings may contain retained or partial evidence. No recorded limitation does not certify freshness or complete model coverage.</p>${table(["Status", "Source", "Evaluation", "Finding", "Affected element", "Details"], issueRows)}</section>

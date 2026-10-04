@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useStore } from "../store";
 import { IssueRow } from "./IssueRow";
+import { AddThreatNote } from "./AddThreatNote";
 
 // Inline "Issues" list shown inside a NodeDetails / EdgeDetails side panel.
 // Lists every issue whose target matches the selected node or edge.
@@ -32,6 +33,7 @@ export function TargetIssuesSection({
       <legend>
         Issues {matching.length > 0 ? `(${activeCount} active)` : ""}
       </legend>
+      <AddThreatNote targetKind={targetKind} targetId={targetId} />
       {matching.length === 0 ? (
         <p className="ps-empty" style={{ padding: 0, fontSize: 12 }}>
           No issues on this {targetKind}.

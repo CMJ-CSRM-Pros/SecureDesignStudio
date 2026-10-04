@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { dataClassificationLabel } from "../types";
 import { useStore } from "../store";
+import { flowDfdSummary } from "../dfdSemantics";
 import {
   authTypeDescription,
   authTypeLabel,
@@ -222,6 +223,7 @@ export function EdgeTable() {
                 <td>{e.title || "(untitled)"}</td>
                 <td>
                   {(src?.title ?? e.source)} → {(tgt?.title ?? e.target)}
+                  <div className="ps-description-below">{flowDfdSummary(e, doc, activeScenario)}</div>
                 </td>
                 <td>
                   {(e.authenticationTypes ?? []).map((id, i, arr) => (

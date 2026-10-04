@@ -10,6 +10,7 @@
 
 import { useCallback } from "react";
 import { useStore } from "../store";
+import { isAuthoredThreatNote } from "../threatNotes";
 
 export function useRemoveFromScenarioWithConfirm() {
   const {
@@ -48,6 +49,12 @@ export function useRemoveFromScenarioWithConfirm() {
         }
         deleteNode(nodeId);
       } else {
+        const scopedNotes = doc.issues.filter(issue => isAuthoredThreatNote(issue) &&
+          issue.scenarioIds.length === 1 && issue.scenarioIds[0] === scenarioId &&
+          ((issue.targetKind === "node" && issue.targetId === nodeId) ||
+            (issue.targetKind === "edge" && doc.edges.some(edge => edge.id === issue.targetId &&
+              (edge.source === nodeId || edge.target === nodeId))))).length;
+        if (scopedNotes && !window.confirm(`Removing this node from the scenario also removes ${scopedNotes} threat note(s) scoped only here, including notes on connected flows. Undo can restore them. Continue?`)) return;
         removeNodeFromScenario(scenarioId, nodeId);
       }
     },
@@ -73,6 +80,10 @@ export function useRemoveFromScenarioWithConfirm() {
         }
         deleteEdge(edgeId);
       } else {
+        const scopedNotes = doc.issues.filter(issue => isAuthoredThreatNote(issue) &&
+          issue.targetKind === "edge" && issue.targetId === edgeId &&
+          issue.scenarioIds.length === 1 && issue.scenarioIds[0] === scenarioId).length;
+        if (scopedNotes && !window.confirm(`Removing this flow from the scenario also removes ${scopedNotes} threat note(s) scoped only here. Undo can restore them. Continue?`)) return;
         removeEdgeFromScenario(scenarioId, edgeId);
       }
     },

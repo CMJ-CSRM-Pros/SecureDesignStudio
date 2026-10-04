@@ -31,6 +31,7 @@ import { nodeTypeIconUrl, nodeTypeIconUrlForKey } from "../nodeTypeIcons";
 import { classificationOptions } from "../classificationLibrary";
 import { useLibraries } from "../libraries/LibraryProvider";
 import { inventoryFieldFor, inventoryIdError } from "../inventoryIdentity";
+import { DFD_ROLES, DFD_ROLE_LABELS, formatDfdValue, isDfdRole } from "../dfdSemantics";
 
 function cloneDefinition(definition: NodeTypeDefinition): NodeTypeDefinition {
   return JSON.parse(JSON.stringify(definition)) as NodeTypeDefinition;
@@ -417,6 +418,22 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
                         updateDefinition({ category: event.target.value })
                       }
                     />
+                  </label>
+                  <label>
+                    Default DFD role
+                    <select
+                      value={draft.definition.defaultDfdRole === undefined ? ""
+                        : isDfdRole(draft.definition.defaultDfdRole) ? draft.definition.defaultDfdRole : "unresolved"}
+                      onChange={event => updateDefinition({ defaultDfdRole: event.target.value || undefined })}
+                    >
+                      <option value="">Unspecified (Process fallback)</option>
+                      {draft.definition.defaultDfdRole !== undefined && !isDfdRole(draft.definition.defaultDfdRole)
+                        && <option value="unresolved" disabled>Unrecognized saved role</option>}
+                      {DFD_ROLES.map(role => <option key={role} value={role}>{DFD_ROLE_LABELS[role]}</option>)}
+                    </select>
+                    {draft.definition.defaultDfdRole !== undefined && !isDfdRole(draft.definition.defaultDfdRole)
+                      && <span role="status">{formatDfdValue(draft.definition.defaultDfdRole)}</span>}
+                    <span>Independent of service identity. Legacy nodes keep Process until explicitly adopting this default.</span>
                   </label>
                   <label>
                     {inventoryField.label}

@@ -1021,6 +1021,9 @@ body.ps-resizing-h * {
   border-radius: 6px;
   background: #f8fafc;
 }
+.ps-details > details + .ps-node-type-summary {
+  margin-top: 8px;
+}
 .ps-node-type-summary img {
   width: 28px;
   height: 28px;
@@ -1166,7 +1169,7 @@ body.ps-resizing-h * {
   background: white;
   border: 2px solid #1f2937;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 8px 12px 36px;
   min-width: 130px;
   max-width: 220px;
   text-align: center;
@@ -1181,6 +1184,31 @@ body.ps-resizing-h * {
     0 0 0 6px rgba(37, 99, 235, 0.25),
     0 0 14px 2px rgba(37, 99, 235, 0.55);
 }
+.ps-node.ps-dfd-Process { border-radius: 18px; }
+.ps-node.ps-dfd-DataStore { border-radius: 50% / 12px; border-top-width: 4px; border-bottom-width: 4px; }
+.ps-node.ps-dfd-ExternalInteractor { border-radius: 0; border-style: double; border-width: 4px; }
+.ps-node.ps-dfd-scope-outOfScope { border-style: dashed; }
+.ps-node.ps-dfd-scope-outOfScope .ps-node-semantics { border-left: 4px solid var(--ps-oos-color, #b45309); padding-left: 4px; }
+.ps-node.ps-dfd-ExternalInteractor .ps-node-semantics { border-left: 4px solid var(--ps-external-color, #7c3aed); padding-left: 4px; }
+.ps-node-semantics {
+  /* Scenario-only cues must not resize the persisted node geometry. */
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 24px;
+  line-height: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  text-align: left;
+}
+.ps-node-semantics span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ps-dfd-recovery { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .ps-node.ps-simulation-active {
   border-color: #d13438;
   box-shadow: 0 0 0 4px rgba(209, 52, 56, 0.18);
@@ -1228,6 +1256,22 @@ body.ps-resizing-h * {
   font-size: 9px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.ps-node-badges {
+  /* Scenario-filtered counts must not change the persisted node dimensions. */
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 3px;
+}
+.ps-node-badges .ps-comment-badges,
+.ps-node-badges .ps-issue-badges {
+  margin-left: 0;
+  flex-wrap: wrap;
 }
 .ps-node-type {
   margin-top: 2px;
@@ -3092,6 +3136,15 @@ body.ps-resizing-h * {
 .ps-target-issues {
   /* Override the data-section padding so the rows hug the fieldset edge */
   padding: 6px 8px 10px;
+}
+
+.ps-threat-note-editor {
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}
+.ps-threat-note-editor fieldset {
+  min-width: 0;
+  margin: 8px 0;
 }
 .ps-target-issues-list {
   display: flex;

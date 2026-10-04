@@ -10,6 +10,11 @@ export interface ProcessNodeData {
   typeLabel?: string;
   iconUrl?: string;
   color?: string;
+  dfdRole?: string;
+  dfdLabel?: string;
+  scopeDisposition?: string;
+  scopeLabel?: string;
+  semanticSummary?: string;
   selected?: boolean;
   commentActive?: number;
   commentResolved?: number;
@@ -59,13 +64,13 @@ export function ProcessNode({ id, data, selected }: NodeProps) {
 
   return (
     <div
-      className={`ps-node ${selected ? "selected" : ""} ${
+      className={`ps-node ps-dfd-${d.dfdRole ?? "Process"} ps-dfd-scope-${d.scopeDisposition ?? "noScenario"} ${selected ? "selected" : ""} ${
         d.simulationActive ? "ps-simulation-active" : ""
       } ${d.simulationCurrent ? "ps-simulation-current" : ""} ${
         d.simulationTarget ? "ps-simulation-target" : ""
       }`}
       onClick={onClick}
-      title={d.type}
+      title={d.semanticSummary ?? d.type}
       style={d.color ? { background: d.color } : undefined}
     >
       {/* One handle per side. connectionMode="loose" on the canvas lets each
@@ -137,14 +142,6 @@ export function ProcessNode({ id, data, selected }: NodeProps) {
               title="Double-click to rename · Ctrl/Cmd+Enter to save · Esc to cancel"
             >
               {d.title || "(untitled)"}
-              <CommentBadges
-                active={d.commentActive ?? 0}
-                resolved={d.commentResolved ?? 0}
-              />
-              <IssueBadges
-                active={d.issueActive ?? 0}
-                resolved={d.issueResolved ?? 0}
-              />
             </div>
           )}
           {d.type && (
@@ -152,6 +149,16 @@ export function ProcessNode({ id, data, selected }: NodeProps) {
           )}
         </div>
       </div>
+      <div className="ps-node-semantics" title={d.semanticSummary}>
+        <span>{d.dfdLabel}</span>
+        <span>{d.scopeLabel}</span>
+      </div>
+      {!!(d.commentActive || d.commentResolved || d.issueActive || d.issueResolved) && (
+        <div className="ps-node-badges nodrag nopan" role="group" aria-label="Node comments and issues">
+          <CommentBadges active={d.commentActive ?? 0} resolved={d.commentResolved ?? 0} />
+          <IssueBadges active={d.issueActive ?? 0} resolved={d.issueResolved ?? 0} />
+        </div>
+      )}
     </div>
   );
 }

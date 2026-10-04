@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import {
   edgeRequiresProductionIdentity,
   isGuid,
@@ -23,6 +24,7 @@ import {
   dataClassificationLabel,
   productionIdentityTenantLabel,
   productionIdentityTenantChoices,
+  REQUIRED_ACCESS_RIGHTS_MAX_LENGTH,
 } from "../types";
 import {
   allowedAuthMethodsForNode,
@@ -40,6 +42,9 @@ import { useRemoveFromScenarioWithConfirm } from "./useRemoveFromScenarioWithCon
 import { useLibraries } from "../libraries/LibraryProvider";
 
 export function EdgeDetails({ edge }: { edge: PsEdge }) {
+  const rightsId = useId();
+  const [rightsError, setRightsError] = useState<{ edgeId: string; message: string } | null>(null);
+  const currentRightsError = rightsError?.edgeId === edge.id ? rightsError.message : null;
   const installed = useLibraries().authentication;
   const {
     updateEdge,
@@ -206,6 +211,38 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
               }
             />
           </label>
+
+          <label htmlFor={rightsId}>
+            <LabelWithTooltip
+              label="Required access rights"
+              description="Document the rights required for this call, for example an Azure RBAC role or read/write/execute permissions. Include resource scope or justification if useful. Blank means unspecified, not no permissions required. This is declared intent, not verification of deployed grants or compliance."
+            />
+            <textarea
+              id={rightsId}
+              rows={3}
+              value={edge.requiredAccessRights ?? ""}
+              aria-describedby={`${rightsId}-help${currentRightsError ? ` ${rightsId}-error` : ""}`}
+              aria-invalid={!!currentRightsError}
+              onChange={(event) => {
+                try {
+                  updateEdge(edge.id, { requiredAccessRights: event.target.value });
+                  setRightsError(null);
+                } catch (error) {
+                  setRightsError({ edgeId: edge.id, message: error instanceof Error ? error.message : String(error) });
+                }
+              }}
+            />
+          </label>
+          <p id={`${rightsId}-help`} className="ps-description-below">
+            Applies to this flow in every scenario that includes it. Blank means unspecified.
+            {" "}{(edge.requiredAccessRights ?? "").length}/{REQUIRED_ACCESS_RIGHTS_MAX_LENGTH} UTF-16 code units
+            (some characters count as two). Over-limit edits are rejected, not shortened.
+          </p>
+          {currentRightsError && (
+            <p id={`${rightsId}-error`} className="ps-auth-selection-warning" role="alert">
+              {currentRightsError}
+            </p>
+          )}
 
           <label>
             Authentication method

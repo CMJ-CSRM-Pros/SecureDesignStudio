@@ -26,6 +26,8 @@ interface UiPreferences {
   inspectorActiveTab: InspectorTab;
   darkTheme: boolean;
   autosaveIntervalMs: number;
+  outOfScopeColor: string;
+  externalInteractorColor: string;
 }
 
 interface UiShellApi extends UiPreferences {
@@ -39,6 +41,7 @@ interface UiShellApi extends UiPreferences {
   setInspectorActiveTab: (tab: InspectorTab) => void;
   setDarkTheme: (darkTheme: boolean) => void;
   setAutosaveIntervalMs: (autosaveIntervalMs: number) => void;
+  setScopeColor: (field: "outOfScopeColor" | "externalInteractorColor", color: string) => void;
   resetPreferences: () => void;
   fitViewRequest: number;
   requestFitView: () => void;
@@ -54,6 +57,8 @@ const DEFAULT_PREFERENCES: UiPreferences = {
   inspectorActiveTab: "properties",
   darkTheme: false,
   autosaveIntervalMs: 500,
+  outOfScopeColor: "#b45309",
+  externalInteractorColor: "#7c3aed",
 };
 const INSPECTOR_TABS = new Set<InspectorTab>([
   "properties",
@@ -87,6 +92,10 @@ function loadPreferences(): UiPreferences {
     if (!parsed || typeof parsed !== "object") return DEFAULT_PREFERENCES;
     const candidate = parsed as Partial<UiPreferences>;
     return {
+      outOfScopeColor: typeof candidate.outOfScopeColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.outOfScopeColor)
+        ? candidate.outOfScopeColor : DEFAULT_PREFERENCES.outOfScopeColor,
+      externalInteractorColor: typeof candidate.externalInteractorColor === "string" && /^#[0-9a-f]{6}$/i.test(candidate.externalInteractorColor)
+        ? candidate.externalInteractorColor : DEFAULT_PREFERENCES.externalInteractorColor,
       inspectorVisible:
         typeof candidate.inspectorVisible === "boolean"
           ? candidate.inspectorVisible
@@ -215,6 +224,10 @@ export function UiShellProvider({ children }: { children: ReactNode }) {
         setPreferences((current) => ({ ...current, darkTheme })),
       setAutosaveIntervalMs: (autosaveIntervalMs) =>
         setPreferences((current) => ({ ...current, autosaveIntervalMs })),
+      setScopeColor: (field, color) => {
+        if (!/^#[0-9a-f]{6}$/i.test(color)) throw new Error("Scope color must be a six-digit hex color.");
+        setPreferences(current => ({ ...current, [field]: color }));
+      },
       resetPreferences: () => {
         try {
           window.localStorage.removeItem("ps-side-width");

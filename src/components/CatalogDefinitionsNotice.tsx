@@ -3,7 +3,7 @@ import { catalogDefinitionKey } from "../catalogDefinitions";
 import { useStore } from "../store";
 
 export function CatalogDefinitionsNotice() {
-  const { doc, catalogSnapshotError, documentRecoveryError, classificationDefinitions } = useStore();
+  const { doc, catalogSnapshotError, documentRecoveryError, availableCatalogDefinitions } = useStore();
   const saved = doc.catalogDefinitions ?? [];
   if (documentRecoveryError) return <p className="ps-catalog-error" role="alert">{documentRecoveryError}</p>;
   if (catalogSnapshotError) return <p className="ps-catalog-error" role="alert">{catalogSnapshotError}</p>;
@@ -19,7 +19,7 @@ export function CatalogDefinitionsNotice() {
       </p>
       <ul>
         {saved.map((definition) => {
-          const installed = catalogDefinitionsFor(definition.kind, undefined, classificationDefinitions)
+          const installed = catalogDefinitionsFor(definition.kind, undefined, availableCatalogDefinitions)
             .find((def) => def.id === definition.id);
           const conflict = installed && (installed.label !== definition.label
             || installed.description !== definition.description);

@@ -1,8 +1,8 @@
 # Application regression and usability checks
 
 These checks exercise the current working tree in a real, isolated browser.
-They complement, not replace, the production build, version preflight, and
-immutable-PR9 structural regression guard.
+They complement, not replace, the production build, version checks and
+source review.
 
 ## Run the automated checks
 
@@ -41,6 +41,9 @@ session's server. It starts only this checkout's Vite process, verifies that
 process's ready address and HTTP response, and stops its owned process in
 cleanup. It never launches `dev:ai`, an API, Azure services, or deployment.
 Do not bypass startup failures or silently choose another port.
+Initial navigation has a bounded 20-second startup budget for cold Vite module
+transformation; ordinary UI actions retain their six-second timeout. Runtime,
+network and dialog failures are still recorded, not retried or suppressed.
 
 Each case gets a fresh browser context and imports a synthetic `.tma` via the
 application's real file input. HTTP and WebSocket routes allow only the exact
@@ -62,13 +65,15 @@ a guessed second module instance.
 | `test:regression` | Scenario visibility; parallel directional flows; custom edge numbers; request/response data attachments; graph/sequence switching; native `.tma` export/reopen; title editing; undo/redo; autosave/reload; inert startup room fragment; offline editing without collaboration caches. |
 | `test:usability` | File menu keyboard navigation and focus return; Filter staging/Cancel/Enter/Clear all; inspector keyboard tabs, pinning, selection behavior and ARIA/rendered resize agreement; viewport reflow and reachable navigation/scenario/inspector/zoom controls at 320, 375, 480, 768, 1024 and 1366 CSS pixels in light and dark themes. |
 | `test:browser:unit` | Harness network policy, ANSI-safe owned-server readiness, and refusal to take over an occupied port. |
+| Sample gallery cases in `test:regression` | All five actual `.tma` samples and 11 scenarios: current authentication badges, exact scenario membership, node/label overlap and viewport clipping, Sequence order, model/view save/reopen and no omitted retention introduced by Analyze. Screenshots capture the authored diagrams; this is not human usability research. |
 | Unavailable-catalog case in `test:browser` | Synthetic unfamiliar classification, tenant, boundary and deviation IDs; unresolved canvas/inspector/filter labels; node-policy preservation; explicit classification change with Undo/Redo; full native save/reopen; autosave/reload. It does not install a library or run unavailable rules. |
 | Analyzer evidence cases in `test:browser` | Unavailable-rule and unspecified-policy findings retain status/replies/guidance; available obsolete findings clear; shared/global issue warnings, search, narrow layout, native files, Undo/Redo, autosave, review report and atomic evaluator-failure diagnostic. The production standalone case also checks retained evidence through export/reopen. |
 | Custom Libraries cases | Default browser union checks empty-selection disclosure, keyboard/focus and 320px layout. `test:libraries:browser` separately selects a complete synthetic package plus a missing directory and checks metadata/rules/history/reload. `test:libraries:production` requires a configured build; it fulfills hosted files in an isolated browser without a network server, checks missing/HTML manifest fallback, and exports/reopens embedded packages and metadata in standalone HTML. |
 | Endpoint guidance and import cases | Default and configured suites check generic/optional help, effective provenance, keyboard/focus/320px layout, clipboard success and denied-access selection fallback. Synthetic text imports cover URL/request-line parsing, most-specific matching, deduplication, unknown-line downloads, active-scenario membership and existing Undo/Redo. Configured production checks the same help slots in hosted and exported standalone artifacts, including generic fallback when the manifest is rejected. No test executes a telemetry query. |
-| Authentication extraction | Core tests require 14 definitions and Customer/Other tenants. Historical snapshots remain data fixtures, not defaults. The unconfigured browser case checks fresh/cached profiles, disabled retained selections, node-catalog/native export and findings. Configured tests create a temporary synthetic historical package (never require the private checkout) and check authoring, conflict repair, minimal preference imports and history. CLI tests use the same registry and reject forged authority in operation arguments. The companion-only suite separately verifies actual package content. |
-| Node metadata and inventory | Pure cases cover legacy-shaped package IDs, absent versus saved definitions, optional text Inventory ID versus selected GUID validation, report/TM7/VSDX labels, icon allowlist and retained findings. Browser cases verify non-mutating selection, explicit metadata application, inventory edit/history/export, configured required-value checks and endpoint matching before first use. Actual 13-type companion content is verified separately by `test:libraries:internal`. |
-| Boundary/evidence taxonomy | Core and selected-library cases retain historical labels, descriptions, IDs and resolved deviations while limiting new boundary/default-policy/evidence choices to the installed catalog. Native export/reopen, Undo, autosave, reports and synthetic Yjs/CLI writes are covered. Classification defaults and profile preferences are not changed. |
+| Authentication extraction | Core tests require 14 definitions and Customer/Other tenants. Historical snapshots remain data fixtures, not defaults. The unconfigured browser case checks fresh/cached profiles, disabled retained selections, node-catalog/native export and findings. Configured tests create a temporary synthetic historical package and check authoring, conflict repair, minimal preference imports and history; no private package is required. |
+| Node metadata and inventory | Pure cases cover legacy-shaped package IDs, absent versus saved definitions, optional text Inventory ID versus selected GUID validation, report/TM7/VSDX labels, icon allowlist and retained findings. Browser cases verify non-mutating selection, explicit metadata application, inventory edit/history/export, configured required-value checks and endpoint matching before first use. |
+| DFD role/scope | `dfd-contracts.mjs` exercises independent roles, per-scenario reasons, field-only clearing and exceptional imported-evidence recovery, sequential typing/deletion and same-focus selected replacement through app Undo/Redo, editor-context preservation without reselection, gesture/target/scenario boundaries, full-document/geometry invariants, duplicate isolation, native save/reopen, autosave, keyboard and narrow presentation. Its isolated real StoreProvider cases use StrictMode for same-turn queued size/scope writes, inverse-order serial controls, multiple queued mutations, same-target view echoes, ordinary compound grouping, history branching/cap, Open/New, target removal, queued-filter autosave/reload and profile-backed history, authoring defaults/enabled choices and storage failures. These synthetic cases are not participant retests, live remote-provider proof or proof of the reported clipping being resolved; registered coverage is not evidence of execution on a particular candidate. The pure `tests/authentication/dfd-semantics.test.mjs` covers all 25 endpoint pairs in both directions, legacy-before-hydration, bounded recovery, snapshots, report/HTML/history, unchanged deterministic findings and atomic-map synthetic Yjs convergence. The separately configured Assistant production suite captures the actual scoped POST with synthetic responses; no live inference is performed. |
+| Boundary/evidence taxonomy | Core and selected-library cases retain historical labels, descriptions, IDs and resolved deviations while limiting new boundary/default-policy/evidence choices to the installed catalog. Native export/reopen, Undo, autosave, reports and synthetic Yjs writes are covered. Classification defaults and profile preferences are not changed. |
 | Saved-catalog cases in `test:browser` | Saved-first labels, document-only metadata/conflict disclosure, profile isolation, native/history/recovery preservation, 320px disclosure layout, atomic invalid import and non-overwriting corrupt-snapshot recovery. The production standalone case also exercises taxonomy snapshots and script-closing text. |
 | Classification Library foundation cases in `test:browser` | Twelve shared types with public Purview guidance, unchanged original IDs/default/presentation, new Administrator Data/Customer Data authoring, native/history/reload preservation, alternate-profile defaults and enabled choices, saved/inactive value preservation, no implicit list union, New/Open/reload profile isolation, safe corrupt-profile fallback, 320px status layout, and recognized PMEXP mapping/Undo with an alternate list. |
 | Classification editor cases in `test:browser` | CRUD/default protection, referenced/history delete guards, saved-meaning pinning, explicit diagram resolution, reloadable library history, Merge/Replace preview and export, atomic quota/stale-draft failure, raw-backup/guarded corrupt-profile repair, invalid/cancelled asynchronous import, and 320px focus/Escape/shortcut behavior. |
@@ -180,8 +185,8 @@ For file-selection cases, unset all three endpoint overrides:
 The `defaults` row must also unset `SDS_SERVICE_CONFIG`; it now proves both
 services are disabled in both formats, including inert room fragments.
 `disabled` explicitly supplies empty endpoint strings with no file. Invalid
-environment/file settings fail closed with no fallback. The fixture file is
-generic; actual private destinations are checked only in the companion tests.
+environment/file settings fail closed with no fallback. The fixture file
+contains only synthetic destinations.
 
 Use a process launcher that preserves explicitly empty environment entries
 (for example Node `spawn` with an `env` object); older PowerShell versions

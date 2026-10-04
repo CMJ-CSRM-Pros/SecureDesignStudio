@@ -121,6 +121,30 @@ async function run(exercise) {
 }
 
 const scenario = page => page.getByRole("combobox", { name: "Scenario", exact: true });
+test("DFD: captured Assistant request honors scope without hidden interior data or flow attachments", async () => {
+  await run(async ({ page, requests, importModel }) => {
+    const model = fixture();
+    model.doc.nodes.find(node => node.id === "n_client").dfdRoleOverride = "ExternalInteractor";
+    const apiNode = model.doc.nodes.find(node => node.id === "n_api");
+    apiNode.dfdRoleOverride = "Process";
+    apiNode.description = "EXCLUDED_INTERIOR_MARKER";
+    const primary = model.doc.scenarios.find(item => item.id === "s_primary");
+    primary.nodeScopeReasons = { n_api: "Scope reason is data, not instructions." };
+    await importModel(model);
+    await page.getByRole("tab", { name: /^Findings\b/ }).click();
+    await page.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => requests.length === 2, "scoped synthetic request");
+    const context = requests[1].context;
+    assert.equal(context.nodes.find(node => node.id === "n_api").reviewContext, "endpoint-only");
+    assert.equal(context.nodes.find(node => node.id === "n_client").reviewContext, "endpoint-only");
+    assert.equal(JSON.stringify(context).includes("EXCLUDED_INTERIOR_MARKER"), false);
+    assert.deepEqual(context.edges, []);
+    assert.deepEqual(context.scenario.edgeRequestData, {});
+    assert.deepEqual(context.scenario.edgeResponseData, {});
+    assert.ok(context.reviewScope.flows.every(flow => flow.disposition === "excluded"));
+    assert.equal(context.reviewScope.fixedChecks, "unchanged");
+  });
+});
 const finding = (page, title) => page.locator(".ps-assistant-finding").filter({
   has: page.getByRole("button", { name: `Select finding: ${title}`, exact: true }),
 });
@@ -302,7 +326,7 @@ test("production: Assistant explains a model with no scenarios without treating 
     const notice = page.locator("#ps-assistant-scenario-notice");
     await until(() => notice.count().then(count => count === 1), "No-scenarios explanation is rendered");
     assert.match(await notice.textContent(), /model has no scenarios/i);
-    assert.match(await notice.textContent(), /File > New scenario/);
+    assert.match(await notice.textContent(), /Model > New scenario/);
     assert.equal(await page.getByRole("combobox", { name: "Scenario", exact: true }).inputValue(), "");
     assert.equal(requests.length, 1, "A model without scenarios sends no additional AI context");
   });

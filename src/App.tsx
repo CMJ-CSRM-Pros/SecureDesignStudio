@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { DiagramCanvas } from "./components/DiagramCanvas";
 import { SequenceDiagramView } from "./components/SequenceDiagramView";
 import { SidePanel } from "./components/SidePanel";
@@ -63,7 +63,7 @@ function StatusBar() {
 }
 
 function AppShell() {
-  const { darkTheme, inspectorVisible, openInspector, reopenFocusRequest } =
+  const { darkTheme, inspectorVisible, openInspector, reopenFocusRequest, outOfScopeColor, externalInteractorColor } =
     useUiShell();
   const reopenInspectorRef = useRef<HTMLButtonElement>(null);
 
@@ -75,7 +75,8 @@ function AppShell() {
   }, [inspectorVisible, reopenFocusRequest]);
 
   return (
-    <div className={`ps-shell ${darkTheme ? "ps-theme-dark" : ""}`}>
+    <div className={`ps-shell ${darkTheme ? "ps-theme-dark" : ""}`}
+      style={{ "--ps-oos-color": outOfScopeColor, "--ps-external-color": externalInteractorColor } as CSSProperties}>
       <Toolbar />
       <main
         className={`ps-main ${inspectorVisible ? "ps-inspector-visible" : "ps-inspector-hidden"}`}

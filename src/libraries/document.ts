@@ -3,6 +3,7 @@ import { classificationDefinitionsForLibrary } from "../classificationLibrary";
 import { withCatalogDefinitions } from "../catalogDefinitions";
 import { withAuthenticationDefinitions, authenticationUnavailableReason, type AuthTypeDef } from "../authentication";
 import type { LibraryRegistry, MetadataField } from "./contracts";
+import { isDfdRole } from "../dfdSemantics";
 
 export function libraryNodeTypes(doc: PsDocument, registry: LibraryRegistry): NodeTypeRef[] {
   const result = new Map(doc.nodeTypes.map(type => [type.id, type]));
@@ -34,13 +35,17 @@ export function withLibraryDefinitions(
   doc: PsDocument, registry: LibraryRegistry, profile: readonly AuthTypeDef[] = registry.authentication,
   classifications: readonly CatalogDefinitionSnapshot[] = classificationDefinitionsForLibrary(registry.classifications),
 ): PsDocument {
-  if (!registry.statuses.some(status => status.state === "loaded")) return doc;
+  const adoptedTypes = new Set(doc.nodes.filter(node => node.dfdRoleLegacy === false).map(node => node.type));
+  const hasCoreRoleDefault = registry.nodes.some(type =>
+    adoptedTypes.has(type.id) && isDfdRole(type.definition?.defaultDfdRole));
+  if (!registry.statuses.some(status => status.state === "loaded") && !hasCoreRoleDefault) return doc;
   let next = doc;
   const usedTypes = new Set(doc.nodes.map(node => node.type));
   const nodes = new Map(doc.nodeTypes.map(type => [type.id, type]));
   let changed = false;
   for (const type of registry.nodes) {
-    if (registry.provenance[`nodes/${type.id.toLowerCase()}`] === "core"
+    if ((registry.provenance[`nodes/${type.id.toLowerCase()}`] === "core"
+          && !(adoptedTypes.has(type.id) && isDfdRole(type.definition?.defaultDfdRole)))
         || !usedTypes.has(type.id) || nodes.get(type.id)?.definition) continue;
     nodes.set(type.id, { ...type, definition: type.definition ? { ...type.definition, catalogSource: "Document" } : undefined });
     changed = true;

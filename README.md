@@ -16,8 +16,10 @@ modeling and analysis.
 
 ## From service context to a review-ready design
 
-- **Start with what you already know.** 
-  Threat Modeling Copilot diagrams instead of re-entering them.
+- **Start with what you already know.** Import existing `.tm7` models,
+  documented scenario/DFD JSON, or local PMEXP inventory data instead of
+  re-entering it. JSON import replaces the model; PMEXP merges data and
+  retention into an existing scenario. See the import/export limits below.
 - **Create clean, easy-to-follow designs.** Use the Microsoft cloud node
   catalog, show security and privacy boundaries, and organize a complex system
   into focused scenarios. Switch between the diagram and sequence view to
@@ -34,7 +36,8 @@ modeling and analysis.
   changed rather than start from scratch.
 - **Share the output your review needs.** Export Visio diagrams, `.tm7` diagrams for Threat Modeling Tool, HTML review
   reports, or PNG images. Keep the native `.tma` model for future edits and
-  reviews.
+  reviews. Formats have different limits; Visio export is not an importer,
+  and TM7 does not preserve all native privacy and access-rights details.
 - **Start small, work together when needed.** Core modeling and analysis run
   locally without an Azure account or AI service. Collaboration-enabled
   builds let reviewers work on the same model together.
@@ -42,6 +45,9 @@ modeling and analysis.
 
 **[Read the user guide](docs/user-guide.md)** for the complete journey from a
 first model to analysis, sequence view, and importing or exporting work.
+See [import/export limitations](docs/user-guide.md#7-import-and-export).
+The tool supports review decisions; it does not inspect live deployments or
+certify security, privacy or regulatory compliance.
 
 ## Get started on Windows
 
@@ -82,12 +88,12 @@ is the Windows npm command and avoids PowerShell's script wrapper.
 ### 2. Download and start the app
 
 Run these lines in order. Stop and read any error before continuing.
-Cloning this repository requires a GitHub account with access to it.
+The public repository can be cloned without a GitHub sign-in.
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\source" | Out-Null
 Set-Location "$HOME\source"
-git clone https://github.com/gim-home/SecureDesignStudio.git
+git clone https://github.com/microsoft/SecureDesignStudio.git
 Set-Location .\SecureDesignStudio
 .\Start-SecureDesignStudio.ps1
 ```
@@ -196,15 +202,25 @@ AI requests send active-scenario context to the configured service; review the
 
 ## Contributing
 
-This is an open-source internal
-project, and contributions are welcome: improve a workflow, add a service
+This is an open-source project, and contributions are welcome: improve a workflow, add a service
 type, sharpen a review rule, fix a bug, or make the docs easier to follow.
 Share what would make your next review simpler, or open a pull request.
 
+Use the [contributor guide](docs/contributing.md) for local validation and
+[SECURITY policy](SECURITY.md) for reporting vulnerabilities. Public
+first-party source is licensed under [MIT](LICENSE), copyright Microsoft
+Corporation. [Third-party components, Microsoft icons and the Visio template](docs/third-party-notices.md)
+retain their separate terms; the project license grants no trademark rights.
 
 
 ## Recent changes
 
+- Version 1.0.15 refreshes five fictional reference models and all 11 scenarios
+  with concrete services, operation-scoped authorization and classified data.
+- DFD roles distinguish Processes, Data Stores and External Interactors,
+  including Azure SQL's Data Store default and scenario-scoped review reasons.
+- Authored review concerns, flow access-rights fields and network-boundary
+  intent retain the distinction between requirements and verified controls.
 - Windows launchers check prerequisites and provide a separate optional AI path.
 - Custom Libraries add catalogs, metadata, checks, and help without granting access.
 - Authentication and Classification Library editors make model vocabulary reusable.

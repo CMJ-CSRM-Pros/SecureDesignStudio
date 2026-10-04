@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useStore } from "../store";
 import { calculateScenarioDeletionImpact } from "../scenarioDeletion";
+import { isAuthoredThreatNote } from "../threatNotes";
 
 export function DeleteScenarioDialog({
   scenarioId,
@@ -30,7 +31,8 @@ export function DeleteScenarioDialog({
     const issuesRemoved = doc.issues.filter(
       (issue) =>
         (issue.targetKind === "node" && orphanNodeIds.has(issue.targetId)) ||
-        (issue.targetKind === "edge" && orphanEdgeIds.has(issue.targetId)),
+        (issue.targetKind === "edge" && orphanEdgeIds.has(issue.targetId)) ||
+        (isAuthoredThreatNote(issue) && issue.scenarioIds.length === 1 && issue.scenarioIds[0] === scenarioId),
     ).length;
     const requestAttachments = Object.values(
       scenario?.edgeRequestData ?? {},
