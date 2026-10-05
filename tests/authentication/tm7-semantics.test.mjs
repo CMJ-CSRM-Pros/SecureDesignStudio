@@ -387,14 +387,16 @@ test("TM7 import rejects duplicate scope properties and incompatible standard Ty
   assert.throws(() => parseTm7(xml.replace("<TypeId>GE.P</TypeId>", "<TypeId>GE.DS</TypeId>")), /conflicting native role IDs/);
 });
 
-test("TM7 import discloses lost extra properties, annotations and first-seen shared metadata", () => {
+test("TM7 import preserves annotations and discloses lost extra properties and first-seen shared metadata", () => {
   const p = nativeNode(guid(1), "GE.P", "StencilEllipse");
   const xml = nativeModel(
     nativeTab(guid(10), p.replace("</Properties>", "<anyType><DisplayName>Custom fact</DisplayName><Value>Not represented</Value></anyType></Properties>") +
       nativeNode(guid(2), "GE.A", "StencilRectangle")) +
     nativeTab(guid(11), p.replace("Independent node", "Different title")));
   const result = parseTm7(xml);
-  assert.equal(result.summary.skippedAnnotationCount, 1);
+  assert.equal(result.summary.skippedAnnotationCount, 0);
+  assert.equal(result.summary.annotationCount, 1);
+  assert.equal(result.doc.textAnnotations[0].text, "Independent node");
   assert.equal(result.doc.nodes.length, 1);
   assert.equal(result.doc.nodes[0].title, "Independent node");
   assert.match(result.diagnostics.join("\n"), /Custom fact/);

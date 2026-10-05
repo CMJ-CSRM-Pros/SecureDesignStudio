@@ -25,7 +25,7 @@ async function measureAllFixtureNodes(page, count, restoreScenario) {
   await scenario.selectOption(restoreScenario);
 }
 
-async function withAtomicStore(page, exercise) {
+export async function withAtomicStore(page, exercise) {
   const modules = await page.evaluate(() => {
     const urls = performance.getEntriesByType("resource").map(entry => entry.name);
     const find = name => urls.find(url => new URL(url).origin === location.origin && new URL(url).pathname.endsWith(`/${name}`));
@@ -74,7 +74,7 @@ async function withAtomicStore(page, exercise) {
   }
 }
 
-async function readAtomicStore(page) {
+export async function readAtomicStore(page) {
   return page.evaluate(key => ({
     doc: JSON.parse(JSON.stringify(window.atomicStore.doc)),
     selection: window.atomicStore.selection,
@@ -90,7 +90,7 @@ async function readAtomicStore(page) {
   }), autosaveKey);
 }
 
-async function commitAtomicStore(page, action, argument) {
+export async function commitAtomicStore(page, action, argument) {
   const before = await page.evaluate(() => window.atomicStoreCommits);
   await page.evaluate(action, argument);
   await page.waitForFunction(previous => window.atomicStoreCommits > previous, before);

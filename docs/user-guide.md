@@ -688,7 +688,7 @@ or data classifications from flow text.
 The command confirms replacement when a diagram has content. Declining the
 confirmation, cancelling the file picker, or rejecting an unsupported format
 leaves it unchanged. A successful import is one undoable replacement.
-The summary reports free-text annotations without a model equivalent,
+The scenario/DFD JSON importer reports free-text annotations it does not yet map,
 unresolved edges, scenarios without diagrams and unmatched diagrams.
 Scenarios without diagrams remain empty; unmatched diagrams do not create
 scenarios. Save a native `.tma` to preserve the converted model.
@@ -745,7 +745,52 @@ normally; the app does not discover telemetry services or prompt for sign-in.
 TM7 export omits privacy boundaries, data/retention, much metadata, and
 issues/threats. Auth labels/ID lines preserve this build's identifiers, not
 definitions/behavior; custom methods reopen unresolved. TM7 imports leave node
-policy types blank and can skip line boundaries, free text, and dangling flows.
+policy types blank. Standard GE.A free text is preserved as canvas annotations.
+Explicitly unattached connectors are omitted with an individual warning and
+their nonempty labels preserved as annotations; nonzero broken references fail.
+Line boundaries and unsupported properties remain disclosed losses.
+
+### Canvas text annotations
+
+Choose **Model > New text annotation**, or right-click the canvas and choose
+**New text annotation**. These notes explain a drawing without creating a
+process, data flow, data element, review comment or policy target. They have no
+connection handles, sequence lifelines, authentication or data propagation.
+
+Select a note (double-click to open Properties), enter complete plain text,
+then choose **Apply text**. One Apply is one undoable edit; **Discard text
+edits** restores the saved value. Drafts survive inspector tab switches; apply
+before changing the selected note or closing its editor. Drag to move, use the
+selected resize handles, or edit position/size in Properties. Keyboard users
+can focus the note, press Enter to edit, or use arrows (Shift for larger steps)
+to move. Delete removes the selected note; Ctrl+Z restores it.
+
+Properties and the context menu manage scenario membership. Duplicating a
+scenario shares the note; edits appear in every included scenario. Removing
+membership retains the note in Show all. Deleting a scenario also deletes
+notes used only by that scenario, while shared and already-detached notes stay.
+Sequence view lists scenario notes separately from participants.
+
+Native `.tma`, autosave, portable HTML and current collaboration peers preserve
+text, placement, size and membership. Compare reports edits and navigates to
+the note. Review HTML contains complete escaped text and geometry; PNG is a
+visual rendering, not a backup. TM7 uses standard GE.A rectangles with the
+[documented geometry mapping](tm7-compatibility.md#free-floating-text).
+VSDX does **not** map these notes and warns before exporting.
+
+Older application versions can discard optional annotation data or scenario
+membership: do not edit these models with older clients. No compatibility
+marker can retrofit protection into an old reader.
+The current app treats New, Open and history restoration as complete document
+state: replacing a model with a legacy or empty model removes its previous
+annotations from the room. The compatibility adapter preserves absent annotation
+fields for partial legacy callers, not for deliberate current-app replacement.
+Ordinary Undo/Redo clears selection; reselect a note to reopen its saved text.
+The browser text editor displays CR/CRLF as line breaks. Untouched/no-op edits
+retain the exact source text; real edits retain a uniform source newline style.
+Editing mixed newline styles uses the browser's LF representation.
+Optional Assistant requests include notes only as untrusted authored context,
+never instructions; creating/importing notes makes no model-service request.
 Reassign types and review the summary and
 [auth compatibility](authentication-library.md#stable-semantics-and-compatibility-limits).
 

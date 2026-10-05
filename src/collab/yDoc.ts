@@ -22,6 +22,7 @@ export interface YShape {
   nodes: Y.Map<Y.Map<unknown>>;
   edges: Y.Map<Y.Map<unknown>>;
   boundaries: Y.Map<Y.Map<unknown>>;
+  textAnnotations: Y.Map<Y.Map<unknown>>;
   scenarios: Y.Map<Y.Map<unknown>>;
   data: Y.Map<Y.Map<unknown>>;
   comments: Y.Map<Y.Map<unknown>>;
@@ -41,6 +42,7 @@ export function createYShape(ydoc?: Y.Doc): YShape {
     nodes: doc.getMap<Y.Map<unknown>>("nodes"),
     edges: doc.getMap<Y.Map<unknown>>("edges"),
     boundaries: doc.getMap<Y.Map<unknown>>("boundaries"),
+    textAnnotations: doc.getMap<Y.Map<unknown>>("textAnnotations"),
     scenarios: doc.getMap<Y.Map<unknown>>("scenarios"),
     data: doc.getMap<Y.Map<unknown>>("data"),
     comments: doc.getMap<Y.Map<unknown>>("comments"),
@@ -59,6 +61,7 @@ export function isYShapeEmpty(shape: YShape): boolean {
     shape.nodes.size === 0 &&
     shape.edges.size === 0 &&
     shape.boundaries.size === 0 &&
+    shape.textAnnotations.size === 0 &&
     shape.scenarios.size === 0 &&
     shape.data.size === 0 &&
     shape.comments.size === 0 &&

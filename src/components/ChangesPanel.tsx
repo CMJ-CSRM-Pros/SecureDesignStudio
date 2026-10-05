@@ -12,6 +12,7 @@ const CATEGORY_FILTERS: { value: CategoryFilter; label: string }[] = [
   { value: "node", label: "Nodes" },
   { value: "edge", label: "Edges" },
   { value: "boundary", label: "Boundaries" },
+  { value: "annotation", label: "Text annotations" },
   { value: "data", label: "Data" },
   { value: "workItem", label: "Work Items" },
   { value: "nodeType", label: "Node Types" },
@@ -140,11 +141,15 @@ export function ChangesPanel({ embedded = false }: { embedded?: boolean }) {
         if (next) setActiveScenarioId(next.id);
       }
     }
+    if (t.kind === "annotation" && (!t.scenarioId ||
+        !doc.scenarios.some(s => s.id === t.scenarioId && s.textAnnotationIds?.includes(t.id)))) {
+      setActiveScenarioId(doc.scenarios.find(s => s.textAnnotationIds?.includes(t.id))?.id ?? null);
+    }
     if (t.kind === "scenario") {
       setSelection(null);
     } else {
       setSelection({ kind: t.kind, id: t.id });
-      if (t.kind === "node" || t.kind === "edge") {
+      if (t.kind === "node" || t.kind === "edge" || t.kind === "annotation" || t.kind === "boundary") {
         setFocusTarget({ kind: t.kind, id: t.id });
       }
     }

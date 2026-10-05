@@ -53,6 +53,7 @@ export type ChangeCategory =
   | "node"
   | "edge"
   | "boundary"
+  | "annotation"
   | "data"
   | "deviation"
   | "workItem"
@@ -71,7 +72,7 @@ function metadataKey(entity: PsNode | PsEdge): string {
 }
 
 export interface ChangeTarget {
-  kind: "node" | "edge" | "boundary" | "scenario";
+  kind: "node" | "edge" | "boundary" | "scenario" | "annotation";
   id: string;
   // When the change is scoped to a specific scenario (e.g. data attachment
   // added in scenario X), navigating should also activate that scenario so
@@ -168,6 +169,23 @@ export function diffDocuments(
   inventoryLabel = "Inventory ID",
 ): ChangeItem[] {
   const changes: ChangeItem[] = [];
+  const previousAnnotations = new Map(prev.textAnnotations?.map(annotation => [annotation.id, annotation]));
+  const currentAnnotations = new Map(curr.textAnnotations?.map(annotation => [annotation.id, annotation]));
+  for (const id of new Set([...previousAnnotations.keys(), ...currentAnnotations.keys()])) {
+    const before = previousAnnotations.get(id), after = currentAnnotations.get(id);
+    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    changes.push({ id: nextId(), category: "annotation",
+      description: `${!before ? "Added" : !after ? "Removed" : "Changed"} canvas text annotation: ${(after ?? before)!.text}`,
+      ...(after ? { target: { kind: "annotation", id, scenarioId: curr.scenarios.find(s => s.textAnnotationIds?.includes(id))?.id } } : {}),
+    });
+  }
+  for (const scenario of curr.scenarios) {
+    const previous = prev.scenarios.find(s => s.id === scenario.id);
+    if (!previous || sameSet(previous.textAnnotationIds ?? [], scenario.textAnnotationIds ?? [])) continue;
+    changes.push({ id: nextId(), category: "membership",
+      description: `[${scenario.name}] Changed text annotation membership`,
+      target: { kind: "scenario", id: scenario.id } });
+  }
   const previousNotes = new Map(prev.issues.filter(isAuthoredThreatNote).map(note => [note.id, note]));
   const currentNotes = new Map(curr.issues.filter(isAuthoredThreatNote).map(note => [note.id, note]));
   for (const id of new Set([...previousNotes.keys(), ...currentNotes.keys()])) {
@@ -1091,6 +1109,7 @@ export function diffDocuments(
     "node",
     "edge",
     "boundary",
+    "annotation",
     "data",
     "deviation",
     "workItem",
@@ -1137,6 +1156,8 @@ export function isChangeNavigable(
       return doc.edges.some((e) => e.id === t.id);
     case "boundary":
       return doc.boundaries.some((b) => b.id === t.id);
+    case "annotation":
+      return doc.textAnnotations?.some(annotation => annotation.id === t.id) ?? false;
     case "scenario":
       return doc.scenarios.some((s) => s.id === t.id);
   }

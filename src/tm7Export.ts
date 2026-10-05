@@ -34,6 +34,7 @@ import type {
   PsDocument,
   PsEdge,
   PsNode,
+  PsTextAnnotation,
   PsIssue,
   Scenario,
 } from "./types";
@@ -44,7 +45,7 @@ import { isAuthoredThreatNote, validateThreatNotes } from "./threatNotes";
 export class Tm7ExportError extends Error {}
 
 export interface Tm7OccurrenceReference {
-  kind: "node" | "edge" | "boundary";
+  kind: "node" | "edge" | "boundary" | "annotation";
   entityId: string;
   scenarioId: string | null;
   tabGuid: string;
@@ -113,7 +114,7 @@ function xmlEscape(s: string): string {
       default:
         return c;
     }
-  });
+  }).replace(/\r/g, "&#13;");
 }
 
 // RFC 4122 v4 GUID. Prefer crypto.randomUUID() when present (every modern
@@ -329,6 +330,26 @@ function renderSecurityBoundary(b: PsBoundary, ctx: BuildCtx): string {
   );
 }
 
+function renderAnnotation(annotation: PsTextAnnotation, ctx: BuildCtx): string {
+  const zid = occurrenceId("annotation", annotation.id, ctx);
+  return `      <a:KeyValueOfguidanyType>
+        <a:Key>${safeGuid(annotation.id)}</a:Key>
+        <a:Value z:Id="${zid}" i:type="StencilRectangle">
+          <GenericTypeId xmlns="${NS_ABSTRACTS}">GE.A</GenericTypeId>
+          <Guid xmlns="${NS_ABSTRACTS}">${safeGuid(annotation.id)}</Guid>
+          <Properties xmlns="${NS_ABSTRACTS}">
+${renderHeader("Generic Annotation")}${renderStringAttr("Name", annotation.text)}
+          </Properties>
+          <TypeId xmlns="${NS_ABSTRACTS}">GE.A</TypeId>
+          <Height xmlns="${NS_ABSTRACTS}">${Math.max(1, Math.round(annotation.size.height))}</Height>
+          <Left xmlns="${NS_ABSTRACTS}">${Math.max(0, Math.round(annotation.position.x + ctx.offsetX))}</Left>
+          <Top xmlns="${NS_ABSTRACTS}">${Math.max(0, Math.round(annotation.position.y + ctx.offsetY))}</Top>
+          <Width xmlns="${NS_ABSTRACTS}">${Math.max(1, Math.round(annotation.size.width))}</Width>
+        </a:Value>
+      </a:KeyValueOfguidanyType>
+`;
+}
+
 function renderEdge(
   edge: PsEdge,
   seq: number | undefined,
@@ -390,6 +411,7 @@ interface TabContent {
   edgeNumbers: Record<string, number>;
   // Security boundaries only.
   boundaries: PsBoundary[];
+  textAnnotations: PsTextAnnotation[];
 }
 
 function computeSurfaceOffset(tab: TabContent): { offsetX: number; offsetY: number } {
@@ -403,7 +425,7 @@ function computeSurfaceOffset(tab: TabContent): { offsetX: number; offsetY: numb
     minX = Math.min(minX, n.position.x - NODE_W / 2);
     minY = Math.min(minY, n.position.y - NODE_H / 2);
   }
-  for (const b of tab.boundaries) {
+  for (const b of [...tab.boundaries, ...tab.textAnnotations]) {
     minX = Math.min(minX, b.position.x);
     minY = Math.min(minY, b.position.y);
   }
@@ -423,6 +445,7 @@ function renderDrawingSurface(tab: TabContent, ctx: BuildCtx): string {
   const surfaceCtx: BuildCtx = { ...ctx, offsetX, offsetY, scenario: tab.scenario, tabGuid: tab.guid };
   const bordersXml =
     tab.boundaries.map((b) => renderSecurityBoundary(b, surfaceCtx)).join("") +
+    tab.textAnnotations.map(annotation => renderAnnotation(annotation, surfaceCtx)).join("") +
     tab.nodes.map((n) => renderNode(n, surfaceCtx)).join("");
   const linesXml = tab.edges
     .map((e) => renderEdge(e, tab.edgeNumbers[e.id], nodeById, surfaceCtx))
@@ -651,6 +674,7 @@ function buildTabsFromScenarios(doc: PsDocument): TabContent[] {
       edges,
       edgeNumbers: { ...s.edgeNumbers },
       boundaries,
+      textAnnotations: (doc.textAnnotations ?? []).filter(annotation => s.textAnnotationIds?.includes(annotation.id)),
     };
   });
 }
@@ -675,6 +699,7 @@ function buildSingleTabFromDocument(doc: PsDocument): TabContent {
     edges,
     edgeNumbers,
     boundaries: doc.boundaries.filter((b) => b.type === "security"),
+    textAnnotations: [...(doc.textAnnotations ?? [])],
   };
 }
 
@@ -722,6 +747,7 @@ export function prepareTm7Export(doc: PsDocument, options: ExportTm7Options = {}
             edges: [],
             edgeNumbers: {},
             boundaries: [],
+            textAnnotations: [],
           },
           ctx
         );
@@ -847,7 +873,7 @@ function renderThreatNotes(doc: PsDocument, tabs: readonly TabContent[], ctx: Bu
 
 function validateReferences(doc: PsDocument): void {
   const guids = new Map<string, string>();
-  for (const item of [...doc.nodes, ...doc.edges, ...doc.boundaries, ...doc.scenarios]) {
+  for (const item of [...doc.nodes, ...doc.edges, ...doc.boundaries, ...doc.scenarios, ...(doc.textAnnotations ?? [])]) {
     if (!item.id?.trim()) throw new Tm7ExportError("An object has no ID. Correct the model before exporting.");
     const guid = safeGuid(item.id);
     if (guid === "00000000-0000-0000-0000-000000000000" || guids.has(guid)) {
@@ -858,7 +884,7 @@ function validateReferences(doc: PsDocument): void {
   if (!doc.scenarios.length && guids.has(safeGuid("secure-design-studio:tm7:diagram"))) {
     throw new Tm7ExportError("An object ID collides with the fallback Diagram tab.");
   }
-  for (const item of [...doc.nodes, ...doc.boundaries]) {
+  for (const item of [...doc.nodes, ...doc.boundaries, ...(doc.textAnnotations ?? [])]) {
     if (![item.position.x, item.position.y, ...("size" in item && item.size ? [item.size.width, item.size.height] : [])]
       .every(value => Number.isFinite(value) && Math.abs(value) < 100_000_000)) {
       throw new Tm7ExportError(`Object ${item.id} has invalid or unsupported coordinates.`);
@@ -867,13 +893,14 @@ function validateReferences(doc: PsDocument): void {
   const nodes = new Set(doc.nodes.map(node => node.id));
   const edges = new Set(doc.edges.map(edge => edge.id));
   const boundaries = new Set(doc.boundaries.map(boundary => boundary.id));
+  const annotations = new Set(doc.textAnnotations?.map(annotation => annotation.id));
   for (const edge of doc.edges) {
     if (!nodes.has(edge.source) || !nodes.has(edge.target)) {
       throw new Tm7ExportError(`Flow ${edge.id} has a missing endpoint.`);
     }
   }
   for (const scenario of doc.scenarios) {
-    for (const [ids, known] of [[scenario.nodeIds, nodes], [scenario.edgeIds, edges], [scenario.boundaryIds, boundaries]] as const) {
+    for (const [ids, known] of [[scenario.nodeIds, nodes], [scenario.edgeIds, edges], [scenario.boundaryIds, boundaries], [scenario.textAnnotationIds ?? [], annotations]] as const) {
       if (new Set(ids).size !== ids.length || ids.some(id => !known.has(id))) {
         throw new Tm7ExportError(`Tab "${scenario.name}" (${scenario.id}) has duplicate or missing membership references.`);
       }
@@ -893,6 +920,8 @@ function validateReferences(doc: PsDocument): void {
 function exportLosses(doc: PsDocument, tabs: readonly TabContent[]): string[] {
   const losses: string[] = [];
   const note = (condition: unknown, message: string) => { if (condition) losses.push(message); };
+  note(doc.textAnnotations?.length,
+    "Canvas text annotations use standard GE.A rectangles with full plain text. Coordinates are translated per tab to a positive origin and rounded to integers; fonts and decoration are not exported. Keep .tma for exact native geometry.");
   note(doc.nodes.some(node => node.type || node.dfdRoleOverride !== undefined || node.dfdRoleLegacy !== undefined),
     "Service types, catalog defaults and role-override provenance are not retained; only the effective native DFD role is exported.");
   note(doc.nodes.some(node => node.description || node.endpointRegex || node.metadata || node.geoBoundary || node.postSubscriptionRetention),
@@ -927,8 +956,8 @@ function exportLosses(doc: PsDocument, tabs: readonly TabContent[]): string[] {
   note(doc.scenarios.some(s => s.edgeIds.some((id, i) => s.edgeNumbers[id] !== i + 1)),
     "Flow numbers are exported, but TM7 re-import currently compacts them to sequential values.");
   if (doc.scenarios.length) {
-    const assigned = new Set(doc.scenarios.flatMap(s => [...s.nodeIds, ...s.edgeIds, ...s.boundaryIds]));
-    note([...doc.nodes, ...doc.edges, ...doc.boundaries].some(item => !assigned.has(item.id)),
+    const assigned = new Set(doc.scenarios.flatMap(s => [...s.nodeIds, ...s.edgeIds, ...s.boundaryIds, ...(s.textAnnotationIds ?? [])]));
+    note([...doc.nodes, ...doc.edges, ...doc.boundaries, ...(doc.textAnnotations ?? [])].some(item => !assigned.has(item.id)),
       "Objects outside every scenario are omitted.");
   }
   return losses;

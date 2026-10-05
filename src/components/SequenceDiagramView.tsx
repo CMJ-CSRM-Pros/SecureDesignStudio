@@ -31,6 +31,7 @@ export function SequenceDiagramView() {
     activeScenario,
     visibleNodes,
     visibleEdges,
+    visibleTextAnnotations,
     selection,
     setSelection,
     edgeNumberFor,
@@ -222,10 +223,22 @@ export function SequenceDiagramView() {
     }
   }, [selection]);
 
+  const notes = visibleTextAnnotations.length > 0 && (
+    <section className="ps-seq-notes" aria-label="Scenario text annotations">
+      <h3>Canvas notes (not sequence participants)</h3>
+      {visibleTextAnnotations.map(annotation => (
+        <button type="button" key={annotation.id} style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", textAlign: "left" }}
+          onClick={() => setSelection({ kind: "annotation", id: annotation.id })}>
+          {annotation.text || "Empty text annotation"}
+        </button>
+      ))}
+    </section>
+  );
   if (!activeScenario) {
     return (
       <div className="ps-seq-empty">
         <p>Select a scenario to see the sequence diagram.</p>
+        {notes}
         <p className="ps-seq-empty-sub">
           The sequence view orders edges by their per-scenario sequence
           number, so a scenario is required.
@@ -244,12 +257,14 @@ export function SequenceDiagramView() {
           Add edges in the graph view (or relax the toolbar filters) to
           populate the sequence diagram.
         </p>
+        {notes}
       </div>
     );
   }
 
   return (
     <div className="ps-seq-wrap" ref={containerRef}>
+      {notes}
       <svg
         className="ps-seq-svg"
         width={width}

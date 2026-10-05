@@ -19,7 +19,7 @@ import type { CatalogDefinitionSnapshot } from "../types";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type { PsDocument } from "../types";
 import { createYShape, isYShapeEmpty, REMOTE_ORIGIN, type YShape } from "./yDoc";
-import { buildDocFromY, reconcileLocalToY } from "./reconcile";
+import { buildDocFromY, reconcileCurrentDocumentToY } from "./reconcile";
 import { SERVICES } from "../services";
 import {
   WebPubSubProvider,
@@ -247,7 +247,7 @@ export function useCollab(opts: UseCollabOptions): CollabState {
           if (seedFromLocal && yIsEmpty()) {
             try {
               const definitions = classificationDefinitionsRef.current;
-              reconcileLocalToY(yShape, withCatalogDefinitions(docRef.current, definitions), definitions);
+              reconcileCurrentDocumentToY(yShape, withCatalogDefinitions(docRef.current, definitions), definitions);
             } catch (error) {
               setState({
                 status: "error",
@@ -302,7 +302,7 @@ export function useCollab(opts: UseCollabOptions): CollabState {
     if (lastAppliedFromCollabRef.current === doc) return;
     try {
       const definitions = classificationDefinitionsRef.current;
-      reconcileLocalToY(y, withCatalogDefinitions(doc, definitions), definitions);
+      reconcileCurrentDocumentToY(y, withCatalogDefinitions(doc, definitions), definitions);
     } catch (error) {
       setState({
         status: "error",

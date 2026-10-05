@@ -6,6 +6,8 @@
 // export's tab-per-scenario layout.
 //
 // What's mapped:
+// Canvas text annotations are not mapped. Interactive callers must disclose
+// this loss before download; .tma remains the complete native backup.
 //   - PsNode  -> rounded rectangle whose multi-line text shows:
 //                  <title>
 //                  Type: <nodeType label>
@@ -423,10 +425,10 @@ function renderNodeShape(
 function sanitizeHexColor(c?: string): string | undefined {
   if (!c) return undefined;
   const v = c.trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toUpperCase().replace(/^#/, "#");
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toUpperCase();
   if (/^#[0-9a-fA-F]{3}$/.test(v)) {
     const r = v[1], g = v[2], b = v[3];
-    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase().replace(/^#/, "#");
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
   }
   return undefined;
 }

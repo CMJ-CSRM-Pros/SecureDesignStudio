@@ -17,6 +17,7 @@ import { registerJsonImportContracts } from "./json-import-contracts.mjs";
 import { registerProvenanceContracts } from "./provenance-contracts.mjs";
 import { registerDfdContracts } from "./dfd-contracts.mjs";
 import { registerTm7Contracts } from "./tm7-contracts.mjs";
+import { registerTextAnnotationContracts } from "./text-annotation-contracts.mjs";
 import { registerThreatNoteContracts } from "./threat-note-contracts.mjs";
 import { registerSampleContracts } from "./sample-contracts.mjs";
 
@@ -57,6 +58,7 @@ registerJsonImportContracts({ getHarness: () => harness, exportModel });
 registerProvenanceContracts({ getHarness: () => harness, exportModel });
 registerDfdContracts({ getHarness: () => harness, exportModel });
 registerTm7Contracts({ getHarness: () => harness, exportModel });
+registerTextAnnotationContracts({ getHarness: () => harness, exportModel });
 registerThreatNoteContracts({ getHarness: () => harness, exportModel });
 registerSampleContracts({ getHarness: () => harness, exportModel });
 

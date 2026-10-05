@@ -18,12 +18,13 @@
 //   - BorderBoundary (GE.TB.B)         -> PsBoundary  (security, blank
 //                                         subtype — set later in UI)
 //   - Connector (GE.DF)                -> PsEdge
+//   - StencilRectangle (GE.A)          -> nonsemantic canvas text annotation
 //
 // What's intentionally dropped (with counters/diagnostics before replacement):
-//   - StencilRectangle (GE.A) free-text annotations — no PsNode analog.
 //   - LineBoundary (GE.TB.L) — PsBoundary is rectangle-only, no surface
 //     for representing a free-floating line. Future improvement.
-// Broken connector references and conflicting identities fail explicitly.
+// Explicitly unattached connectors are omitted with warnings and labels retained
+// as annotations. Nonzero broken references and conflicting identities fail.
 //
 // Round-trip decorations from `tm7Export.ts` are reversed when present:
 //   - Node "Name" of the form "Title\nST: <guid>" splits into
@@ -49,6 +50,7 @@ import {
   type PsDocument,
   type PsEdge,
   type PsNode,
+  type PsTextAnnotation,
   type Scenario,
   uid,
 } from "./types";
@@ -62,11 +64,12 @@ export interface Tm7ImportSummary {
   nodeCount: number;
   edgeCount: number;
   boundaryCount: number;
+  annotationCount: number;
   // Surfaces seen in the file (= scenarios that will exist).
   surfaceCount: number;
-  // Kept for existing consumers. Invalid connector references now fail import.
+  // Only explicitly unattached (blank/zero) endpoints are omitted.
   skippedDanglingEdgeCount: number;
-  // Free-text annotations (GE.A) dropped on import.
+  // Retained for consumers; supported GE.A text is no longer dropped.
   skippedAnnotationCount: number;
   // Line boundaries (GE.TB.L) dropped on import.
   skippedLineBoundaryCount: number;
@@ -323,6 +326,8 @@ interface ParsedEdge {
   // True when SourceGuid / TargetGuid were zero-sentinel rather than a
   // real node id — used by caller to decide whether to skip.
   endpointMissing: boolean;
+  rawName: string;
+  labelPosition: { x: number; y: number };
 }
 
 // Split a TM7 "Name" cell. Lines come in with `\r\n` (TMT writes
@@ -413,6 +418,7 @@ function parseBorderEntry(entry: Element): {
   kind: "node" | "boundary" | "annotation" | "other";
   node?: ParsedNode;
   boundary?: ParsedBoundary;
+  annotation?: PsTextAnnotation;
 } {
   const value = firstChild(entry, "Value");
   if (!value) return { kind: "other" };
@@ -430,14 +436,33 @@ function parseBorderEntry(entry: Element): {
   const height = parseInt0(textOf(firstChild(value, "Height")));
 
   if (genericTypeId === GTI_ANNOTATION) {
-    return { kind: "annotation" };
+    if (xsiType && xsiType !== "StencilRectangle") {
+      throw new Tm7ImportError(`Annotation ${guid} has conflicting native shape ${xsiType}.`);
+    }
+    const typeId = textOf(firstChild(value, "TypeId"));
+    if (typeId !== GTI_ANNOTATION && (NODE_GTIS.has(typeId) ||
+        [GTI_DATAFLOW, GTI_BORDER_BOUNDARY, GTI_LINE_BOUNDARY].includes(typeId))) {
+      throw new Tm7ImportError(`Annotation ${guid} has conflicting native type ${typeId}.`);
+    }
+    const dimension = (name: string, positive = false) => {
+      const raw = textOf(firstChild(value, name));
+      const number = Number(raw);
+      if (!raw || !Number.isFinite(number) || (positive && number <= 0)) {
+        throw new Tm7ImportError(`Annotation ${guid} has invalid ${name}.`);
+      }
+      return number;
+    };
+    return { kind: "annotation", annotation: {
+      id: guid.toLowerCase(), text: nameValue?.textContent ?? "",
+      position: { x: dimension("Left"), y: dimension("Top") },
+      size: { width: dimension("Width", true), height: dimension("Height", true) },
+    } };
   }
 
   if (NODE_GTIS.has(genericTypeId) || xsiType === "StencilEllipse" ||
       xsiType === "StencilRectangle" || xsiType === "StencilParallelLines") {
     // Free-text annotations are StencilRectangle/GE.A — already handled
     // above. Anything else maps to a node.
-    if (genericTypeId === GTI_ANNOTATION) return { kind: "annotation" };
     const { title, serviceTreeId } = parseNodeLabel(rawName);
     const header = readStencilHeader(properties);
     const roles: Record<string, { role: DfdRole; shape: string }> = {
@@ -508,6 +533,7 @@ function parseLineEntry(entry: Element): ParseLineResult {
 
   const properties = firstChild(value, "Properties");
   const rawName = textOf(findPropertyValue(properties, "Name"));
+  const labelText = findPropertyValue(properties, "Name")?.textContent ?? "";
   const rawOrder = textOf(findPropertyValue(properties, "Dataflow Order"));
   const sourceGuidRaw = textOf(firstChild(value, "SourceGuid"));
   const targetGuidRaw = textOf(firstChild(value, "TargetGuid"));
@@ -539,6 +565,11 @@ function parseLineEntry(entry: Element): ParseLineResult {
       authenticationTypes,
       dataflowOrder,
       endpointMissing,
+      rawName: labelText,
+      labelPosition: {
+        x: (parseInt0(textOf(firstChild(value, "SourceX"))) + parseInt0(textOf(firstChild(value, "TargetX")))) / 2,
+        y: (parseInt0(textOf(firstChild(value, "SourceY"))) + parseInt0(textOf(firstChild(value, "TargetY")))) / 2,
+      },
     },
   };
 }
@@ -554,7 +585,7 @@ interface ParsedSurface {
   // is honored when present; otherwise we use the source order for
   // numbering.
   edges: ParsedEdge[];
-  annotations: number;
+  annotations: PsTextAnnotation[];
   lineBoundaries: number;
 }
 
@@ -566,7 +597,7 @@ function parseSurface(surface: Element, diagnostics: string[]): ParsedSurface {
     nodes: [],
     boundaries: [],
     edges: [],
-    annotations: 0,
+    annotations: [],
     lineBoundaries: 0,
   };
   if (!nativeId) diagnostics.push("A tab has no native GUID; a new scenario identity was assigned.");
@@ -595,8 +626,8 @@ function parseSurface(surface: Element, diagnostics: string[]): ParsedSurface {
             textOf(findPropertyValue(props, "Reason For Out Of Scope"))) {
           diagnostics.push(`Boundary scope on "${out.name}" is not mapped; only node scenario scope is supported.`);
         }
-      } else if (parsed.kind === "annotation") {
-        out.annotations++;
+      } else if (parsed.kind === "annotation" && parsed.annotation) {
+        out.annotations.push(parsed.annotation);
       } else {
         diagnostics.push(`Unsupported border ${textOf(firstChild(value, "Guid"))} on "${out.name}" is omitted.`);
       }
@@ -684,7 +715,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
   for (const surface of parsedSurfaces) {
     if (surfaceIds.has(surface.id)) throw new Tm7ImportError(`Duplicate tab GUID ${surface.id}.`);
     surfaceIds.add(surface.id);
-    for (const [kind, objects] of [["node", surface.nodes], ["edge", surface.edges], ["boundary", surface.boundaries]] as const) {
+    for (const [kind, objects] of [["node", surface.nodes], ["edge", surface.edges], ["boundary", surface.boundaries], ["annotation", surface.annotations]] as const) {
       for (const object of objects) {
         const previous = objectKinds.get(object.id);
         if (previous && previous !== kind) throw new Tm7ImportError(`GUID ${object.id} is shared by incompatible object kinds.`);
@@ -714,6 +745,14 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
   const nodesByGuid = new Map<string, PsNode>();
   const boundariesByGuid = new Map<string, PsBoundary>();
   const edgesByGuid = new Map<string, PsEdge>();
+  const annotationsById = new Map<string, PsTextAnnotation>();
+  const occupiedIds = new Set([...objectKinds.keys(), ...surfaceIds]);
+  const distinctAnnotationId = () => {
+    let id: string;
+    do { id = uid("a"); } while (occupiedIds.has(id));
+    occupiedIds.add(id);
+    return id;
+  };
   const skipped = {
     annotation: 0,
     lineBoundary: 0,
@@ -764,20 +803,52 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
         nodeIds: [],
       });
     }
-    skipped.annotation += surf.annotations;
+    surf.annotations = surf.annotations.map(annotation => {
+      const previous = annotationsById.get(annotation.id);
+      if (previous && JSON.stringify(previous) !== JSON.stringify(annotation)) {
+        const originalId = annotation.id;
+        annotation = { ...annotation, id: distinctAnnotationId() };
+        diagnostics.push(`Annotation ${originalId} on "${surf.name}" differs across tabs; preserved as separate annotation ${annotation.id}.`);
+      }
+      annotationsById.set(annotation.id, annotation);
+      return annotation;
+    });
     skipped.lineBoundary += surf.lineBoundaries;
   }
 
   // Each connector must resolve to node occurrences on its own tab.
+  const declaredEndpoints = new Map<string, { source?: string; target?: string }>();
   for (const surf of parsedSurfaces) {
     const localNodes = new Set(surf.nodes.map(node => node.id));
     for (const e of surf.edges) {
-      if (
-        e.endpointMissing ||
-        !localNodes.has(e.source) ||
-        !localNodes.has(e.target)
-      ) {
+      const sourceMissing = !e.source || e.source === ZERO_GUID;
+      const targetMissing = !e.target || e.target === ZERO_GUID;
+      const declared = declaredEndpoints.get(e.id) ?? {};
+      if ((!sourceMissing && declared.source && declared.source !== e.source) ||
+          (!targetMissing && declared.target && declared.target !== e.target)) {
+        throw new Tm7ImportError(`Flow ${e.id} has conflicting endpoints across tabs.`);
+      }
+      declaredEndpoints.set(e.id, {
+        source: sourceMissing ? declared.source : e.source,
+        target: targetMissing ? declared.target : e.target,
+      });
+      if ((!sourceMissing && !localNodes.has(e.source)) || (!targetMissing && !localNodes.has(e.target))) {
         throw new Tm7ImportError(`Flow ${e.id} on "${surf.name}" has an endpoint missing from that tab. Correct its references before importing.`);
+      }
+      if (e.endpointMissing) {
+        skipped.danglingEdge++;
+        let labelNotice = "No visible label was present.";
+        if (e.rawName.length > 0) {
+          const annotation: PsTextAnnotation = {
+            id: distinctAnnotationId(), text: e.rawName, position: e.labelPosition,
+            size: { width: 300, height: Math.max(60, e.rawName.split("\n").length * 22) },
+          };
+          annotationsById.set(annotation.id, annotation);
+          surf.annotations.push(annotation);
+          labelNotice = `Complete label preserved as annotation ${annotation.id} at the connector endpoint midpoint (source label geometry is not available).`;
+        }
+        diagnostics.push(`Omitted unattached flow ${e.id} on "${surf.name}": ${sourceMissing && targetMissing ? "source and target are" : sourceMissing ? "source is" : "target is"} unattached. ${labelNotice}`);
+        continue;
       }
       const previous = edgesByGuid.get(e.id);
       if (previous) {
@@ -829,7 +900,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
     // present) wins over source order; ties fall back to source order
     // for stability.
     const surfaceEdges = surf.edges
-      .filter((e) => edgesByGuid.has(e.id))
+      .filter((e) => !e.endpointMissing && edgesByGuid.has(e.id))
       .map((e, idx) => ({ e, idx }))
       .sort((a, b) => {
         const ao = a.e.dataflowOrder;
@@ -864,6 +935,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
       edgeIds,
       edgeNumbers,
       boundaryIds: [...surfaceBoundaryIds],
+      ...(surf.annotations.length ? { textAnnotationIds: surf.annotations.map(annotation => annotation.id) } : {}),
       nodeData: {},
       edgeRequestData: {},
       edgeResponseData: {},
@@ -876,6 +948,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
     nodes: [...nodesByGuid.values()],
     edges: [...edgesByGuid.values()],
     boundaries: [...boundariesByGuid.values()],
+    ...(annotationsById.size ? { textAnnotations: [...annotationsById.values()] } : {}),
     scenarios,
     data: [],
     comments: [],
@@ -893,6 +966,7 @@ export function parseTm7(xmlText: string): Tm7ImportResult {
       nodeCount: nodesByGuid.size,
       edgeCount: edgesByGuid.size,
       boundaryCount: boundariesByGuid.size,
+      annotationCount: annotationsById.size,
       surfaceCount: parsedSurfaces.length,
       skippedDanglingEdgeCount: skipped.danglingEdge,
       skippedAnnotationCount: skipped.annotation,
