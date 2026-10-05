@@ -18,6 +18,7 @@ export function DeleteKeyHandler() {
     deleteNode,
     deleteEdge,
     deleteBoundary,
+    deleteTextAnnotation,
     removeEdgeWaypoint,
     undo,
     redo,
@@ -57,6 +58,7 @@ export function DeleteKeyHandler() {
         const nodeIds = new Set(doc.nodes.map((n) => n.id));
         for (const id of multiSelectedIds) {
           if (nodeIds.has(id)) deleteNode(id);
+          else if (doc.textAnnotations?.some(annotation => annotation.id === id)) deleteTextAnnotation(id);
           else deleteBoundary(id);
         }
       }
@@ -73,6 +75,9 @@ export function DeleteKeyHandler() {
       } else if (selection.kind === "boundary") {
         deleteBoundary(selection.id);
         setSelection(null);
+      } else if (selection.kind === "annotation") {
+        deleteTextAnnotation(selection.id);
+        setSelection(null);
       } else if (selection.kind === "waypoint") {
         removeEdgeWaypoint(selection.edgeId, selection.waypointId);
         setSelection({ kind: "edge", id: selection.edgeId });
@@ -88,6 +93,7 @@ export function DeleteKeyHandler() {
     deleteNode,
     deleteEdge,
     deleteBoundary,
+    deleteTextAnnotation,
     removeEdgeWaypoint,
     undo,
     redo,

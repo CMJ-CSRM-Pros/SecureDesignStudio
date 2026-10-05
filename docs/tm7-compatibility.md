@@ -40,9 +40,36 @@ Conflicting shared roles or connector endpoints block replacement.
 
 Tab GUIDs are derived from scenario IDs, not names. Valid imported tab GUIDs
 remain scenario IDs. Legacy tabs without a GUID get a new ID with a notice.
-Node/flow/boundary GUIDs keep the existing deterministic ID mapping.
+Node/flow/boundary/annotation GUIDs keep the existing deterministic ID mapping.
 Same-direction parallel flows remain separate objects. Every connector must
-resolve to node occurrences on its own tab.
+resolve to node occurrences on its own tab to become a flow.
+
+An explicitly unattached endpoint (blank or all-zero GUID) is a recoverable
+drawing connector, not a graph edge. Import retains the valid diagram and
+previews **each** omitted occurrence with its tab, flow ID and unattached end(s).
+A nonempty label is preserved verbatim as a separate canvas text annotation
+with a new ID reported in that diagnostic. Its position is the midpoint of
+the stored connector endpoints, an explicit approximation when no label box is
+available. No placeholder nodes or coordinate-inferred connections are created.
+Nonzero missing/malformed endpoints still fail, including an invalid opposite
+end of an unattached connector. A valid shared flow on another tab never adds
+the omitted occurrence to this tab.
+
+## Free-floating text
+
+Standard `StencilRectangle` / `GE.A` annotations import as native,
+**nonsemantic canvas text**, not nodes, privacy data or review comments.
+The complete `Name` text (spaces, blank lines and Unicode) and the source
+Left/Top/Width/Height are retained, with membership on each scenario.
+Text-only tabs and models are supported. Different text or geometry for the
+same GUID across tabs is preserved as separate annotations with a diagnostic,
+not silently reduced to the first occurrence.
+
+Export writes standard `GE.A` rectangles and full escaped plain text for every
+included occurrence. As with other drawing elements, TM7 export translates
+each tab to a positive origin and rounds coordinates to integers. Source font
+and decoration are not retained. Keep `.tma` or portable application HTML for
+exact native placement and all model metadata.
 
 `prepareTm7Export(doc, options)` returns `{ xml, diagnostics, references }`.
 `references` contains **only emitted occurrences**, with `kind`, `entityId`,
@@ -56,8 +83,9 @@ use the prepared result to present diagnostics before downloading.
 Duplicate/colliding IDs, missing memberships/endpoints, conflicting dictionary
 keys, unsupported serialization references, invalid XML text and malformed XML
 fail explicitly. XML `z:Ref` object reuse is not supported by this bounded
-reader. Cross-tab differences in labels, authentication or layout keep the first
-occurrence and are disclosed; no claim of arbitrary-template fidelity is made.
+reader. Cross-tab differences in node/flow/boundary labels, authentication or
+layout keep the first occurrence and are disclosed; annotations instead retain
+all variants. No claim of arbitrary-template fidelity is made.
 
 ## Intentional losses
 

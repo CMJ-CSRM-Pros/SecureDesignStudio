@@ -6,6 +6,7 @@ const CATEGORY_LABELS: Record<ChangeItem["category"], string> = {
   node: "Node",
   edge: "Edge",
   boundary: "Boundary",
+  annotation: "Text annotation",
   data: "Data",
   deviation: "Deviation",
   workItem: "Work Item",

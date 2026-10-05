@@ -883,6 +883,14 @@ export interface PsEdge {
   waypoints: Waypoint[];
 }
 
+// Nonsemantic canvas text: never a flow endpoint, asset, or review target.
+export interface PsTextAnnotation {
+  id: string;
+  text: string;
+  position: Position;
+  size: Size;
+}
+
 export interface PsBoundary {
   id: string;
   type: BoundaryType;
@@ -942,6 +950,7 @@ export interface Scenario {
   edgeIds: string[];
   edgeNumbers: Record<string, number>;
   boundaryIds: string[];
+  textAnnotationIds?: string[];
   // nodeId -> (dataId -> Retention)
   nodeData: Record<string, Record<string, Retention>>;
   // edgeId -> dataIds (treated as a set), split by direction.
@@ -1123,6 +1132,7 @@ export interface PsDocument {
   nodes: PsNode[];
   edges: PsEdge[];
   boundaries: PsBoundary[];
+  textAnnotations?: PsTextAnnotation[];
   scenarios: Scenario[];
   data: PsData[];
   comments: PsComment[];

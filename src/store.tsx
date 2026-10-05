@@ -1,4 +1,6 @@
 import { SERVICES } from "./services";
+import { normalizeTextAnnotations, normalizeTextAnnotationIds } from "./textAnnotations";
+import type { PsTextAnnotation } from "./types";
 import { normalizeDfdValue, normalizeNodeScope, resolveNodeReviewScope } from "./dfdSemantics";
 import {
   createContext,
@@ -138,6 +140,7 @@ export type Selection =
   | { kind: "node"; id: string }
   | { kind: "edge"; id: string }
   | { kind: "boundary"; id: string }
+  | { kind: "annotation"; id: string }
   | { kind: "waypoint"; edgeId: string; waypointId: string }
   | null;
 
@@ -590,7 +593,7 @@ interface StoreApi {
   // set is non-empty, another id is promoted to the single selection so the
   // side panel still has a focus). Otherwise, adds or removes `id` from the
   // additional set.
-  toggleAdditionalSelection: (kind: "node" | "boundary", id: string) => void;
+  toggleAdditionalSelection: (kind: "node" | "boundary" | "annotation", id: string) => void;
   clearMultiSelection: () => void;
   filter: FilterState;
   setFilter: (f: Partial<FilterState>) => void;
@@ -638,8 +641,8 @@ interface StoreApi {
   clearDiff: () => void;
   // One-shot "please pan/zoom the diagram to this target." DiagramCanvas
   // consumes and clears it.
-  focusTarget: { kind: "node" | "edge" | "boundary"; id: string } | null;
-  setFocusTarget: (target: { kind: "node" | "edge" | "boundary"; id: string } | null) => void;
+  focusTarget: { kind: "node" | "edge" | "boundary" | "annotation"; id: string } | null;
+  setFocusTarget: (target: { kind: "node" | "edge" | "boundary" | "annotation"; id: string } | null) => void;
   // Which visualisation of the underlying graph data is shown in the main
   // canvas area. Pure UI state — not persisted to the document, not
   // undoable. The data model is always the graph; "sequence" is just an
@@ -658,7 +661,7 @@ interface StoreApi {
   moveDiagramItems: (
     moves: Array<{
       id: string;
-      kind: "node" | "boundary";
+      kind: "node" | "boundary" | "annotation";
       position: Position;
       size?: Size;
     }>,
@@ -895,6 +898,11 @@ interface StoreApi {
   visibleNodes: PsNode[];
   visibleEdges: PsEdge[];
   visibleBoundaries: PsBoundary[];
+  visibleTextAnnotations: PsTextAnnotation[];
+  createTextAnnotation: (position: Position) => PsTextAnnotation;
+  updateTextAnnotation: (id: string, patch: Partial<Omit<PsTextAnnotation, "id">>, snapshotBefore?: boolean) => void;
+  deleteTextAnnotation: (id: string) => void;
+  setTextAnnotationMembership: (scenarioId: string, id: string, included: boolean) => void;
   edgeNumberFor: (edgeId: string) => number | null;
 }
 
@@ -992,6 +1000,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         }
         for (const saved of [value, ...history]) {
+          if (saved && typeof saved === "object") {
+            const annotations = normalizeTextAnnotations(saved as Partial<PsDocument>);
+            for (const scenario of (saved as Partial<PsDocument>).scenarios ?? []) {
+              normalizeTextAnnotationIds(scenario, annotations ?? []);
+            }
+          }
           if (saved && typeof saved === "object") validateThreatNotes(saved as Partial<PsDocument>);
           if (saved && typeof saved === "object" && "edges" in saved && Array.isArray(saved.edges)) {
             for (const edge of saved.edges) {
@@ -1223,13 +1237,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (current.kind === "boundary") {
         return scenario.boundaryIds.includes(current.id) ? current : null;
       }
+      if (current.kind === "annotation") {
+        return scenario.textAnnotationIds?.includes(current.id) ? current : null;
+      }
       return scenario.edgeIds.includes(current.edgeId) ? current : null;
     });
     setMultiSelectedIds((current) =>
       current.filter(
         (selectedId) =>
           scenario?.nodeIds.includes(selectedId) ||
-          scenario?.boundaryIds.includes(selectedId),
+          scenario?.boundaryIds.includes(selectedId) ||
+          scenario?.textAnnotationIds?.includes(selectedId),
       ),
     );
   }, [updateDocumentHistory]);
@@ -1237,7 +1255,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setMultiSelectedIds([]);
   }, []);
   const toggleAdditionalSelection = useCallback(
-    (kind: "node" | "boundary", id: string) => {
+    (kind: "node" | "boundary" | "annotation", id: string) => {
       const prevSel = selectionRef.current;
       const prevMulti = multiSelectedIdsRef.current;
       // Case A: id is the current single selection — deselect. If the multi
@@ -1248,11 +1266,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         } else {
           const [head, ...rest] = prevMulti;
           const doc = docRef.current;
-          const promotedKind: "node" | "boundary" = doc.nodes.some(
+          const promotedKind: "node" | "boundary" | "annotation" = doc.nodes.some(
             (n) => n.id === head
           )
             ? "node"
-            : "boundary";
+            : doc.boundaries.some(b => b.id === head) ? "boundary" : "annotation";
           setSelectionRaw({ kind: promotedKind, id: head });
           setMultiSelectedIds(rest);
         }
@@ -1338,7 +1356,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDiffViewOpenRaw(false);
   }, []);
   const [focusTarget, setFocusTarget] = useState<{
-    kind: "node" | "edge" | "boundary";
+    kind: "node" | "edge" | "boundary" | "annotation";
     id: string;
   } | null>(null);
   const [viewMode, setViewMode] = useState<"graph" | "sequence">("graph");
@@ -1372,6 +1390,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const boundaryIds = new Set(
         nextDoc.boundaries.map((boundary) => boundary.id),
       );
+      const annotationIds = new Set(nextDoc.textAnnotations?.map(annotation => annotation.id));
       setSelectionRaw((current) => {
         if (!current) return null;
         if (current.kind === "node") {
@@ -1383,6 +1402,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (current.kind === "boundary") {
           return boundaryIds.has(current.id) ? current : null;
         }
+        if (current.kind === "annotation") return annotationIds.has(current.id) ? current : null;
         const edge = nextDoc.edges.find(
           (candidate) => candidate.id === current.edgeId,
         );
@@ -1394,7 +1414,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
       setMultiSelectedIds((current) =>
         current.filter(
-          (id) => nodeIds.has(id) || boundaryIds.has(id),
+          (id) => nodeIds.has(id) || boundaryIds.has(id) || annotationIds.has(id),
         ),
       );
     },
@@ -1804,7 +1824,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (
       moves: Array<{
         id: string;
-        kind: "node" | "boundary";
+        kind: "node" | "boundary" | "annotation";
         position: Position;
         size?: Size;
       }>,
@@ -1909,7 +1929,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        return { ...d, nodes, boundaries };
+        const annotationMoves = new Map(moves.filter(move => move.kind === "annotation").map(move => [move.id, move]));
+        return { ...d, nodes, boundaries, ...(d.textAnnotations ? {
+          textAnnotations: d.textAnnotations.map(annotation => {
+            const move = annotationMoves.get(annotation.id);
+            return move ? { ...annotation, position: move.position } : annotation;
+          }),
+        } : {}) };
       });
     },
     [],
@@ -3116,6 +3142,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
   }, [snapshot]);
 
+  // -------- Canvas annotations --------
+  const createTextAnnotation = useCallback((position: Position): PsTextAnnotation => {
+    const annotation = { id: uid("a"), text: "", position, size: { width: 300, height: 120 } };
+    const scenarioId = activeScenarioIdRef.current;
+    snapshot();
+    setDoc(d => ({
+      ...d, textAnnotations: [...(d.textAnnotations ?? []), annotation],
+      scenarios: d.scenarios.map(s => s.id === scenarioId
+        ? { ...s, textAnnotationIds: [...(s.textAnnotationIds ?? []), annotation.id] } : s),
+    }));
+    return annotation;
+  }, [snapshot]);
+
+  const updateTextAnnotation = useCallback((id: string, patch: Partial<Omit<PsTextAnnotation, "id">>, snapshotBefore = true) => {
+    const current = docRef.current.textAnnotations?.find(annotation => annotation.id === id);
+    if (!current || Object.entries(patch).every(([key, value]) =>
+      JSON.stringify(current[key as keyof PsTextAnnotation]) === JSON.stringify(value))) return;
+    normalizeTextAnnotations({ textAnnotations: [{ ...current, ...patch, id }] });
+    if (snapshotBefore) snapshot();
+    setDoc(d => ({ ...d, textAnnotations: d.textAnnotations?.map(annotation =>
+      annotation.id === id ? { ...annotation, ...patch, id } : annotation) }));
+  }, [snapshot]);
+
+  const deleteTextAnnotation = useCallback((id: string) => {
+    snapshot();
+    setDoc(d => ({
+      ...d, textAnnotations: d.textAnnotations?.filter(annotation => annotation.id !== id),
+      scenarios: d.scenarios.map(s => s.textAnnotationIds?.includes(id)
+        ? { ...s, textAnnotationIds: s.textAnnotationIds.filter(member => member !== id) } : s),
+    }));
+  }, [snapshot]);
+
+  const setTextAnnotationMembership = useCallback((scenarioId: string, id: string, included: boolean) => {
+    snapshot();
+    setDoc(d => !d.textAnnotations?.some(annotation => annotation.id === id) ? d : ({
+      ...d, scenarios: d.scenarios.map(s => s.id !== scenarioId ? s : {
+        ...s, textAnnotationIds: included ? [...new Set([...(s.textAnnotationIds ?? []), id])]
+          : (s.textAnnotationIds ?? []).filter(member => member !== id),
+      }),
+    }));
+    if (!included && activeScenarioIdRef.current === scenarioId) {
+      setSelectionRaw(current => current?.kind === "annotation" && current.id === id ? null : current);
+      setMultiSelectedIds(current => current.filter(member => member !== id));
+    }
+  }, [snapshot]);
+
   // -------- Scenario ops --------
   const createScenario = useCallback(
     (name: string, description = ""): Scenario => {
@@ -3167,6 +3239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         edgeIds: [...source.edgeIds],
         edgeNumbers: { ...source.edgeNumbers },
         boundaryIds: [...source.boundaryIds],
+        ...(source.textAnnotationIds ? { textAnnotationIds: [...source.textAnnotationIds] } : {}),
         ...(source.nodeScopeReasons ? { nodeScopeReasons: structuredClone(source.nodeScopeReasons) } : {}),
         ...(source.nodeScopeReasonsRecovery ? { nodeScopeReasonsRecovery: { ...source.nodeScopeReasonsRecovery } } : {}),
         nodeData: clonedNodeData,
@@ -3215,7 +3288,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Cascade-delete nodes and edges no longer referenced by any remaining
         // scenario. This includes edges whose endpoints are shared but whose
         // only scenario membership was the deleted scenario.
-        const { orphanNodeIds, orphanEdgeIds } =
+        const { orphanNodeIds, orphanEdgeIds, orphanAnnotationIds } =
           calculateScenarioDeletionImpact(d, id);
 
         const scenariosWithoutDeleted = remainingScenarios.map((s) => {
@@ -3253,6 +3326,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return {
           ...d,
           scenarios: scenariosWithoutDeleted,
+          ...(d.textAnnotations ? { textAnnotations: d.textAnnotations.filter(annotation => !orphanAnnotationIds.has(annotation.id)) } : {}),
           nodes: d.nodes.filter((n) => !orphanNodeIds.has(n.id)),
           edges: d.edges.filter((e) => !orphanEdgeIds.has(e.id)),
           boundaries: d.boundaries.map((boundary) => ({
@@ -4336,6 +4410,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return doc.boundaries.filter((b) => allow.has(b.id));
   }, [doc.boundaries, activeScenario]);
 
+  const visibleTextAnnotations = useMemo(() => (doc.textAnnotations ?? []).filter(annotation =>
+    !activeScenario || activeScenario.textAnnotationIds?.includes(annotation.id)), [doc.textAnnotations, activeScenario]);
+
   const edgeNumberFor = useCallback(
     (edgeId: string): number | null => {
       if (!activeScenario) return null;
@@ -4493,6 +4570,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     visibleNodes,
     visibleEdges,
     visibleBoundaries,
+    visibleTextAnnotations,
+    createTextAnnotation,
+    updateTextAnnotation,
+    deleteTextAnnotation,
+    setTextAnnotationMembership,
     edgeNumberFor,
   };
 
@@ -4668,6 +4750,7 @@ export function normalizeDoc(
   availableNodeTypes: readonly NodeTypeRef[] = [],
 ): PsDocument {
   validateThreatNotes(doc);
+  const textAnnotations = normalizeTextAnnotations(doc);
   const base = emptyDocument();
   const authenticationDefinitions = doc.authenticationDefinitions === undefined
     ? [] : validatePortableAuthenticationDefinitions(doc.authenticationDefinitions);
@@ -4840,6 +4923,7 @@ export function normalizeDoc(
       edgeIds,
       edgeNumbers: { ...fallbackNumbers, ...(s.edgeNumbers ?? {}) },
       boundaryIds,
+      ...normalizeTextAnnotationIds(s, textAnnotations ?? []),
       nodeData,
       edgeRequestData,
       edgeResponseData,
@@ -4972,6 +5056,7 @@ export function normalizeDoc(
     ...(catalogDefinitions !== undefined ? { catalogDefinitions } : {}),
     nodeTypes,
     nodes: normalizedNodes,
+    ...(textAnnotations !== undefined ? { textAnnotations } : {}),
     edges: rawEdges.map((e) => {
       const authenticationTypes = normalizeAuthTypes(e, authenticationDefinitions);
       const rawPi = (e as { productionIdentity?: unknown }).productionIdentity;

@@ -51,11 +51,12 @@ export async function captureDiagramPng(
   scenario: Scenario,
 ): Promise<string> {
   const nodes = doc.nodes.filter((node) => scenario.nodeIds.includes(node.id));
+  const annotations = (doc.textAnnotations ?? []).filter(annotation => scenario.textAnnotationIds?.includes(annotation.id));
   const edges = doc.edges.filter((edge) => scenario.edgeIds.includes(edge.id));
   const boundaries = doc.boundaries.filter((boundary) =>
     scenario.boundaryIds.includes(boundary.id),
   );
-  if (nodes.length === 0 && boundaries.length === 0) {
+  if (nodes.length === 0 && boundaries.length === 0 && annotations.length === 0) {
     throw new Error("The current scenario has no diagram elements to export.");
   }
 
@@ -63,6 +64,7 @@ export async function captureDiagramPng(
   const nodeHeight = 72;
   const padding = 48;
   const xs = [
+    ...annotations.flatMap(annotation => [annotation.position.x, annotation.position.x + Math.max(annotation.size.width, ...annotation.text.split("\n").map(line => line.length * 8 + 16))]),
     ...nodes.flatMap((node) => [node.position.x, node.position.x + nodeWidth]),
     ...boundaries.flatMap((boundary) => [
       boundary.position.x,
@@ -70,6 +72,7 @@ export async function captureDiagramPng(
     ]),
   ];
   const ys = [
+    ...annotations.flatMap(annotation => [annotation.position.y, annotation.position.y + Math.max(annotation.size.height, annotation.text.split("\n").length * 20 + 16)]),
     ...nodes.flatMap((node) => [node.position.y, node.position.y + nodeHeight]),
     ...boundaries.flatMap((boundary) => [
       boundary.position.y,
@@ -119,7 +122,9 @@ export async function captureDiagramPng(
       return `<g><title>${escapeHtml(nodeDfdSummary(node, doc, scenario))}</title><rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="${scope.role.role === "Process" ? 18 : scope.role.role === "DataStore" ? 12 : 0}" fill="${node.color ?? "#ffffff"}" stroke="#334155" stroke-width="2"${scope.disposition === "outOfScope" ? ' stroke-dasharray="5 3"' : ""}/><text x="${x + 12}" y="${y + 22}" font-size="14" font-weight="600" fill="#0f172a">${escapeHtml(node.title)}</text><text x="${x + 12}" y="${y + 39}" font-size="11" fill="#64748b">${escapeHtml(nodeTypeLabel(node.type, doc.nodeTypes))}</text><text x="${x + 12}" y="${y + 53}" font-size="10" fill="#334155">${escapeHtml(DFD_ROLE_LABELS[scope.role.role])} / ${escapeHtml(scope.disposition)}</text></g>`;
     })
     .join("");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#475569"/></marker><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#dbe3ec"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafc"/><rect width="100%" height="100%" fill="url(#grid)"/>${boundarySvg}${edgeSvg}${nodeSvg}</svg>`;
+  const annotationSvg = annotations.map(annotation => `<g><title>${escapeHtml(annotation.text)}</title><text xml:space="preserve" font-size="14" fill="#242424">${annotation.text.split("\n").map((line, index) =>
+    `<tspan x="${offset(annotation.position.x, minX) + 8}" y="${offset(annotation.position.y, minY) + 20 + index * 20}">${escapeHtml(line)}</tspan>`).join("")}</text></g>`).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#475569"/></marker><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#dbe3ec"/></pattern></defs><rect width="100%" height="100%" fill="#f8fafc"/><rect width="100%" height="100%" fill="url(#grid)"/>${boundarySvg}${edgeSvg}${nodeSvg}${annotationSvg}</svg>`;
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const image = new Image();
@@ -340,6 +345,12 @@ ${diagramDataUrl ? `<section><h2>Scenario diagram</h2><img class="diagram" src="
     : "Inactive (security only)"),
 ]))}</section>
 <section><h2>Node inventory</h2><p>DFD role is independent of service type. Scope excludes interiors only from LLM review, never fixed checks. Stored reasons on External Interactors are inactive.</p>${table(["Node", "Type", "DFD role / scope", "Stored scope reason", "Diagnostics", "Description", options.inventoryLabel ?? "Inventory ID", "Endpoint pattern"], nodeRows)}</section>
+<section><h2>Canvas text annotations</h2><p>Nonsemantic, untrusted authored context. Not assets or review findings.</p>${table(["Text", "Position (x, y)", "Size (width, height)"],
+  (doc.textAnnotations ?? []).filter(annotation => scenario.textAnnotationIds?.includes(annotation.id)).map(annotation => [
+    `<pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(annotation.text)}</pre>`,
+    escapeHtml(`${annotation.position.x}, ${annotation.position.y}`),
+    escapeHtml(`${annotation.size.width}, ${annotation.size.height}`),
+  ]))}</section>
 <section><h2>Data flow inventory</h2><p>Required access rights are declared design intent, not verified deployed grants or compliance. Blank means unspecified, not no permissions required.</p>${table(["#", "Flow", "Source", "Target", "Scope context", "Authentication", "Audience", "Production identity", "Required access rights", "Request data", "Response data"], edgeRows)}</section>
 <section><h2>Data inventory and retention</h2>${table(["Data element", "Classification", "Sample", "Stored / processed at"], dataRows)}</section>
 ${metadataRows.length ? `<section><h2>Custom metadata</h2>${table(["Type", "Element", "Field", "Value"], metadataRows)}</section>` : ""}

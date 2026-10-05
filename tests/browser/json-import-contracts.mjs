@@ -148,7 +148,7 @@ export function registerJsonImportContracts({ getHarness, exportModel }) {
       await stubDialogs(page);
       await chooseJson(page, scenarioDfdJsonFixture());
       assert.equal(await alertAt(page),
-        "Imported 3 scenarios from scenario/DFD JSON.\nNodes: 4 unique source instances (from 5 records).\nBoundaries: 2.\nEdges: 4.\nSplit 1 multi-numbered label into separate edges.\nSkipped 1 freetext annotation (no SecureDesignStudio equivalent).\nSkipped 2 edges whose source/target was a freetext, boundary, or unknown id.\n1 scenario had no diagram and were imported empty.\n1 diagram in the export had no matching scenario and were ignored.");
+        "Imported 3 scenarios from scenario/DFD JSON.\nNodes: 4 unique source instances (from 5 records).\nBoundaries: 2.\nEdges: 4.\nSplit 1 multi-numbered label into separate edges.\nSkipped 1 freetext annotation (this external importer does not map them to native canvas text).\nSkipped 2 edges whose source/target was a freetext, boundary, or unknown id.\n1 scenario had no diagram and were imported empty.\n1 diagram in the export had no matching scenario and were ignored.");
       await fileFocused(page);
       const primaryId = await page.getByRole("combobox", { name: "Scenario", exact: true }).inputValue();
       await measureAllNodes(page, 4, primaryId);

@@ -37,6 +37,7 @@ export function ScenarioDetails({ scenario }: { scenario: Scenario }) {
         <div>
           <strong>{knownEdges.length}</strong> / {edgeCount} edges
         </div>
+        <div><strong>{scenario.textAnnotationIds?.length ?? 0}</strong> text annotations</div>
       </div>
     </div>
   );

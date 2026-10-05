@@ -18,7 +18,7 @@ export function DeleteScenarioDialog({
   const scenario = doc.scenarios.find((candidate) => candidate.id === scenarioId);
 
   const impact = useMemo(() => {
-    const { orphanNodeIds, orphanEdgeIds } =
+    const { orphanNodeIds, orphanEdgeIds, orphanAnnotationIds } =
       calculateScenarioDeletionImpact(doc, scenarioId);
     const commentsRemoved = doc.comments.filter(
       (comment) =>
@@ -47,6 +47,7 @@ export function DeleteScenarioDialog({
     return {
       orphanNodes: orphanNodeIds.size,
       orphanEdges: orphanEdgeIds.size,
+      orphanAnnotations: orphanAnnotationIds.size,
       commentsRemoved,
       issuesRemoved,
       requestAttachments,
@@ -110,6 +111,7 @@ export function DeleteScenarioDialog({
           <ul className="ps-dialog-impact-list">
             <li>{scenario.nodeIds.length} node memberships</li>
             <li>{scenario.edgeIds.length} edge memberships and sequence numbers</li>
+            <li>{scenario.textAnnotationIds?.length ?? 0} text annotation memberships; {impact.orphanAnnotations} annotations used only by this scenario will be deleted</li>
             <li>
               {scenario.boundaryIds.length} boundary memberships (boundary
               records are not deleted by this action)

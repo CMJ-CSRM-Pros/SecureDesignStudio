@@ -14,6 +14,7 @@
 import * as Y from "yjs";
 import {
   type PsBoundary,
+  type PsTextAnnotation,
   type PsComment,
   type PsData,
   type PsDeviation,
@@ -159,7 +160,17 @@ export function reconcileLocalToY(
     syncCollection(y.nodes, doc.nodes);
     syncCollection(y.edges, doc.edges);
     syncCollection(y.boundaries, doc.boundaries);
-    syncCollection(y.scenarios, doc.scenarios);
+    if (doc.textAnnotations !== undefined) {
+      syncCollection(y.textAnnotations, doc.textAnnotations);
+      if (y.meta.get("textAnnotationsPresent") !== true) y.meta.set("textAnnotationsPresent", true);
+    }
+    syncCollection(y.scenarios, doc.textAnnotations === undefined
+      ? doc.scenarios.map(scenario => {
+          const retained = y.scenarios.get(scenario.id)?.get("textAnnotationIds");
+          return scenario.textAnnotationIds === undefined && Array.isArray(retained)
+            ? { ...scenario, textAnnotationIds: retained as string[] } : scenario;
+        })
+      : doc.scenarios);
     syncCollection(y.data, doc.data);
     syncCollection(y.comments, doc.comments);
     syncCollection(y.issues, doc.issues);
@@ -193,6 +204,15 @@ export function reconcileLocalToY(
   }, LOCAL_ORIGIN);
 }
 
+// The current application owns complete document replacement (New/Open/history).
+// Unlike a legacy caller's partial representation, absence here means no notes.
+export function reconcileCurrentDocumentToY(
+  y: YShape, doc: PsDocument, availableClassifications?: readonly CatalogDefinitionSnapshot[],
+): void {
+  reconcileLocalToY(y, doc.textAnnotations === undefined
+    ? { ...doc, textAnnotations: [] } : doc, availableClassifications);
+}
+
 // Pull an item back out of Y.Map. Y.Map.toJSON() walks nested Y types,
 // but our values are plain JS objects/arrays/primitives so a simple
 // key-by-key extraction suffices and gives us typed casts.
@@ -218,6 +238,9 @@ export function buildDocFromY(y: YShape): PsDocument {
 
   const partial: Partial<PsDocument> = {
     version: (y.meta.get("version") as 1 | undefined) ?? 1,
+    ...(y.textAnnotations.size || y.meta.get("textAnnotationsPresent") === true ? {
+      textAnnotations: collect<PsTextAnnotation>(y.textAnnotations).sort((a, b) => a.id.localeCompare(b.id)),
+    } : {}),
     nodes: collect<PsNode>(y.nodes).sort((a, b) => a.id.localeCompare(b.id)),
     edges: collect<PsEdge>(y.edges).sort((a, b) => a.id.localeCompare(b.id)),
     boundaries: collect<PsBoundary>(y.boundaries).sort((a, b) =>

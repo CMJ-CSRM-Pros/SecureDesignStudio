@@ -36,11 +36,13 @@ import { BoundaryNode } from "./BoundaryNode";
 import { CommentsModal, type CommentTarget } from "./CommentsModal";
 import { FlowEdge } from "./FlowEdge";
 import { ProcessNode } from "./ProcessNode";
+import { TextAnnotationNode } from "./TextAnnotationNode";
 import { useRemoveFromScenarioWithConfirm } from "./useRemoveFromScenarioWithConfirm";
 
 const nodeTypes = {
   process: ProcessNode,
   boundary: BoundaryNode,
+  annotation: TextAnnotationNode,
 };
 
 const edgeTypes = {
@@ -130,6 +132,9 @@ function InnerDiagram() {
     removeBoundaryFromScenario,
     removeNodeFromBoundary,
     visibleBoundaries,
+    visibleTextAnnotations,
+    createTextAnnotation,
+    setTextAnnotationMembership,
     activeScenarioId,
     activeScenario,
     edgeNumberFor,
@@ -151,13 +156,14 @@ function InnerDiagram() {
     getViewport,
     setViewport,
   } = useReactFlow();
-  const { fitViewRequest } = useUiShell();
+  const { fitViewRequest, openInspector } = useUiShell();
 
   // ---- Right-click context menu state ---- (hoisted above rfEdges so the
   // edge-title callback can be embedded in edge data.)
   type MenuTarget =
     | { kind: "pane" }
     | { kind: "boundary"; id: string }
+    | { kind: "annotation"; id: string }
     | { kind: "node"; id: string }
     | { kind: "edge"; id: string };
   type Menu = {
@@ -212,6 +218,8 @@ function InnerDiagram() {
       if (visibleNodes.some((n) => n.id === focusTarget.id)) {
         nodeIds = [focusTarget.id];
       }
+    } else if (focusTarget.kind === "annotation") {
+      if (visibleTextAnnotations.some(annotation => annotation.id === focusTarget.id)) nodeIds = [focusTarget.id];
     } else if (focusTarget.kind === "boundary") {
       if (visibleBoundaries.some((boundary) => boundary.id === focusTarget.id)) {
         nodeIds = [focusTarget.id];
@@ -239,7 +247,7 @@ function InnerDiagram() {
     }
     // Target isn't visible in the current scenario — clear so we don't loop.
     setFocusTarget(null);
-  }, [focusTarget, visibleNodes, visibleBoundaries, doc.edges, fitView, setFocusTarget]);
+  }, [focusTarget, visibleNodes, visibleBoundaries, visibleTextAnnotations, doc.edges, fitView, setFocusTarget]);
 
   useEffect(() => {
     if (fitViewRequest === 0) return;
@@ -490,9 +498,18 @@ function InnerDiagram() {
         zIndex: 1,
       };
     });
-    return [...boundaryNodes, ...processNodes];
+    const annotationNodes: RfNode[] = visibleTextAnnotations.map(annotation => ({
+      id: annotation.id, type: "annotation", position: annotation.position,
+      width: annotation.size.width, height: annotation.size.height,
+      measured: { ...annotation.size }, data: { text: annotation.text },
+      ariaLabel: `Text annotation: ${annotation.text || "Empty"}`,
+      selected: (selection?.kind === "annotation" && selection.id === annotation.id) || multiSet.has(annotation.id),
+      draggable: true, selectable: true, connectable: false, zIndex: 2,
+    }));
+    return [...boundaryNodes, ...processNodes, ...annotationNodes];
   }, [
     visibleBoundaries,
+    visibleTextAnnotations,
     visibleNodes,
     selection,
     multiSelectedIds,
@@ -586,7 +603,7 @@ function InnerDiagram() {
     Map<
       string,
       {
-        kind: "node" | "boundary";
+        kind: "node" | "boundary" | "annotation";
         position: { x: number; y: number };
         size?: { width: number; height: number };
       }
@@ -610,7 +627,7 @@ function InnerDiagram() {
       const finishedMoves = new Map<
         string,
         {
-          kind: "node" | "boundary";
+          kind: "node" | "boundary" | "annotation";
           position: { x: number; y: number };
           size?: { width: number; height: number };
         }
@@ -652,7 +669,7 @@ function InnerDiagram() {
           if (change.dragging === true) {
             // Coalesce: only the latest position per node-id matters per frame.
             pendingMovesRef.current.set(node.id, {
-              kind: node.type === "boundary" ? "boundary" : "node",
+              kind: node.type === "annotation" ? "annotation" : node.type === "boundary" ? "boundary" : "node",
               position: node.position,
               size:
                 node.type === "boundary"
@@ -667,7 +684,7 @@ function InnerDiagram() {
             }
           } else {
             finishedMoves.set(node.id, {
-              kind: node.type === "boundary" ? "boundary" : "node",
+              kind: node.type === "annotation" ? "annotation" : node.type === "boundary" ? "boundary" : "node",
               position: node.position,
               size:
                 node.type === "boundary"
@@ -681,7 +698,10 @@ function InnerDiagram() {
         } else if (change.type === "dimensions" && change.dimensions) {
           const node = updated.find((n) => n.id === change.id);
           if (!node) continue;
-          if (node.type === "boundary") {
+          if (node.type === "annotation") {
+            // Only the explicit NodeResizer gesture persists annotation size.
+            continue;
+          } else if (node.type === "boundary") {
             resizeBoundary(
               change.id,
               {
@@ -779,6 +799,8 @@ function InnerDiagram() {
       e.preventDefault();
       if (node.type === "boundary") {
         openMenuAt(e.clientX, e.clientY, { kind: "boundary", id: node.id });
+      } else if (node.type === "annotation") {
+        openMenuAt(e.clientX, e.clientY, { kind: "annotation", id: node.id });
       } else {
         openMenuAt(e.clientX, e.clientY, { kind: "node", id: node.id });
       }
@@ -803,9 +825,10 @@ function InnerDiagram() {
       else if (t.kind === "edge") addEdgeToScenario(scenarioId, t.id);
       else if (t.kind === "boundary")
         addBoundaryToScenario(scenarioId, t.id);
+      else if (t.kind === "annotation") setTextAnnotationMembership(scenarioId, t.id, true);
       setContextMenu(null);
     },
-    [contextMenu, addNodeToScenario, addEdgeToScenario, addBoundaryToScenario]
+    [contextMenu, addNodeToScenario, addEdgeToScenario, addBoundaryToScenario, setTextAnnotationMembership]
   );
 
   const onRemoveTargetFromScenario = useCallback(
@@ -816,6 +839,7 @@ function InnerDiagram() {
       else if (t.kind === "edge") removeEdgeOrDelete(scenarioId, t.id);
       else if (t.kind === "boundary")
         removeBoundaryFromScenario(scenarioId, t.id);
+      else if (t.kind === "annotation") setTextAnnotationMembership(scenarioId, t.id, false);
       setContextMenu(null);
     },
     [
@@ -823,6 +847,7 @@ function InnerDiagram() {
       removeNodeOrDelete,
       removeEdgeOrDelete,
       removeBoundaryFromScenario,
+      setTextAnnotationMembership,
     ]
   );
 
@@ -965,6 +990,14 @@ function InnerDiagram() {
           }}
           onContextMenu={(e) => e.preventDefault()}
         >
+          {(contextMenu.target.kind === "pane" || contextMenu.target.kind === "boundary") && (
+            <button onClick={() => {
+              const annotation = createTextAnnotation({ x: contextMenu.flowX, y: contextMenu.flowY });
+              setSelection({ kind: "annotation", id: annotation.id });
+              openInspector("properties");
+              setContextMenu(null);
+            }}>New text annotation</button>
+          )}
           {(contextMenu.target.kind === "pane" ||
             contextMenu.target.kind === "boundary") &&
             (activeScenarioId ? (
@@ -985,7 +1018,7 @@ function InnerDiagram() {
 
           {(() => {
             const t = contextMenu.target;
-            if (t.kind !== "node" && t.kind !== "edge" && t.kind !== "boundary")
+            if (t.kind !== "node" && t.kind !== "edge" && t.kind !== "boundary" && t.kind !== "annotation")
               return null;
             return (
               <>
@@ -1001,7 +1034,7 @@ function InnerDiagram() {
                         ? s.nodeIds.includes(t.id)
                         : t.kind === "edge"
                           ? s.edgeIds.includes(t.id)
-                          : s.boundaryIds.includes(t.id);
+                          : t.kind === "annotation" ? s.textAnnotationIds?.includes(t.id) : s.boundaryIds.includes(t.id);
                     return (
                       <button
                         key={s.id}
@@ -1028,7 +1061,7 @@ function InnerDiagram() {
                         ? active.nodeIds.includes(t.id)
                         : t.kind === "edge"
                           ? active.edgeIds.includes(t.id)
-                          : active.boundaryIds.includes(t.id);
+                          : t.kind === "annotation" ? active.textAnnotationIds?.includes(t.id) : active.boundaryIds.includes(t.id);
                     if (!inActive) return null;
                     return (
                       <button

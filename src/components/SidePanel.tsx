@@ -5,6 +5,7 @@ import { AllCommentsPanel } from "./AllCommentsPanel";
 import { AllDeviationsPanel } from "./AllDeviationsPanel";
 import { AllIssuesPanel } from "./AllIssuesPanel";
 import { BoundaryDetails } from "./BoundaryDetails";
+import { TextAnnotationDetails } from "./TextAnnotationDetails";
 import { ChangesPanel } from "./ChangesPanel";
 import { DataModal } from "./DataModal";
 import { DesignAssistantPanel } from "./DesignAssistantPanel";
@@ -190,6 +191,10 @@ export function SidePanel() {
   }, [inspectorVisible, closeInspector]);
 
   const detail = useMemo(() => {
+    if (selection?.kind === "annotation") {
+      const annotation = doc.textAnnotations?.find(item => item.id === selection.id);
+      if (annotation) return <TextAnnotationDetails key={annotation.id} annotation={annotation} />;
+    }
     if (selection?.kind === "node") {
       const node = doc.nodes.find((candidate) => candidate.id === selection.id);
       if (node) return <NodeDetails node={node} />;
@@ -221,11 +226,12 @@ export function SidePanel() {
       <div className="ps-details ps-details-empty">
         <p>
           Select or create a scenario from the command bar — all diagram
-          elements must be added inside a scenario.
+          nodes and flows must be added inside a scenario. Free text can also
+          be added in Show all using Model &gt; New text annotation.
         </p>
       </div>
     );
-  }, [selection, doc.nodes, doc.edges, doc.boundaries, activeScenario]);
+  }, [selection, doc.nodes, doc.edges, doc.boundaries, doc.textAnnotations, activeScenario]);
 
   const contextLabel = useMemo(() => {
     if (selection?.kind === "node") {
@@ -241,6 +247,7 @@ export function SidePanel() {
       );
     }
     if (selection?.kind === "boundary") return "Selected boundary";
+    if (selection?.kind === "annotation") return "Selected text annotation";
     if (selection?.kind === "waypoint") return "Selected waypoint";
     return activeScenario?.name ?? "Show all scenarios";
   }, [selection, doc.nodes, doc.edges, activeScenario]);

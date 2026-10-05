@@ -6,6 +6,8 @@
 // export's tab-per-scenario layout.
 //
 // What's mapped:
+// Canvas text annotations are not mapped. Interactive callers must disclose
+// this loss before download; .tma remains the complete native backup.
 //   - PsNode  -> rounded rectangle whose multi-line text shows:
 //                  <title>
 //                  Type: <nodeType label>

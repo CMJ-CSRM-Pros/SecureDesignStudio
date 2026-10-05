@@ -98,6 +98,7 @@ type CommandId =
   | "scenario.settings"
   | "scenario.delete"
   | "model.catalog"
+  | "model.annotation"
   | "model.authentication"
   | "model.classifications"
   | "model.customLibraries"
@@ -148,6 +149,8 @@ export function Toolbar() {
     exportJson,
     importJson,
     createNode,
+    createTextAnnotation,
+    setFocusTarget,
     updateNode,
     addNodeToScenario,
     filter,
@@ -685,6 +688,9 @@ export function Toolbar() {
   // boundaries render as labelled rectangles behind their nodes.
   const onExportVsdx = () => {
     setOpenMenu(null);
+    if (doc.textAnnotations?.length && !window.confirm(
+      `Visio export omits ${doc.textAnnotations.length} canvas text annotations. Keep the .tma model to retain all text. Continue with this lossy export?`,
+    )) return;
     try {
       const bytes = exportVsdx(withCatalogDefinitions(doc, availableCatalogDefinitions), {
         inventoryLabel: inventoryField.label,
@@ -792,6 +798,7 @@ export function Toolbar() {
       doc.nodes.length > 0 ||
       doc.edges.length > 0 ||
       doc.scenarios.length > 0 ||
+      (doc.textAnnotations?.length ?? 0) > 0 ||
       doc.boundaries.length > 0 ||
       doc.data.length > 0;
     if (
@@ -1065,7 +1072,8 @@ export function Toolbar() {
     // Confirm when there is meaningful work to lose so we don't silently
     // blow away the user's diagram.
     const hasContent =
-      doc.scenarios.length > 0 || doc.nodes.length > 0 || doc.edges.length > 0;
+      doc.scenarios.length > 0 || doc.nodes.length > 0 || doc.edges.length > 0 ||
+      (doc.textAnnotations?.length ?? 0) > 0;
     if (hasContent) {
       const ok = window.confirm(
         "Importing scenario/DFD JSON will REPLACE the current diagram " +
@@ -1128,7 +1136,7 @@ export function Toolbar() {
         lines.push(
           `Skipped ${s.skippedFreetextCount} freetext annotation${
             s.skippedFreetextCount === 1 ? "" : "s"
-          } (no SecureDesignStudio equivalent).`,
+          } (this external importer does not map them to native canvas text).`,
         );
       }
       if (s.skippedUnresolvedEdgeCount > 0) {
@@ -1184,13 +1192,13 @@ export function Toolbar() {
         } from TM7 (${s.surfaceCount} drawing surface${
           s.surfaceCount === 1 ? "" : "s"
         }).`,
-        `Nodes: ${s.nodeCount}.  Edges: ${s.edgeCount}.  Boundaries: ${s.boundaryCount}.`,
+        `Nodes: ${s.nodeCount}.  Edges: ${s.edgeCount}.  Boundaries: ${s.boundaryCount}.  Text annotations: ${s.annotationCount}.`,
       ];
       if (s.skippedAnnotationCount > 0) {
         lines.push(
           `Skipped ${s.skippedAnnotationCount} free-text annotation${
             s.skippedAnnotationCount === 1 ? "" : "s"
-          } (no SecureDesignStudio equivalent).`,
+          } (unsupported native annotation shape).`,
         );
       }
       if (s.skippedLineBoundaryCount > 0) {
@@ -1204,7 +1212,7 @@ export function Toolbar() {
         lines.push(
           `Skipped ${s.skippedDanglingEdgeCount} edge${
             s.skippedDanglingEdgeCount === 1 ? "" : "s"
-          } with missing endpoints.`,
+          } with explicitly unattached endpoints; details and label preservation are listed below.`,
         );
       }
       lines.push(
@@ -1686,6 +1694,15 @@ export function Toolbar() {
         restoreFocus = false;
         setNodeTypeCatalogOpen(true);
         break;
+      case "model.annotation": {
+        restoreFocus = false;
+        const annotation = createTextAnnotation({ x: 100, y: 100 });
+        setSelection({ kind: "annotation", id: annotation.id });
+        setFocusTarget({ kind: "annotation", id: annotation.id });
+        setViewMode("graph");
+        showInspectorTab("properties");
+        break;
+      }
       case "model.authentication":
         restoreFocus = false;
         setAuthenticationLibraryOpen(true);
@@ -1953,6 +1970,9 @@ export function Toolbar() {
                 <button role="menuitem" onClick={() => executeCommand("model.catalog")}>
                   <span>Node Type Catalog</span>
                   <small>{nodeTypeCatalog.length} types</small>
+                </button>
+                <button role="menuitem" onClick={() => executeCommand("model.annotation")}>
+                  <span>New text annotation</span>
                 </button>
                 <button role="menuitem" aria-label="Customize authentication" aria-describedby="ps-auth-command-hint" onClick={() => executeCommand("model.authentication")}>
                   <span>Customize authentication</span>

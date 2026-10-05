@@ -3,6 +3,7 @@ import type { PsDocument } from "./types";
 export interface ScenarioDeletionImpact {
   orphanNodeIds: Set<string>;
   orphanEdgeIds: Set<string>;
+  orphanAnnotationIds: Set<string>;
 }
 
 export function calculateScenarioDeletionImpact(
@@ -16,7 +17,7 @@ export function calculateScenarioDeletionImpact(
     (scenario) => scenario.id === scenarioId,
   );
   if (!deletedScenario) {
-    return { orphanNodeIds: new Set(), orphanEdgeIds: new Set() };
+    return { orphanNodeIds: new Set(), orphanEdgeIds: new Set(), orphanAnnotationIds: new Set() };
   }
   const retainedNodeIds = new Set(
     remainingScenarios.flatMap((scenario) => scenario.nodeIds),
@@ -38,5 +39,7 @@ export function calculateScenarioDeletionImpact(
       orphanEdgeIds.add(edge.id);
     }
   }
-  return { orphanNodeIds, orphanEdgeIds };
+  const retainedAnnotations = new Set(remainingScenarios.flatMap(scenario => scenario.textAnnotationIds ?? []));
+  const orphanAnnotationIds = new Set((deletedScenario.textAnnotationIds ?? []).filter(id => !retainedAnnotations.has(id)));
+  return { orphanNodeIds, orphanEdgeIds, orphanAnnotationIds };
 }
