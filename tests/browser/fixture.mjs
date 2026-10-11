@@ -1,5 +1,37 @@
 export const autosaveKey = "secure-design-studio:autosave:v1";
 
+export const publicPowerPlatformPrompt = "i want a powerpages application that is backed by a copilot ai to summerize data i have in a dataverse instance";
+
+export function publicPowerPlatformDesignFixture() {
+  return {
+    answer: "Synthetic proposed Power Pages site, Copilot Studio agent and Dataverse data path; verify integration and permissions.",
+    assumptions: ["Copilot means a Copilot Studio agent; confirm the supported site integration and effective caller permissions."],
+    design: {
+      scenario: { name: "Dataverse summarization", description: "Synthetic design intent, not deployment evidence." },
+      nodes: [
+        { id: "visitor", type: "", title: "Visitor", description: "Intended summary recipient.", dfdRole: "ExternalInteractor" },
+        { id: "site", type: "PowerPages", title: "Power Pages site", description: "Proposed hosted visitor experience; verify authentication and table permissions.", dfdRole: "Process" },
+        { id: "agent", type: "CopilotStudio", title: "Copilot Studio agent", description: "Proposed summarization agent; verify channel integration, grounding scope and permissions.", dfdRole: "Process" },
+        { id: "data", type: "Dataverse", title: "Dataverse instance", description: "Proposed business-data source; verify row/column authorization for the connection.", dfdRole: "DataStore" },
+      ],
+      edges: [
+        { id: "visit", source: "visitor", target: "site", title: "Request summary", description: "Verify visitor identity and the intended result audience.",
+          authenticationType: null, requestDataIds: ["query"], responseDataIds: ["summary"], dataMode: "replace" },
+        { id: "ask", source: "site", target: "agent", title: "Ask agent", description: "Select and verify the supported site-to-agent integration; no authentication claim yet.",
+          authenticationType: null, requestDataIds: ["query"], responseDataIds: ["summary"], dataMode: "replace" },
+        { id: "retrieve", source: "agent", target: "data", title: "Retrieve permitted records", description: "Verify caller versus connection identity and least-privilege grounding query.",
+          authenticationType: null, requestDataIds: ["query"], responseDataIds: ["records"], dataMode: "replace" },
+      ],
+      boundaries: [{ id: "service", type: "security", title: "Proposed solution boundary", nodeIds: ["site", "agent", "data"], membershipMode: "replace" }],
+      data: [
+        { id: "query", name: "Synthetic summary query", classification: "EUPI" },
+        { id: "records", name: "Synthetic permitted business records", classification: "Customer Content" },
+        { id: "summary", name: "Synthetic business summary", classification: "Customer Content" },
+      ],
+    },
+  };
+}
+
 export function scenarioDfdJsonFixture() {
   return {
     scenarios: { threatModel: { scenarios: [

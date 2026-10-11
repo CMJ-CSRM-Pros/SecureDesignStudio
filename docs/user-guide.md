@@ -131,6 +131,101 @@ works offline, but enabled collaboration can contact services, unlike
 
 ## 3. Simple how-to
 
+### Build a proposed threat model with AI
+
+When the existing Assistant service is configured, choose **Design with AI**
+on the first-scenario screen, or **File > Design with AI** (directly below
+**Open**) for the selected
+scenario. For example: “I need a web server to securely host documents for
+authenticated users.” With an existing document, select a scenario first:
+**Show all** cannot be an authoring target. **New scenario** remains a manual
+creation flow; create and select it before asking AI to populate it.
+
+The **Threat Model Designer** is a modeless prompt dialog. Enter sends;
+Shift+Enter inserts a newline. A valid response immediately adds or refines
+catalog-backed components, directional flows, data and boundaries. The model
+switches to Diagram view and fits the design. **Collapse** leaves more canvas
+visible. Drag the title bar to move the dialog, or focus the title bar and use the
+arrow keys (Shift+arrow moves farther). It stays within the available viewport
+when resized. Active filters have an explicit **Clear filters and show design**
+remedy. The bottom-left zoom controls remain available.
+
+Each applied response is one model Undo step, including creation of the first
+scenario. Redo restores it. Ask follow-up questions to refine the same IDs.
+Clarifications, invalid/incomplete responses and cancelled requests do not
+change the model or history. **Stop generating**, closing the dialog, switching
+scenarios or a timeout discards the pending response. If model semantics or
+catalog choices change while AI is working, resend the prompt; it will not
+overwrite that work. Existing authored geometry is retained where possible;
+unsafe boundary expansion is rejected rather than enclosing unrelated nodes.
+
+AI can add, edit and delete components, connections and boundaries, redirect
+connections, and remove data attachments or boundary members. Give an explicit
+design instruction such as **"Route browser traffic through Application Gateway
+and remove the direct connection to the web app."** Adding an exclusive gateway
+should replace bypass paths, not simply add parallel connections. Advice-only
+questions can still return an explanation without changing the diagram.
+
+**Deletion is global**, matching the editor's Delete action, including all
+scenarios using the item. Deleting a component removes its remaining incident
+connections and their comments/issues; a connection explicitly rerouted away
+from it in the same response survives. Deleting a boundary keeps its components.
+Evidence-backed deviations are retained without their deleted target, not
+silently resolved. Other model content and reusable data are preserved.
+
+Rerouting retains the connection ID and sequence numbers, updates the connection
+everywhere it is shared, and includes its new endpoints in those scenarios.
+Old endpoint-specific identity/audience/rights claims and routing handles are
+cleared where no longer applicable; review the new flow's required controls.
+Data attachment replacement affects only the selected scenario, not reusable
+data, other scenarios' attachments, or previously recorded node retention.
+Removing boundary members moves them outside that boundary while preserving
+their other memberships. Conflicting geometry rejects the entire response.
+
+Each response remains **one Undo step** for all additions, removals and reroutes.
+The result shows counts calculated from the applied model, rather than only
+the AI's prose. Empty/no-op responses do not add history. Request/response data
+remain separate. New catalog selections must still be available and permitted.
+
+To change the execution sequence, ask **"Order the flows browser to WAF, WAF
+to backend, then backend to Copilot."** AI can explicitly reorder the selected
+scenario's complete flow list and renumber it from 1. Other scenarios keep their
+own order and numbers. This does not change the connection endpoints or canvas
+positions. Sequence participants follow first appearance in the saved flow list;
+an order-only edit keeps Sequence view open so the result is immediately visible.
+Correct connectivity alone does not establish correct execution order.
+
+When AI attaches data to a flow, the receiving node's **Privacy** inventory is
+populated immediately in the same undoable edit: request data goes to the
+target, response data to the source. You do not need to run Analyze first.
+The node's General tab offers **View privacy data** when items are recorded.
+Newly propagated retention is **Not specified** until you choose it; existing
+retention choices are preserved. "Low risk" does not mean public/nonpersonal
+data or establish that data is never stored. Review classification and retention
+separately. Removing a flow attachment does not erase prior node retention.
+
+**This is proposed, unverified design intent, not deployment evidence,
+certification or a complete threat assessment.** Review generated descriptions,
+assumptions, authentication, data and boundaries before relying on them.
+Specialized services without an available catalog entry require an explained
+generic component or clarification. No deployment or evidence discovery occurs.
+
+Your prompt, up to 12 prior conversation messages, the selected scenario's
+authoring context and available catalog choices go to the **same configured
+Assistant endpoint**. The dialog discloses the destination. Conversation is
+retained in this browser session when you close and reopen the dialog, including
+your unfinished prompt. Closing still cancels a pending request; it cannot apply
+a late response. Switching scenarios, opening or creating a model, or refreshing
+clears the conversation and draft. Neither is saved in `.tma`, autosave,
+standalone HTML or collaboration. Generated model content and explicit
+assumptions are saved normally. **Review > Design Assistant** remains the
+separate analysis/chat experience.
+
+Default credential-free `npm run dev` makes no AI requests. Manual scenario
+creation remains available. To enable AI, use the existing explicitly configured
+[optional AI workflow](advanced-configuration.md#optional-local-design-assistant);
+this feature introduces no new service or credential setting.
+
 Use synthetic data for **Submit a support case**: a web frontend calls an API
 that writes to Dataverse. Authentication and retention below are practice
 assumptions, not service policy recommendations.
@@ -174,8 +269,12 @@ Core provides an optional **Inventory ID**, accepting ordinary text such as
 `ASSET-123`. The compatible JSON field remains `serviceTreeId`. Custom library
 can label the same field **ServiceTreeId** and add GUID validation and a
 required-value check. Existing values remain editable without that library.
-All 13 former curated node types now require the selected Custom library or
-a saved document definition; the public-cloud catalog remains available.
+Private curated policies still require the selected Custom library or a saved
+document definition. Neutral public Dataverse, Dataverse Table, Dataverse
+Plugin, Microsoft Copilot Studio and Power Platform connectors are available
+without it. `CopilotStudio` is the public agent product; the optional spaced
+`Copilot Studio` identity is not its alias. See the [catalog guide](microsoft-cloud-node-catalog.md)
+for product distinctions, selected integrations and unresolved lifecycle scope.
 
 Opening node properties does not replace saved **Inventory ID** or
 **EndpointRegex** values with catalog defaults. When they differ, review the
@@ -185,8 +284,10 @@ the values alone. A different type applies only valid supplied defaults; fields
 without a supplied default keep their existing values.
 
 The right-hand inspector edits the selection; **View > Properties** returns
-to details. **Undo/Redo** recovers edits. On narrow screens use the menus
-when direct buttons are hidden. **Autosave is recovery, not backup**:
+to details. For nodes and flows, **Custom metadata** appears below **Issues**,
+after the **General / Security** or **Privacy** fields. **Undo/Redo** recovers
+edits. On narrow screens use the menus when direct buttons are hidden.
+**Autosave is recovery, not backup**:
 save `.tma` in an approved location before replacing or sharing a model.
 
 ## 4. Advanced features
@@ -274,6 +375,31 @@ not to other diagrams or repository source. See the
 [cloud catalog](microsoft-cloud-node-catalog.md) for services, icons, sources,
 and Unspecified-policy limitations.
 
+**AI design guidance** is an optional, separate field in the catalog editor.
+Reviewed Microsoft cloud entries now include short **Context / Dependencies /
+Risks / Uncertainty** guidance, with explicit owner-withheld types left blank.
+For a Power Pages site that uses an agent to summarize Dataverse data, the
+default catalog offers `PowerPages`, `CopilotStudio` and `Dataverse` directly;
+Microsoft 365 Copilot need not be used as a substitute. Confirm the intended
+Copilot product, supported site/agent integration, effective connection
+identity and summary audience. Guidance does not create dependency nodes or
+verify that a proposed control is deployed.
+It is untrusted reference text for Threat Model Designer and Design Assistant,
+not a policy rule, risk waiver, or evidence that a deployment has a control.
+Existing Description text is never converted into guidance automatically.
+In node **Properties > General / Security**, expand **AI design guidance** to
+read it and its source URLs/revision/edit date. **Edit guidance for this type in
+this diagram** opens a draft with explicit Save and Cancel (Escape cancels and
+returns focus). Saving affects every node of that type in this diagram, across
+scenarios, but not installed libraries, instance metadata or policy. Undo/Redo
+restores the entire edit. Remove guidance from the draft and Save to clear it;
+the saved type definition still wins over installed guidance.
+Source URLs are not fetched automatically, and revision/date do not imply
+review approval. Native files, autosave, exported HTML, node catalogs and
+current-version collaborators retain guidance. Older readers and lossy external
+formats are not guaranteed to retain it. See the [guidance contract and
+limits](custom-libraries.md#ai-design-guidance).
+
 **Model > Customize authentication** opens one Authentication Library per
 browser profile/origin. Edit **Method** and **Description** for flow selectors
 and node-type policies. It contains 17 modern profiles plus the ambiguous
@@ -310,6 +436,13 @@ TM7, VSDX and PNG are not full-metadata backups. The
 rights omitted from exported flows; it does not map them to native permissions.
 
 ### Document boundary network intent
+
+Move a security or privacy boundary by dragging its **outer border**, not its
+empty center. Empty interior space passes through to canvas gestures and
+underlying items, so it will not move the boundary or its contained nodes.
+Border dragging moves the boundary and its members together. Select its border
+or title to inspect it; use the visible resize handles to resize, and
+double-click the title to rename. Each move/resize is one Undo step.
 
 Select a security boundary and open **Properties** to edit **Inbound Allow**,
 **Inbound Deny**, **Outbound Allow**, and **Outbound Deny**. These four optional
@@ -778,9 +911,10 @@ visual rendering, not a backup. TM7 uses standard GE.A rectangles with the
 [documented geometry mapping](tm7-compatibility.md#free-floating-text).
 VSDX does **not** map these notes and warns before exporting.
 
-Older application versions can discard optional annotation data or scenario
+Older application/CLI versions can discard optional annotation data or scenario
 membership: do not edit these models with older clients. No compatibility
-marker can retrofit protection into an old reader.
+marker can retrofit protection into an old reader. Current CLI reads preserve
+annotations on unrelated mutations but do not provide annotation authoring.
 The current app treats New, Open and history restoration as complete document
 state: replacing a model with a legacy or empty model removes its previous
 annotations from the room. The compatibility adapter preserves absent annotation

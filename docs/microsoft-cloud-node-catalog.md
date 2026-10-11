@@ -1,22 +1,97 @@
 # Microsoft cloud node-type catalog
 
-Snapshot date: 2026-08-16
+Inventory baseline: 2026-08-16; scoped product-boundary/guidance update: 2026-10-09.
 
-*Updated: 2026-09-15 - Linked the canonical guide; catalog snapshot and sources are unchanged.*
+*Updated: 2026-10-09 - Added reviewed Azure guidance and reconciled owner-approved service boundaries.*
 
-SecureDesignStudio ships **177 node types**: 13 curated product-specific entries plus 164 Microsoft cloud catalog entries. The Azure portion starts from the 214-resource Microsoft Cloud Adoption Framework inventory and collapses SKU/child-resource variants into 93 architecturally meaningful data-flow node families.
+SecureDesignStudio provides **169 neutral core node types**, without requiring
+an optional library. The optional Custom package contributes 13 node
+definitions, including six private service identities; three explicitly
+overlay same-ID Dataverse bases, yielding **179 combined IDs** when selected.
+Private policy/identity definitions are not part of the neutral core. The Azure
+portion starts from the 214-resource Microsoft Cloud
+Adoption Framework inventory and collapses SKU/child-resource variants into
+93 architecturally meaningful data-flow node families.
 Use the [user guide](user-guide.md#4-advanced-features) for the modeling
 workflow; this reference retains the catalog inventory and source methodology.
 
 ## Catalog policy
 
-Catalog entries identify products, categories, public endpoint patterns, resource-provider namespaces, documentation, and official diagram icons. They deliberately **do not assert service-specific authentication, data-classification, geo, retention, or GDPR policy**. SecureDesignStudio marks those entries as `policyStatus: Unspecified`; reviewers must confirm policy for the modeled use. The original 13 entries retain their curated policy.
+Catalog entries identify products, categories, public endpoint hints, resource-provider namespaces, documentation, and bundled diagram icons. They deliberately **do not assert service-specific authentication, data-classification, geo, retention, or GDPR policy**. SecureDesignStudio marks those entries as `policyStatus: Unspecified`; reviewers must confirm policy for the modeled use. The optional private entries retain their existing policy only when explicitly selected or saved in a document.
 
 Because Microsoft services evolve continuously, this is a reviewed snapshot,
 not a claim that every Azure Marketplace offer, retired SKU, preview feature,
 or child ARM resource has its own node. The Azure inventory deliberately
 collapses related SKUs and child resources into data-flow-relevant service
 families; the linked Microsoft sources remain authoritative.
+
+## Reviewed AI design guidance
+
+166 of the 169 neutral core node types carry concise `aiDesignGuidance`:
+Context, Dependencies, Risks and Uncertainty, with source URLs, authored
+revision and edit date. Guidance remains withheld for Virtual machine
+infrastructure, Network security and Route resources as directed by the
+catalog owner. The optional Custom package adds guidance to four additional
+IDs; three Dataverse component overlays retain the same core IDs and guidance.
+Dates are edit dates, not fresh verification of a deployment or every linked
+page.
+
+The optional Custom package also gives neutral public meanings to its stable
+legacy IDs `Connectors` and `Copilot Studio`, separate from the core IDs
+`PowerPlatformConnectors` and `CopilotStudio`. New library definitions no
+longer contain the former private Service Tree identities, environment API
+endpoint matchers, or organization-specific policy fields. Saved diagram
+definitions remain authoritative and are not rewritten by this catalog update.
+The private CAPI, BAP, EDS, PPMS, MDL Service and XStore entries remain without
+AI guidance.
+
+New default choices:
+
+| Stable ID | Meaning |
+|---|---|
+| `Dataverse` | Managed business-data platform, not customer-owned Cosmos DB or a private internal service alias. |
+| `Dataverse Table` | Contained table accessed through parent Dataverse APIs; table kind affects storage and auditing. |
+| `Dataverse Plugin` | Registered synchronous/asynchronous server-side handler, potentially making external calls; not a guarantee of one shared OS process. |
+| `CopilotStudio` | Public agent/workflow authoring and management product, distinct from `m365_copilot` and `Agent365`. |
+| `PowerPlatformConnectors` | Connector family; identify the actual connector, connection identity, operation and backend. |
+
+Owner-approved Azure scopes preserve variant differences: WAF is Web
+Application Firewall at public application entry points; Delivery covers
+Azure Front Door and legacy Azure CDN; Azure Files covers both classic
+account-contained and standalone shares; Managed Redis stays scoped to
+`Microsoft.Cache/RedisEnterprise`; Azure Enclave is a managed deployment
+composite. These definitions do not imply every listed component or control is
+deployed. VM infrastructure, Network security, Route and six private service
+identities remain without guidance.
+
+For the request “a Power Pages application backed by Copilot to summarize
+Dataverse data,” the public choices support `PowerPages` → `CopilotStudio` →
+`Dataverse` directly. This is a proposed architecture, not a guarantee of a
+configured integration. Confirm the intended Copilot product, supported
+channel/data path, effective identity, table/row/column authorization and
+summary audience. Do not substitute Microsoft 365 Copilot merely because it
+was previously the only available Copilot choice. Table, plug-in, connector,
+AI Search and Azure OpenAI nodes are not automatically required.
+
+Descriptions distinguish Power Apps canvas/model-driven apps, Power Automate
+cloud/desktop flows, Customer Insights Data/Journeys, the Dynamics suite,
+Finance versus F&O platform, Sales Insights capabilities and Project Operations
+deployment branches. Agent 365 is categorized as cross-product governance;
+the on-premises gateway is shared integration infrastructure. Customer Voice
+lifecycle and Intelligent Order Management production-availability questions
+remain explicit uncertainty, not inferred retirement or provisioning approval.
+
+The five new entries use `^$` with no matching hints: no unique public endpoint
+classifier is established. Existing CRM/F&O wildcard hints are retained for
+compatibility but **do not uniquely identify a Dynamics application**. A
+table/API resource is not a separately hosted table hostname; this conservative
+matching choice does not claim Dataverse has no APIs.
+
+Saved definitions remain authoritative, including old names and an absent
+guidance field; there is no wholesale migration. New core types omit default
+DFD roles rather than inferring them; explicitly choose Process/Data Store as
+appropriate for a modeled instance. Guidance is untrusted reference text, not
+policy, a risk waiver or permission to create dependencies.
 
 ## Updating the catalog in the app
 
@@ -79,34 +154,39 @@ Official SVGs are copied unmodified from Microsoft architecture icon packs. See 
 
 | Catalog source | Types |
 |---|---:|
-| Curated | 13 |
 | Dynamics 365 | 16 |
 | Microsoft 365 | 40 |
 | Microsoft Azure | 93 |
 | Microsoft Fabric | 9 |
-| Power Platform | 6 |
-| **Total** | **177** |
+| Power Platform | 11 |
+| **Neutral core total** | **169** |
+| Optional Custom entries | 13 |
+| Same-ID optional/core overlap | -3 |
+| **Combined with Custom** | **179** |
+
+Catalog-source grouping preserves the original source attribution; category
+labels independently identify Agent 365 governance and shared gateway roles.
 
 ## Dynamics 365
 
 | Category | Node type | Stable ID | Endpoint pattern | Resource providers |
 |---|---|---|---|---|
-| Dynamics 365 / Workload | [Business Central](https://learn.microsoft.com/en-us/dynamics365/business-central/) | `D365BusinessCentral` | `^https?:\/\/api\.businesscentral\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Commerce](https://learn.microsoft.com/en-us/dynamics365/commerce/overview) | `D365Commerce` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Contact Center](https://learn.microsoft.com/en-us/dynamics365/contact-center/overview) | `D365ContactCenter` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Customer Insights](https://learn.microsoft.com/en-us/dynamics365/customer-insights/overview) | `D365CustomerInsights` | Not cataloged | — |
-| Dynamics 365 / Workload | [Customer Service](https://learn.microsoft.com/en-us/dynamics365/customer-service/) | `D365CustomerService` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Customer Voice](https://learn.microsoft.com/en-us/dynamics365/customer-voice/help-hub) | `D365CustomerVoice` | Not cataloged | — |
-| Dynamics 365 / Workload | [Dynamics 365](https://learn.microsoft.com/en-us/dynamics365/get-started/intro-crossapp-index) | `Dynamics365` | `^https?:\/\/.*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Field Service](https://learn.microsoft.com/en-us/dynamics365/field-service/overview) | `D365FieldService` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Finance](https://learn.microsoft.com/en-us/dynamics365/finance/) | `D365Finance` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Finance and Operations](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/fin-ops/) | `D365FinanceOperations` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Human Resources](https://learn.microsoft.com/en-us/dynamics365/human-resources/) | `D365HumanResources` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Intelligent Order Management](https://learn.microsoft.com/en-us/dynamics365/intelligent-order-management) | `D365IntelligentOrderManagement` | Not cataloged | — |
-| Dynamics 365 / Workload | [Project Operations](https://learn.microsoft.com/en-us/dynamics365/project-operations/) | `D365ProjectOperations` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Sales](https://learn.microsoft.com/en-us/dynamics365/sales/overview) | `D365Sales` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Sales Insights](https://learn.microsoft.com/en-us/dynamics365/sales/overview) | `D365SalesInsights` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
-| Dynamics 365 / Workload | [Supply Chain Management](https://learn.microsoft.com/en-us/dynamics365/supply-chain/) | `D365SupplyChainManagement` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Business Central](https://learn.microsoft.com/en-us/dynamics365/business-central/) | `D365BusinessCentral` | `^https?:\/\/api\.businesscentral\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Commerce](https://learn.microsoft.com/en-us/dynamics365/commerce/overview) | `D365Commerce` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Contact Center](https://learn.microsoft.com/en-us/dynamics365/contact-center/overview) | `D365ContactCenter` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Product family | [Customer Insights](https://learn.microsoft.com/en-us/dynamics365/customer-insights/overview) | `D365CustomerInsights` | Not cataloged | — |
+| Dynamics 365 / Application | [Customer Service](https://learn.microsoft.com/en-us/dynamics365/customer-service/) | `D365CustomerService` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Customer Voice](https://learn.microsoft.com/en-us/dynamics365/customer-voice/help-hub) | `D365CustomerVoice` | Not cataloged | — |
+| Dynamics 365 / Suite | [Dynamics 365](https://learn.microsoft.com/en-us/dynamics365/get-started/intro-crossapp-index) | `Dynamics365` | `^https?:\/\/.*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Field Service](https://learn.microsoft.com/en-us/dynamics365/field-service/overview) | `D365FieldService` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Finance](https://learn.microsoft.com/en-us/dynamics365/finance/) | `D365Finance` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Platform | [Finance and Operations](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/fin-ops/) | `D365FinanceOperations` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Human Resources](https://learn.microsoft.com/en-us/dynamics365/human-resources/) | `D365HumanResources` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Intelligent Order Management](https://learn.microsoft.com/en-us/dynamics365/intelligent-order-management) | `D365IntelligentOrderManagement` | Not cataloged | — |
+| Dynamics 365 / Application | [Project Operations](https://learn.microsoft.com/en-us/dynamics365/project-operations/) | `D365ProjectOperations` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Sales](https://learn.microsoft.com/en-us/dynamics365/sales/overview) | `D365Sales` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Capability | [Sales Insights](https://learn.microsoft.com/en-us/dynamics365/sales/overview) | `D365SalesInsights` | `^https?:\/\/.*\.crm[0-9]*\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
+| Dynamics 365 / Application | [Supply Chain Management](https://learn.microsoft.com/en-us/dynamics365/supply-chain/) | `D365SupplyChainManagement` | `^https?:\/\/.*\.cloud\.dynamics\.com(?::\d+)?(?:\/.*)?$` | — |
 
 ## Microsoft 365
 
@@ -223,7 +303,7 @@ Official SVGs are copied unmodified from Microsoft architecture icon packs. See 
 | Azure / Networking | [Application gateway](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.application-gateway` | Not cataloged | `Microsoft.Network/applicationGateways` |
 | Azure / Networking | [Application security group](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.application-security-group` | Not cataloged | `Microsoft.Network/applicationSecurityGroups` |
 | Azure / Networking | [Azure Enclave](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.azure-enclave` | Not cataloged | `Microsoft.Mission/communities`<br>`Microsoft.Mission/communities/communityEndpoints`<br>`Microsoft.Mission/communities/dedicatedHubs`<br>`Microsoft.Mission/communities/transitHubs`<br>`Microsoft.Mission/virtualEnclaves`<br>`Microsoft.Mission/virtualEnclaves/enclaveEndpoints`<br>`Microsoft.Mission/enclaveConnections`<br>`Microsoft.Mission/virtualEnclaves/workloads` |
-| Azure / Networking | [Delivery services](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.delivery` | Not cataloged | `Microsoft.Cdn/profiles`<br>`Microsoft.Cdn/profiles/endpoints`<br>`Microsoft.Cdn/profiles/afdEndpoints`<br>`Microsoft.Network/frontDoors`<br>`Microsoft.Network/frontdoorWebApplicationFirewallPolicies`<br>`Microsoft.Network/trafficManagerProfiles`<br>`Microsoft.Network/loadBalancers`<br>`Microsoft.Network/publicIPAddresses` |
+| Azure / Networking | [Delivery services](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.delivery` | Not cataloged | `Microsoft.Cdn/profiles`<br>`Microsoft.Cdn/profiles/endpoints`<br>`Microsoft.Cdn/profiles/afdEndpoints`<br>`Microsoft.Network/frontDoors` |
 | Azure / Networking | [DNS](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.dns` | Not cataloged | `Microsoft.Network/dnsZones`<br>`Microsoft.Network/privateDnsZones`<br>`Microsoft.Network/dnsForwardingRulesets`<br>`Microsoft.Network/dnsResolvers`<br>`Microsoft.Network/dnsResolvers/inboundEndpoints`<br>`Microsoft.Network/dnsResolvers/outboundEndpoints` |
 | Azure / Networking | [ExpressRoute](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.expressroute` | Not cataloged | `Microsoft.Network/expressRouteCircuits`<br>`Microsoft.Network/expressRoutePorts`<br>`Microsoft.Network/virtualNetworkGateways` |
 | Azure / Networking | [Firewall](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.network.firewall` | Not cataloged | `Microsoft.Network/azureFirewalls`<br>`Microsoft.Network/firewallPolicies` |
@@ -241,9 +321,9 @@ Official SVGs are copied unmodified from Microsoft architecture icon packs. See 
 | Azure / Security | [Managed identity](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.security.managed-identity` | Not cataloged | `Microsoft.ManagedIdentity/userAssignedIdentities` |
 | Azure / Security | [SSH key](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.security.ssh-key` | Not cataloged | `Microsoft.Compute/sshPublicKeys` |
 | Azure / Security | [VPN Gateway](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.security.vpn` | Not cataloged | `Microsoft.Network/vpnGateways`<br>`Microsoft.Network/vpnGateways/vpnConnections`<br>`Microsoft.Network/vpnGateways/vpnSites` |
-| Azure / Security | [Web Application Firewall policy](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.security.waf` | Not cataloged | `Microsoft.Network/firewallPolicies`<br>`Microsoft.Network/firewallPolicies/ruleGroups` |
+| Azure / Security | [Web Application Firewall policy](https://learn.microsoft.com/en-us/azure/networking/design-guide/web-application-firewall) | `azure.security.waf` | Not cataloged | `Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies`<br>`Microsoft.Network/FrontDoorWebApplicationFirewallPolicies`<br>`Microsoft.Cdn/cdnWebApplicationFirewallPolicies` |
 | Azure / Storage | [Backup Vault](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.storage.backup-vault` | Not cataloged | `Microsoft.DataProtection/resourceGuards`<br>`Microsoft.DataProtection/backupVaults`<br>`Microsoft.DataProtection/backupVaults/backupPolicies` |
-| Azure / Storage | [File share](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.storage.file-share` | Not cataloged | `Microsoft.Storage/storageAccounts/fileServices/shares` |
+| Azure / Storage | [File share](https://learn.microsoft.com/en-us/azure/storage/files/create-file-share) | `azure.storage.file-share` | Not cataloged | `Microsoft.Storage/storageAccounts/fileServices/shares`<br>`Microsoft.FileShares/fileShares` |
 | Azure / Storage | [Storage account](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) | `azure.storage.storage-account` | `^https?:\/\/[a-z0-9]{3,24}\.blob\.core\.windows\.net(?::\d+)?(?:\/.*)?$` | `Microsoft.Storage/storageAccounts` |
 | Azure / Storage | [Storage Sync Service](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.storage.storage-sync` | Not cataloged | `Microsoft.StorageSync/storageSyncServices` |
 | Azure / Virtual desktop infrastructure | [Virtual desktop application group](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) | `azure.vdi.application-group` | Not cataloged | `Microsoft.DesktopVirtualization/applicationGroups` |
@@ -269,9 +349,14 @@ Official SVGs are copied unmodified from Microsoft architecture icon packs. See 
 
 | Category | Node type | Stable ID | Endpoint pattern | Resource providers |
 |---|---|---|---|---|
-| Power Platform / Power Platform | [AI Builder](https://learn.microsoft.com/en-us/ai-builder/overview) | `AIBuilder` | Not cataloged | — |
-| Power Platform / Power Platform | [Microsoft Agent 365](https://learn.microsoft.com/en-us/microsoft-agent-365/) | `Agent365` | Not cataloged | — |
-| Power Platform / Power Platform | [On-premises data gateway](https://learn.microsoft.com/en-us/data-integration/gateway/service-gateway-onprem) | `OnPremisesGateway` | `^https?:\/\/(.*\.servicebus\.windows\.net\|gatewayadminportal\.azure\.com\|.*\.frontend\.clouddatahub\.net)(?::\d+)?(?:\/.*)?$` | — |
-| Power Platform / Power Platform | [Power Apps](https://learn.microsoft.com/en-us/power-apps/) | `PowerApps` | `^https?:\/\/(.*\.powerapps\.com\|.*\.api\.powerplatform\.com\|.*\.powerplatform\.com\|.*\.crm[0-9]*\.dynamics\.com)(?::\d+)?(?:\/.*)?$` | — |
-| Power Platform / Power Platform | [Power Automate](https://learn.microsoft.com/en-us/power-automate/) | `PowerAutomate` | `^https?:\/\/(.*\.flow\.microsoft\.com\|.*\.powerautomate\.com\|.*\.logic\.azure\.com\|.*\.azure-apim\.net\|.*\.azure-apihub\.net)(?::\d+)?(?:\/.*)?$` | — |
-| Power Platform / Power Platform | [Power Pages](https://learn.microsoft.com/en-us/power-pages/) | `PowerPages` | `^https?:\/\/(.*\.powerappsportals\.com\|.*\.powerpages\.microsoft\.com)(?::\d+)?(?:\/.*)?$` | — |
+| Power Platform / AI capability | [AI Builder](https://learn.microsoft.com/en-us/ai-builder/overview) | `AIBuilder` | Not cataloged | — |
+| Microsoft 365 / Agent governance | [Microsoft Agent 365](https://learn.microsoft.com/en-us/microsoft-agent-365/) | `Agent365` | Not cataloged | — |
+| Integration / Data gateway | [On-premises data gateway](https://learn.microsoft.com/en-us/data-integration/gateway/service-gateway-onprem) | `OnPremisesGateway` | `^https?:\/\/(.*\.servicebus\.windows\.net\|gatewayadminportal\.azure\.com\|.*\.frontend\.clouddatahub\.net)(?::\d+)?(?:\/.*)?$` | — |
+| Power Platform / Application platform | [Power Apps](https://learn.microsoft.com/en-us/power-apps/) | `PowerApps` | `^https?:\/\/(.*\.powerapps\.com\|.*\.api\.powerplatform\.com\|.*\.powerplatform\.com\|.*\.crm[0-9]*\.dynamics\.com)(?::\d+)?(?:\/.*)?$` | — |
+| Power Platform / Automation | [Power Automate](https://learn.microsoft.com/en-us/power-automate/) | `PowerAutomate` | `^https?:\/\/(.*\.flow\.microsoft\.com\|.*\.powerautomate\.com\|.*\.logic\.azure\.com\|.*\.azure-apim\.net\|.*\.azure-apihub\.net)(?::\d+)?(?:\/.*)?$` | — |
+| Power Platform / Websites | [Power Pages](https://learn.microsoft.com/en-us/power-pages/) | `PowerPages` | `^https?:\/\/(.*\.powerappsportals\.com\|.*\.powerpages\.microsoft\.com)(?::\d+)?(?:\/.*)?$` | — |
+| Power Platform / Data platform | [Microsoft Dataverse](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-intro) | `Dataverse` | Not cataloged | — |
+| Power Platform / Dataverse component | [Dataverse Table](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-intro) | `Dataverse Table` | Parent Dataverse APIs; no separate host classifier | — |
+| Power Platform / Dataverse component | [Dataverse Plugin](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/plug-ins) | `Dataverse Plugin` | Event handler; no standalone host classifier | — |
+| Power Platform / Agents and workflows | [Microsoft Copilot Studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio) | `CopilotStudio` | Not cataloged | — |
+| Power Platform / Integration | [Power Platform connectors](https://learn.microsoft.com/en-us/power-platform/) | `PowerPlatformConnectors` | Select the connector/backend; no family-wide classifier | — |

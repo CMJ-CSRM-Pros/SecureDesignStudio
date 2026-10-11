@@ -11,11 +11,13 @@ export function NewScenarioDialog({
   required = false,
   onCancel,
   onSubmit,
+  onDesign,
 }: {
   defaultName?: string;
   sourceOptions?: ScenarioSourceOption[];
   required?: boolean;
   onCancel: () => void;
+  onDesign?: () => void;
   onSubmit: (data: {
     name: string;
     description: string;
@@ -138,6 +140,7 @@ export function NewScenarioDialog({
           </label>
         </div>
         <footer className={`ps-modal-footer${required ? " ps-scenario-splash-footer" : ""}`}>
+          {onDesign && <button id="ps-scenario-design" type="button" onClick={onDesign}>Design with AI</button>}
           {!required && <button onClick={onCancel}>Cancel</button>}
           <button
             className="ps-modal-primary"

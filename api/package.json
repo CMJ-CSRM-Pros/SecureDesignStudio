@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Azure Static Web Apps managed Functions for SecureDesignStudio collaboration. Issues short-lived Web Pub/Sub client tokens scoped to a single room.",
-  "main": "dist/collab-token/index.js",
+  "main": "dist/api/collab-token/index.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",

@@ -14,5 +14,5 @@
       "name": "res"
     }
   ],
-  "scriptFile": "../dist/collab-token/index.js"
+  "scriptFile": "../dist/api/collab-token/index.js"
 }

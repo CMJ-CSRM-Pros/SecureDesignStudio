@@ -1,7 +1,7 @@
 {
   "name": "secure-design-studio",
   "private": true,
-  "version": "1.0.16",
+  "version": "1.0.27",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,7 @@
     "test:runtime": "node --test tests/authentication/*.test.mjs",
     "test:authentication:production": "node --test tests/browser/authentication-production.test.mjs",
     "test:assistant:production": "node --test tests/browser/assistant-production.test.mjs",
+    "test:ai:local": "node --test tests/browser/ai-provider-local.test.mjs",
     "test:authentication": "npm run test:runtime"
   },
   "dependencies": {

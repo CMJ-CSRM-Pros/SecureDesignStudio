@@ -1,11 +1,75 @@
-# Bring your own AI: create and secure an Azure OpenAI instance
+# Bring your own AI
 
-*Updated: 2026-09-22 - Added for the optional Design Assistant.*
+*Updated: 2026-10-10 - Added local subscription-backed provider selection.*
 
 The AI Design Assistant is **bring-your-own-AI**. No model service ships with
 SecureDesignStudio, none is shared with you, and the app has no default AI
-provider. To use `Start-SecureDesignStudio-WithAI.ps1` you supply an Azure
-OpenAI resource that you are authorized to create and use.
+service account. `Start-SecureDesignStudio-WithAI.ps1` offers Azure
+OpenAI/Foundry, Claude Code, and Codex. Azure requires your authorized deployment;
+Claude and Codex use their official CLI with your eligible consumer subscription.
+
+## Choose a provider at startup or in SDS
+
+```powershell
+.\Start-SecureDesignStudio-WithAI.ps1                 # interactive menu
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Claude
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex
+```
+
+Non-interactive launchers must supply `-Provider`. Every option needs Node and
+Azure Functions Core Tools for the local bridge. Only Azure needs Azure CLI,
+endpoint/deployment configuration, and Entra access. The Azure setup guide below
+is not a prerequisite for Claude or Codex.
+
+For Claude, install [Claude Code](https://code.claude.com/docs/en/setup), then run
+`claude auth login` and sign in with your Claude subscription. For Codex, install
+[Codex CLI](https://developers.openai.com/codex/cli), then run `codex login` and
+sign in with ChatGPT. CLI versions must support structured output and the safety
+options used by SDS. Unsupported versions fail rather than relaxing permissions.
+SDS invokes a native CLI executable, not an npm `.cmd` shim. On Windows, make the
+official native `claude.exe` or `codex.exe` available on PATH. Claude requires
+restricted mode (Claude Code 2.1.248 or later) and safe mode; an older installation
+can sign in successfully but still be unavailable for SDS requests.
+These subscription allowances are distinct from provider API billing.
+SDS will not silently use an API key, a custom gateway, or a different provider.
+Manage any paid extra-usage settings in your provider account.
+
+Both **Design Assistant** and **Threat Model Designer** share an **AI provider**
+selector. Unavailable providers display setup guidance; **Refresh providers**
+rechecks installation/sign-in without making an inference request. The selector
+is locked while either surface has a pending request. Switching resets the
+conversation; it does not alter the diagram, findings already accepted as
+issues/work items, or model history. Provider preferences are local to the
+browser, never saved into `.tma`, exported HTML, or collaboration.
+
+The launcher supplies the initial default. A saved UI selection is reused on
+reload when that launcher default is unchanged; a different launcher default
+resets the selection. For the npm workflow, set `$env:SDS_AI_PROVIDER = "claude"`
+or `"codex"` before `npm run dev:ai`; without it, the default remains Azure.
+
+The browser sends the same structured SDS request to the fixed localhost API.
+The API invokes a bounded, non-interactive CLI request and validates the result
+through the existing review/design contracts. The CLI does not edit your model
+or repository; model changes are applied through SDS's existing undoable actions.
+Credentials remain with the official CLI. Do not copy login tokens into scripts,
+the browser, diagrams, or local settings.
+
+**Local-only:** a hosted SDS deployment cannot invoke the user's local CLI.
+Hosted Azure processing stays unchanged. `Start-SecureDesignStudio.ps1` remains
+credential-free and starts neither the API nor an AI provider.
+
+**Data handling:** your prompts, included scenario context, catalog guidance and
+recent design conversation go to the selected provider. Use only information
+you are authorized to send; consumer data handling differs from an
+organization-managed Azure deployment. Read the provider's account controls and
+SDS's [request disclosure](advanced-configuration.md#what-is-sent-and-what-is-saved).
+No inference is made merely by launching or refreshing readiness.
+`-VerifyEndpoint` is an explicit Azure-only inference probe and can incur usage.
+Stopping or closing a browser request prevents its result from being applied.
+The local Functions host cannot signal that cancellation to an already-running
+CLI: it can continue consuming allowance until completion or the bridge's
+80-second inference timeout. Only one consumer CLI inference runs at a time.
 
 Nothing on this page is needed for ordinary modeling. Analysis, diagrams,
 scenarios, and saving all work with `Start-SecureDesignStudio.ps1`, which needs
@@ -77,7 +141,10 @@ is the only authentication this app uses. Without it the account has no
 
 The Design Assistant calls the chat completions API with `temperature`,
 `max_tokens`, and `response_format` at api-version `2024-10-21`. Deploy a
-GPT-4-class model such as `gpt-4.1` or `gpt-4o`.
+model such as `gpt-4.1`. **Design with AI** additionally requires strict
+JSON-schema structured output to restrict component choices to the catalog.
+Chat and AI Analysis use JSON-object mode. A deployment that only supports
+JSON-object mode can review existing models but cannot run the design builder.
 
 ```powershell
 az cognitiveservices account deployment create `

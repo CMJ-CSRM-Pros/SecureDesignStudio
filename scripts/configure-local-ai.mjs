@@ -5,74 +5,53 @@ import path from "node:path";
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const settingsPath = path.join(root, "api", "local.settings.json");
 
-function validSettings(settings) {
-  const values = settings?.Values;
-  return Boolean(
-    values &&
-      (values.AZURE_OPENAI_ENDPOINT || values.AZURE_AI_ENDPOINT) &&
-      values.MODEL_DEPLOYMENT_NAME,
-  );
+export function localAiSettings(env, existing = {}) {
+  const previous = existing.Values ?? {};
+  const provider = env.SDS_AI_PROVIDER?.trim().toLowerCase() || "azure";
+  if (!["azure", "claude", "codex"].includes(provider)) {
+    throw new Error("SDS_AI_PROVIDER must be azure, claude, or codex. No fallback provider was selected.");
+  }
+  const endpoint = env.AZURE_OPENAI_ENDPOINT?.trim() || env.AZURE_AI_ENDPOINT?.trim()
+    || previous.AZURE_OPENAI_ENDPOINT || previous.AZURE_AI_ENDPOINT;
+  const deployment = env.MODEL_DEPLOYMENT_NAME?.trim() || previous.MODEL_DEPLOYMENT_NAME;
+  if (provider === "azure" && (!endpoint || !deployment)) {
+    throw new Error("Set AZURE_OPENAI_ENDPOINT (or AZURE_AI_ENDPOINT) and MODEL_DEPLOYMENT_NAME for Azure, or choose SDS_AI_PROVIDER=claude or codex.");
+  }
+  const values = {
+    AzureWebJobsStorage: "",
+    FUNCTIONS_WORKER_RUNTIME: "node",
+    SDS_LOCAL_AI: "1",
+    SDS_AI_PROVIDER: provider,
+  };
+  if (endpoint) {
+    const url = new URL(endpoint);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+      throw new Error("The Azure AI endpoint must use HTTPS without credentials, query parameters, or a fragment.");
+    }
+    values.AZURE_OPENAI_ENDPOINT = url.toString().replace(/\/$/, "");
+  }
+  if (deployment) values.MODEL_DEPLOYMENT_NAME = deployment;
+  const version = env.AZURE_OPENAI_API_VERSION?.trim() || previous.AZURE_OPENAI_API_VERSION;
+  if (version) values.AZURE_OPENAI_API_VERSION = version;
+  return {
+    IsEncrypted: false,
+    Values: values,
+    Host: { CORS: "http://localhost:5173", CORSCredentials: false },
+  };
 }
 
-async function useExistingSettings() {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  let existing = {};
   try {
-    const settings = JSON.parse(await readFile(settingsPath, "utf8"));
-    if (validSettings(settings)) {
-      console.log("Using existing ignored api/local.settings.json.");
-      return true;
+    existing = JSON.parse(await readFile(settingsPath, "utf8"));
+    if (!existing || typeof existing !== "object" || Array.isArray(existing)
+        || (existing.Values && (typeof existing.Values !== "object" || Array.isArray(existing.Values)))) {
+      throw new Error("api/local.settings.json has an invalid settings object.");
     }
   } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw new Error("api/local.settings.json is not valid JSON.");
-    }
+    if (error?.code !== "ENOENT") throw new Error("api/local.settings.json is not valid settings JSON.");
   }
-  return false;
+  const settings = localAiSettings(process.env, existing);
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  console.log(`Configured the ignored local AI bridge with initial provider ${settings.Values.SDS_AI_PROVIDER}. No credentials were written.`);
 }
-
-const endpoint =
-  process.env.AZURE_OPENAI_ENDPOINT?.trim() ||
-  process.env.AZURE_AI_ENDPOINT?.trim();
-const deploymentName = process.env.MODEL_DEPLOYMENT_NAME?.trim();
-const apiVersion = process.env.AZURE_OPENAI_API_VERSION?.trim();
-
-if (!endpoint && !deploymentName && (await useExistingSettings())) {
-  process.exit(0);
-}
-
-if (!endpoint || !deploymentName) {
-  throw new Error(
-    "Set AZURE_OPENAI_ENDPOINT (or AZURE_AI_ENDPOINT) and MODEL_DEPLOYMENT_NAME before running npm run dev:ai.",
-  );
-}
-
-const endpointUrl = new URL(endpoint);
-if (endpointUrl.protocol !== "https:") {
-  throw new Error("The Azure AI endpoint must use HTTPS.");
-}
-
-const values = {
-  AzureWebJobsStorage: "",
-  FUNCTIONS_WORKER_RUNTIME: "node",
-  AZURE_OPENAI_ENDPOINT: endpointUrl.toString().replace(/\/$/, ""),
-  MODEL_DEPLOYMENT_NAME: deploymentName,
-};
-if (apiVersion) values.AZURE_OPENAI_API_VERSION = apiVersion;
-
-await writeFile(
-  settingsPath,
-  `${JSON.stringify(
-    {
-      IsEncrypted: false,
-      Values: values,
-      Host: {
-        CORS: "http://localhost:5173",
-        CORSCredentials: false,
-      },
-    },
-    null,
-    2,
-  )}\n`,
-  { encoding: "utf8", mode: 0o600 },
-);
-
-console.log("Created ignored api/local.settings.json from environment variables.");

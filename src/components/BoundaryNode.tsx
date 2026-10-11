@@ -61,6 +61,10 @@ export function BoundaryNode({ id, data, selected, dragging }: NodeProps) {
         onResizeStart={() => d.onResizeStart?.(id)}
         onResizeEnd={() => d.onResizeEnd?.(id)}
       />
+      {(["top", "right", "bottom", "left"] as const).map(side => (
+        <span key={side} className={`ps-boundary-drag ps-boundary-drag-${side}`}
+          aria-hidden="true" title="Drag the border to move this boundary and its nodes" />
+      ))}
       {editing ? (
         <input
           ref={inputRef}

@@ -162,16 +162,48 @@ when `node_modules` is absent. See the
 ## Start with AI (optional)
 
 The AI Design Assistant is **bring your own AI**: no model service ships with
-this app, and none is provided for you. Supply your own Azure OpenAI
-deployment, Azure CLI, and Azure Functions Core Tools. Your organization
-supplies access and covers Azure usage costs. Once those are ready:
+this app, and none is provided for you. Use an authorized Azure deployment,
+Claude Code with your Claude subscription, or Codex CLI with your ChatGPT
+subscription. All three use the same local bridge and need Azure Functions
+Core Tools; only Azure needs an Azure identity and deployment.
+
+```powershell
+.\Start-SecureDesignStudio-WithAI.ps1                 # interactive provider menu
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Claude
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex
+```
+
+Install and sign into the official CLI first: `claude auth login` for Claude,
+or `codex login` with ChatGPT for Codex. Subscription access is not general API
+access. API-key billing and another provider are never substituted. Startup
+checks sign-in without inference. Missing tools/sign-in produce setup guidance.
+The **AI provider** selector in both AI surfaces is shared; **Refresh providers**
+rechecks availability after setup. Switching starts a new conversation without
+changing the diagram. A remembered UI choice is reused with the same launcher
+default; choosing a different launcher default resets it.
+
+For Azure, configure your own deployment and sign in:
 
 ```powershell
 $env:AZURE_OPENAI_ENDPOINT = "https://<your-resource>.openai.azure.com"
 $env:MODEL_DEPLOYMENT_NAME = "<your-model-deployment-name>"
 az login
-.\Start-SecureDesignStudio-WithAI.ps1
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure
 ```
+
+To check your AI connection before starting, use this command instead:
+
+```powershell
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure -VerifyEndpoint
+```
+
+Look for **`Endpoint reachable.`** in the terminal: the configured deployment
+accepted a small test request using your Azure CLI sign-in. If the probe fails,
+the launcher warns about the connection problem but still starts the app;
+startup alone does not mean AI is connected. A passing probe confirms endpoint
+access, not full compatibility with every Design Assistant feature. See
+[Verify and troubleshoot](docs/bring-your-own-ai.md#7-verify-and-troubleshoot)
+if the probe or assistant fails.
 
 **[Bring your own AI](docs/bring-your-own-ai.md)** walks through creating that
 Azure OpenAI instance and securing it properly — disabling key authentication
@@ -183,7 +215,7 @@ AI requests send active-scenario context to the configured service; review the
 | Script | What you need |
 |---|---|
 | `.\Start-SecureDesignStudio.ps1` | Git and Node.js. No cloud account. |
-| `.\Start-SecureDesignStudio-WithAI.ps1` | The above, plus Azure Functions Core Tools, the Azure CLI, and your own Azure OpenAI deployment. |
+| `.\Start-SecureDesignStudio-WithAI.ps1` | The above plus Azure Functions Core Tools and your selected provider's deployment or installed, subscription-authenticated CLI. |
 
 ## References
 
@@ -214,6 +246,11 @@ retain their separate terms; the project license grants no trademark rights.
 
 
 ## Recent changes
+
+- Version 1.0.27 adds shared Azure/Claude/Codex selection through the local AI launcher.
+- AI design authoring, refinement, deletion/rerouting and flow ordering apply as complete undoable edits.
+- Editable node-type AI guidance and restored Power Platform catalog types support both AI surfaces.
+- Boundary dragging is perimeter-only, and custom metadata follows issues in Properties.
 
 - Version 1.0.15 refreshes five fictional reference models and all 11 scenarios
   with concrete services, operation-scoped authorization and classified data.

@@ -37,8 +37,8 @@ export function SequenceDiagramView() {
     edgeNumberFor,
   } = useStore();
 
-  // Order the visible edges by scenario sequence number (falling back to
-  // visibleEdges order for any unnumbered edges).
+  // Scenario.edgeIds is the authored timeline; edgeNumbers supplies display
+  // labels, which can contain intentional gaps or custom values.
   const orderedEdges = useMemo<PsEdge[]>(() => {
     if (!activeScenario) return [];
     const visibleSet = new Set(visibleEdges.map((e) => e.id));
@@ -240,8 +240,8 @@ export function SequenceDiagramView() {
         <p>Select a scenario to see the sequence diagram.</p>
         {notes}
         <p className="ps-seq-empty-sub">
-          The sequence view orders edges by their per-scenario sequence
-          number, so a scenario is required.
+          The sequence view uses the saved per-scenario flow order, so a
+          scenario is required.
         </p>
       </div>
     );

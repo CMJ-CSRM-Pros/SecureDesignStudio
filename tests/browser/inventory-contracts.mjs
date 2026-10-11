@@ -33,7 +33,7 @@ export function registerInventoryContracts({ getHarness, exportModel, configured
         assert.equal((await exportModel(page)).doc.nodeTypes.find(type => type.id === "nt_browser").definition.serviceTreeId, "CATALOG-123");
       }
       const input = modelFixture();
-      input.doc.nodes[0].type = "Dataverse";
+      input.doc.nodes[0].type = "Unavailable historical inventory service";
       input.doc.nodes[0].serviceTreeId = "HISTORICAL-123";
       input.doc.issues = [{
         id: "i_inventory_old", kind: "Node_must_have_servicetree", targetKind: "node", targetId: "n_client",

@@ -26,6 +26,7 @@ import {
   isGuid,
 } from "./types";
 import { uid } from "./types";
+import { propagateScenarioEdgeData } from "./dataPropagation";
 import type { LibraryHelp, LibraryRule, MetadataField } from "./libraries/contracts";
 import { metadataValue } from "./libraries/document";
 import { safeNavigationHref } from "./urlSafety";
@@ -139,45 +140,7 @@ export class IssueManager {
   // Request data on edge X→Y propagates to Y; response data on edge X→Y
   // propagates back to X.
   private propagateEdgeDataToAllScenarios(doc: PsDocument): PsDocument {
-    const scenarios = doc.scenarios.map((s) => {
-      const scenarioEdgeIds = new Set(s.edgeIds);
-      const incomingByNode = new Map<string, Set<string>>();
-      for (const nodeId of s.nodeIds) incomingByNode.set(nodeId, new Set());
-      for (const edge of doc.edges) {
-        if (!scenarioEdgeIds.has(edge.id)) continue;
-        const reqBucket = incomingByNode.get(edge.target);
-        if (reqBucket) {
-          for (const did of s.edgeRequestData[edge.id] ?? []) {
-            reqBucket.add(did);
-          }
-        }
-        const respBucket = incomingByNode.get(edge.source);
-        if (respBucket) {
-          for (const did of s.edgeResponseData[edge.id] ?? []) {
-            respBucket.add(did);
-          }
-        }
-      }
-      const newNodeData = { ...s.nodeData };
-      let changed = false;
-      for (const [nodeId, incomingIds] of incomingByNode) {
-        if (incomingIds.size === 0) continue;
-        const existing = newNodeData[nodeId] ?? {};
-        const updated: Record<string, Retention> = { ...existing };
-        let nodeChanged = false;
-        for (const did of incomingIds) {
-          if (!(did in updated)) {
-            updated[did] = "";
-            nodeChanged = true;
-          }
-        }
-        if (nodeChanged) {
-          newNodeData[nodeId] = updated;
-          changed = true;
-        }
-      }
-      return changed ? { ...s, nodeData: newNodeData } : s;
-    });
+    const scenarios = doc.scenarios.map(scenario => propagateScenarioEdgeData(scenario, doc.edges));
     return { ...doc, scenarios };
   }
 

@@ -36,16 +36,17 @@ export function withLibraryDefinitions(
   classifications: readonly CatalogDefinitionSnapshot[] = classificationDefinitionsForLibrary(registry.classifications),
 ): PsDocument {
   const adoptedTypes = new Set(doc.nodes.filter(node => node.dfdRoleLegacy === false).map(node => node.type));
-  const hasCoreRoleDefault = registry.nodes.some(type =>
-    adoptedTypes.has(type.id) && isDfdRole(type.definition?.defaultDfdRole));
-  if (!registry.statuses.some(status => status.state === "loaded") && !hasCoreRoleDefault) return doc;
-  let next = doc;
   const usedTypes = new Set(doc.nodes.map(node => node.type));
+  const needsCoreDefinition = (type: NodeTypeRef) =>
+    (adoptedTypes.has(type.id) && isDfdRole(type.definition?.defaultDfdRole))
+    || (usedTypes.has(type.id) && !!type.definition?.aiDesignGuidance);
+  if (!registry.statuses.some(status => status.state === "loaded") && !registry.nodes.some(needsCoreDefinition)) return doc;
+  let next = doc;
   const nodes = new Map(doc.nodeTypes.map(type => [type.id, type]));
   let changed = false;
   for (const type of registry.nodes) {
     if ((registry.provenance[`nodes/${type.id.toLowerCase()}`] === "core"
-          && !(adoptedTypes.has(type.id) && isDfdRole(type.definition?.defaultDfdRole)))
+          && !needsCoreDefinition(type))
         || !usedTypes.has(type.id) || nodes.get(type.id)?.definition) continue;
     nodes.set(type.id, { ...type, definition: type.definition ? { ...type.definition, catalogSource: "Document" } : undefined });
     changed = true;

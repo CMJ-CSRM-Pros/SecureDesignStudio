@@ -265,6 +265,7 @@ export type DfdValue = string | InvalidDfdValue;
 
 export interface NodeTypeDef {
   id: NodeType;
+  aiDesignGuidance?: import("../shared/aiDesignGuidance").AiDesignGuidance;
   defaultDfdRole?: DfdValue;
   // User-facing label shown in dropdowns. May be the same as id for legacy
   // entries, but distinct from id so labels can be edited without breaking
@@ -335,6 +336,7 @@ export function emptyNodeTypeDefinition(): NodeTypeDefinition {
 
 interface MicrosoftCloudNodeTypeCatalogEntry {
   id: string;
+  aiDesignGuidance?: NodeTypeDef["aiDesignGuidance"];
   defaultDfdRole?: DfdRole;
   label: string;
   category: string;
@@ -360,6 +362,7 @@ const microsoftCloudNodeTypeDefs: NodeTypeDef[] = (
     serviceTreeId: "",
     endpointRegex: entry.endpointRegex ?? "^$",
     templateHints: entry.templateHints ?? [],
+    resourceProviders: entry.resourceProviders ?? [],
     allowedAuthMethods: [],
     allowedDataTypes: [],
     policyStatus: "Unspecified",

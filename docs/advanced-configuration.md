@@ -13,7 +13,7 @@ someone else's running preview.
 | Mode | Local processes and network behavior |
 |---|---|
 | `.\Start-SecureDesignStudio.ps1` (`npm run dev`) | Vite only, strict `http://localhost:5173/`. No Azure credentials, API, room persistence, or model-service requests. Room/key fragments are ignored and left untouched. |
-| `.\Start-SecureDesignStudio-WithAI.ps1` (`npm run dev:ai`) | Explicit opt-in: Vite on 5173, API build watcher, and local Azure Functions on 7071. The Function calls the Azure model service you configure. Collaboration stays disabled. |
+| `.\Start-SecureDesignStudio-WithAI.ps1` (`npm run dev:ai`) | Explicit opt-in: Vite on 5173, API build watcher, and local Azure Functions on 7071. The bridge calls your Azure deployment or the locally installed Claude/Codex CLI selected in SDS. Collaboration stays disabled. |
 | Deployed `dist` | Local modeling by default. Collaboration and Assistant require explicit build configuration; using them is a network operation. |
 | Standalone `dist-single\index.html` | Browser-openable local editor by default. Explicitly configured services may use the network; collaboration also requires a hosted share destination. |
 
@@ -117,6 +117,117 @@ service does not affect local editing, autosave, native imports or exports.
 
 ## Optional local Design Assistant
 
+**File > Design with AI** (directly below **Open**) uses this same endpoint and server-side
+provider dispatch as review/chat (Entra/Azure in hosted mode; Azure or subscription CLI in explicit local AI mode). It introduces
+no provider, default cloud destination or credential setting. Default
+credential-free localhost disables both experiences; the explicitly selected
+`dev:ai` workflow continues to use only the fixed localhost API.
+
+Browser and API authoring share `shared/designContract.ts`. Keep shared runtime
+code outside `api/`: Vite serves source modules by path, while credential-free
+browser checks deliberately block every `/api/` request, including source files.
+The API compiler uses the repository root for its source layout and emits
+`api/dist/api/{collab-token,design-assistant}/index.js` plus
+`api/dist/shared/designContract.js`. Both `function.json` entrypoints and the API
+package's `main` point into that compiled tree. Build with
+`npm --prefix api run build` from the full checkout before packaging `api/`;
+the compiled shared module stays inside that deployable folder, and HTTP routes
+are unchanged. The same layout applies to the API watch command.
+
+`shared/aiDesignGuidance.ts` supplies the guidance validator, fixed trusted
+reference-data policy and request-size budgets to both browser and API.
+It also compiles under `api/dist/shared/`. Node-type guidance stays in the
+serialized user/model-context message, never interpolated into the system
+prompt. Both AI experiences resolve diagram-local guidance before installed
+definitions; review includes only applicable interior-node bindings. Guidance
+sources are not fetched. See [AI design guidance](custom-libraries.md#ai-design-guidance)
+for authoring, portability, provenance and explicit overflow behavior.
+
+The API isolates authoring (`mode: "design"`) from the evidence-based review
+policy. Authoring uses strict JSON-schema output with the request's actual
+component, authentication and classification IDs as enumerated choices, followed
+by server and browser validation. Use a deployment supporting structured output,
+such as GPT-4.1. Chat and AI Analysis retain their existing JSON-object mode.
+Unsupported structured requests report an explicit error; they do not silently
+fall back to unconstrained generation.
+
+The empty component type (`type: ""`) is the editor's existing unspecified
+component, not a new catalog entry. AI uses it for people, browsers and generic
+components without a suitable service type, with `dfdRole` set independently.
+`ExternalInteractor` is a role, not a component ID. Unknown nonempty component
+IDs are still rejected atomically rather than coerced to unrelated services.
+
+Authoring accepts at most 12 history messages, a 4,000-character prompt
+and a 500,000-byte request. Complete JSON responses have bounded lists (24 nodes,
+48 flows, 12 boundaries and 24 data items); unknown fields, invalid references,
+unavailable catalog values and non-stop/truncated completions never partially
+apply. The service request timeout is 90 seconds and the dialog cancels after
+100 seconds. Server diagnostics log status/error class, not downstream model
+content. These limits are implementation safeguards, not a guarantee that a
+live model will produce an acceptable design.
+
+The structured design carries explicit `remove.nodeIds`, `remove.edgeIds` and
+`remove.boundaryIds` arrays, limited to 100 supplied IDs each. Only targets in
+the selected scenario can be named, but deletion and incident-flow cleanup are
+global. Unknown targets, duplicate/delete-and-edit conflicts and references to
+deleted nodes fail before any store/history mutation. Incident connections
+explicitly rerouted in the same batch survive if both final endpoints exist.
+Rerouted shared connections gain their new endpoints in every scenario that
+uses them; surviving order/numbers are retained.
+
+Edges carry `dataMode: "merge" | "replace"` for selected-scenario request/response
+attachments. Boundaries carry `membershipMode: "merge" | "replace"` for global
+node membership. Replace uses the exact supplied arrays, including empty
+arrays. Older additive responses that omit these modes remain additive; omitted
+elements or `remove` never imply deletion. No persisted document format change
+is required. New readers still revalidate all output against the live document
+and catalog before applying a single atomic, undoable transition.
+
+`design.edgeOrder` is either `null` (preserve order) or a complete ordered list
+of the selected scenario's surviving flow IDs, including temporary IDs for
+connections created in that response. Explicit ordering is validated as an exact
+permutation after deletions/reroutes, then writes both `Scenario.edgeIds` and
+consecutive `edgeNumbers` from 1 in one history step. Missing, duplicate, unknown,
+deleted and out-of-scenario IDs reject the entire response. Legacy responses
+that omit ordering retain their existing behavior and custom numbering.
+The AI context includes the actual timeline (`flowOrder`, positions and display
+numbers); connectivity is not treated as proof of sequence order. Sequence
+participants already follow first appearance in `edgeIds`; no canvas geometry
+or persisted format change is needed.
+
+AI-edited flows also populate missing receiving-node data entries in the selected
+scenario using the same pure directional propagation helper as Analyze and the
+explicit store propagation action. Only flows present in the AI edit are
+propagated automatically; unrelated scenarios/flows are not rewritten.
+Requests populate the target, responses the source, with retention `""`
+(unspecified), never an inferred storage promise. Existing node retention,
+including values unrelated to current flow attachments, remains intact.
+Both flow attachments and their node entries are persisted inside the one
+AI-response history transition; no Analyze pass or extra Undo entry is required.
+
+New scenarios require a nonblank name (at most 160 characters) and description
+(at most 4,000 characters). For existing scenarios, responses send a
+`scenario: {}` patch or only the fields explicitly being edited. Omitted fields
+retain their saved values locally, even when authored descriptions or appended
+assumptions exceed the response limit. Supplied fields still undergo strict
+type and length validation; an explicitly empty description clears it.
+Name-only, description-only and explicit description-clearing updates to an
+existing scenario do not require any element upserts. Each actual change is
+one Undo step; repeating the same patch without new assumptions is a no-op.
+Assumptions are appended without repeating already-saved text or duplicates
+within the response. Saved content is never truncated to fit a refinement.
+
+Selected-scenario authoring context includes names/descriptions, roles, flows,
+membership, numbering, directional data/retention and available choices. It does
+not project production identity objects, node inventory metadata, data samples,
+comments or review records. Authored text is still untrusted and may contain
+sensitive information; review what you send. The designer's chat and draft
+remain in memory across closing/reopening for the current scenario. A scenario
+switch, New/Open/imported model replacement, or page reload clears them. Dialog
+position is also session-local; neither it nor chat becomes a document field
+or collaboration state. Closing aborts any pending request. See the
+[authoring workflow](user-guide.md#build-a-proposed-threat-model-with-ai).
+
 ### Prerequisites
 
 The assistant is **bring your own AI**: no model service ships with the app and
@@ -127,7 +238,10 @@ access, and assigning the data-plane role — follow
 workflow consumes it.
 
 In addition to the [source setup](user-guide.md#2-how-to-install-and-run),
-this workflow needs Azure Functions Core Tools (`func`), an Azure CLI identity
+this workflow needs Azure Functions Core Tools (`func`). Choose Claude Code or
+Codex with a consumer subscription sign-in as described in
+[bring your own AI](bring-your-own-ai.md#choose-a-provider-at-startup-or-in-sds).
+The following Azure-specific setup applies only to `-Provider Azure`: an Azure CLI identity
 authorized to invoke an existing Azure AI deployment, its HTTPS endpoint,
 and its model deployment name. If you are using someone else's deployment,
 obtain those from its owner. Basic use of SecureDesignStudio does not require
@@ -210,11 +324,15 @@ the repository root in the configured PowerShell session:
 
 ```powershell
 az login
-.\Start-SecureDesignStudio-WithAI.ps1
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure
 ```
 
-The launcher requires Node, npm, `func`, a configured endpoint and deployment
-name, and a signed-in Azure identity; it installs dependencies if their
+The launcher requires Node, npm, `func`, and the selected provider's prerequisites.
+Azure requires an endpoint, deployment name and Entra identity; Claude/Codex
+require their official CLI and subscription sign-in, not Azure credentials.
+Without `-Provider` the interactive launcher presents a choice; non-interactive
+callers must supply it. The shared in-app selector can switch to another ready
+provider afterward. It installs dependencies if their
 directories are missing, then runs `npm run dev:ai`. It finds Core Tools
 installed outside the current PATH, and when a prerequisite is missing it
 reports what is missing and the command that fixes it instead of failing with
@@ -226,8 +344,8 @@ Two switches adjust the preflight:
 
 | Switch | Effect |
 |---|---|
-| `-VerifyEndpoint` | Also probes the configured deployment before starting, which catches a missing data-plane role, a rotated client IP, or a wrong deployment name. Failures warn but do not block. |
-| `-SkipAuthCheck` | Starts without checking for an identity. Vite and the API still run; Design Assistant requests fail. |
+| `-VerifyEndpoint` | Azure only: an explicit, potentially billable inference probe. Failures warn but do not block. |
+| `-SkipAuthCheck` | Azure only: starts without checking for an identity. Requests still require valid credentials. |
 
 The launcher also warns when `AZURE_CLIENT_ID`/`AZURE_TENANT_ID` service
 principal variables are present, because `DefaultAzureCredential` prefers them
@@ -235,8 +353,10 @@ over the Azure CLI sign-in and would present a different principal than the
 one you signed in as.
 
 The configuration helper writes ignored `api\local.settings.json` from the
-environment. With no endpoint/deployment environment values, it reuses a
-valid existing file. Missing or blank endpoint/deployment values are errors.
+environment, including `SDS_LOCAL_AI=1` and `SDS_AI_PROVIDER`. Existing Azure
+deployment values are retained when selecting another provider. Missing Azure
+endpoint/deployment values are errors only when Azure is the initial provider.
+API keys and CLI login credentials are not written to this file.
 `npm run setup:ai` creates/refreshes configuration without starting servers.
 Never commit the local settings file.
 

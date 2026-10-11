@@ -24,7 +24,7 @@ test("inventory: core offers optional ordinary-text Inventory ID and no ServiceT
   assert.equal(field.label, "Inventory ID");
   assert.equal(field.storage, "serviceTreeId");
   assert.equal(field.validation, undefined);
-  assert.equal(CORE_LIBRARIES.nodes.length, 164);
+  assert.equal(CORE_LIBRARIES.nodes.length, 169);
   assert.ok(CORE_LIBRARIES.nodes.every(type => type.definition.policyStatus === "Unspecified"));
   const blank = documentFixture(); blank.nodes.forEach(node => node.serviceTreeId = "");
   assert.equal(new IssueManager().analyze(blank).issues.some(issue => issue.kind === "Node_must_have_servicetree"), false);

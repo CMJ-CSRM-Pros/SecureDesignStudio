@@ -1,0 +1,160 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright-core";
+import { requireFreePort, until, hasLocalReadyMessage } from "./harness.mjs";
+import { modelFixture, autosaveKey } from "./fixture.mjs";
+
+const root = fileURLToPath(new URL("../../", import.meta.url));
+const origin = "http://localhost:5173";
+const endpoint = "http://localhost:7071/api/design-assistant";
+const capabilities = {
+  defaultProvider: "claude",
+  providers: [
+    { id: "azure", label: "Azure OpenAI / Foundry", available: false, message: "Configure an Azure deployment." },
+    { id: "claude", label: "Claude Code", available: true, message: "Synthetic Claude subscription ready." },
+    { id: "codex", label: "Codex", available: true, message: "Synthetic ChatGPT subscription ready." },
+  ],
+};
+
+test("AI providers: shared selection, readiness, request routing, persistence and late-response guards", { timeout: 120_000 }, async () => {
+  await requireFreePort();
+  await requireFreePort(5173, "127.0.0.1");
+  await requireFreePort(5173, "::1");
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (/^(VITE_|SDS_LIBRARY_PATHS|SDS_SERVICE_CONFIG)/.test(name)) delete env[name];
+  const server = spawn(process.execPath, [resolve(root, "node_modules", "vite", "bin", "vite.js"), "--mode", "ai"],
+    { cwd: root, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  server.stdout.on("data", chunk => { output += chunk; });
+  server.stderr.on("data", chunk => { output += chunk; });
+  let browser, context;
+  const faults = [], posts = [];
+  let readinessError = false;
+  let hold;
+  try {
+    await until(async () => {
+      if (server.exitCode !== null) throw new Error(`Owned Vite exited: ${output}`);
+      if (!hasLocalReadyMessage(output)) return false;
+      try { return (await fetch(origin)).ok; } catch { return false; }
+    }, "owned AI-mode Vite ready", 30_000);
+    browser = await chromium.launch({ channel: process.env.SDS_TEST_BROWSER_CHANNEL ?? "msedge", headless: true });
+    context = await browser.newContext({ viewport: { width: 1366, height: 900 }, serviceWorkers: "block" });
+    context.setDefaultTimeout(10_000);
+    await context.route("**/*", async route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.href === endpoint) {
+        if (request.method() === "GET") return route.fulfill({
+          status: readinessError ? 503 : 200, contentType: "application/json",
+          body: JSON.stringify(readinessError ? { error: "Synthetic readiness outage" } : capabilities),
+        });
+        const payload = request.postDataJSON();
+        posts.push(payload);
+        if (hold) await hold;
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify(payload.mode === "design"
+            ? { answer: "Synthetic clarification.", assumptions: [], design: null }
+            : { answer: "Synthetic review.", references: [], findings: [] }) });
+      }
+      if (url.origin === origin && !url.pathname.startsWith("/api/")) return route.continue();
+      if (["data:", "blob:"].includes(url.protocol)) return route.continue();
+      faults.push(`Unexpected network: ${url.origin}${url.pathname}`);
+      return route.abort("blockedbyclient");
+    });
+    await context.routeWebSocket(/.*/, socket => {
+      if (!socket.url().startsWith("ws://localhost:5173/")) { faults.push("Unexpected WebSocket"); socket.close(); }
+      else socket.connectToServer();
+    });
+    const page = await context.newPage();
+    page.on("pageerror", error => faults.push(error.message));
+    await page.goto(origin);
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "synthetic-provider.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(modelFixture())),
+    });
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Design Assistant", exact: true }).click();
+    const analysis = page.locator(".ps-assistant");
+    const selection = analysis.getByLabel("AI provider", { exact: true });
+    await until(async () => await selection.inputValue() === "claude", "launcher default applied");
+    assert.equal(await selection.locator('option[value="azure"]').isDisabled(), true);
+    assert.match(await analysis.innerText(), /Configure an Azure deployment/);
+    await selection.selectOption("codex");
+    await analysis.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => posts.length === 1, "review sent");
+    assert.equal(posts[0].provider, "codex");
+    assert.equal(posts[0].mode, "analyze");
+    await analysis.getByRole("tab", { name: "Chat", exact: true }).click();
+    await analysis.getByLabel("Ask about this model", { exact: true }).fill("Synthetic chat request");
+    await analysis.getByRole("button", { name: "Send question", exact: true }).click();
+    await analysis.getByText("Synthetic review.", { exact: true }).waitFor();
+    assert.equal(posts[1].provider, "codex");
+    assert.equal(posts[1].mode, "chat");
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Design with AI/ }).click();
+    const designer = page.getByRole("dialog", { name: "Threat Model Designer", exact: true });
+    const designerSelection = designer.getByLabel("AI provider", { exact: true });
+    assert.equal(await designerSelection.inputValue(), "codex");
+    await designerSelection.selectOption("claude");
+    assert.equal(await selection.inputValue(), "claude");
+    await designer.getByLabel("What would you like to design or change?").fill("Synthetic clarification only");
+    let release;
+    hold = new Promise(resolve => { release = resolve; });
+    await designer.getByRole("button", { name: "Build design", exact: true }).click();
+    await until(() => posts.length === 3, "design sent");
+    assert.equal(posts[2].provider, "claude");
+    assert.equal(posts[2].mode, "design");
+    assert.equal(await designerSelection.isDisabled(), true);
+    assert.equal(await selection.isDisabled(), true);
+    release();
+    hold = null;
+    await designer.getByText("Synthetic clarification.", { exact: true }).waitFor();
+    await designerSelection.selectOption("codex");
+    assert.equal(await designer.getByText("Synthetic clarification.", { exact: true }).count(), 0);
+    await designer.getByLabel("What would you like to design or change?").fill("Synthetic stopped request");
+    hold = new Promise(resolve => { release = resolve; });
+    await designer.getByRole("button", { name: "Build design", exact: true }).click();
+    await until(() => posts.length === 4, "cancelled design sent");
+    await designer.getByRole("button", { name: "Stop generating", exact: true }).click();
+    await until(async () => await designerSelection.isEnabled(), "stop releases provider lock");
+    await designerSelection.selectOption("claude");
+    release();
+    hold = null;
+    assert.equal(await designer.getByText("Synthetic clarification.", { exact: true }).count(), 0);
+    await designerSelection.selectOption("codex");
+    await designer.getByRole("button", { name: "Close Threat Model Designer", exact: true }).click();
+    await page.reload();
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Design Assistant", exact: true }).click();
+    await until(async () => await selection.inputValue() === "codex", "local preference restored");
+    await analysis.getByRole("tab", { name: "AI Analysis", exact: true }).click();
+    const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), autosaveKey);
+    assert.equal(JSON.stringify(saved.doc).includes('"provider"'), false, "Provider choice stays outside the model");
+    readinessError = true;
+    await analysis.getByRole("button", { name: "Refresh providers", exact: true }).click();
+    await analysis.getByRole("alert").filter({ hasText: "readiness check failed" }).waitFor();
+    assert.equal(await analysis.getByRole("button", { name: "Analyze model", exact: true }).isDisabled(), true);
+    readinessError = false;
+    await analysis.getByRole("button", { name: "Refresh providers", exact: true }).click();
+    await until(async () => await selection.isEnabled(), "readiness refresh recovered");
+    await page.evaluate(() => localStorage.setItem("secure-design-studio:ai-provider:v1", '{"provider":"invalid"}'));
+    await page.reload();
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Design Assistant", exact: true }).click();
+    await until(async () => await selection.inputValue() === "claude", "corrupt preference diagnosed");
+    await analysis.getByText(/saved AI preference could not be read/).waitFor();
+    await page.setViewportSize({ width: 320, height: 640 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+    assert.deepEqual(faults, []);
+  } finally {
+    if (context) await context.close();
+    if (browser) await browser.close();
+    if (server.exitCode === null) {
+      if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(server.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      else server.kill("SIGTERM");
+      if (server.exitCode === null) await Promise.race([once(server, "exit"), new Promise((_, reject) => setTimeout(() => reject(new Error("Owned Vite failed to stop")), 5000))]);
+    }
+  }
+});

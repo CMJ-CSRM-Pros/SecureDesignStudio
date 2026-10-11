@@ -5,9 +5,10 @@ import ts from "typescript";
 
 // Compile the real browser modules in memory; no generated build or browser.
 const sourceRoot = new URL("../../src/", import.meta.url).href;
+const sharedRoot = new URL("../../shared/", import.meta.url).href;
 export const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith(".") && context.parentURL?.startsWith(sourceRoot)) {
+    if (specifier.startsWith(".") && (context.parentURL?.startsWith(sourceRoot) || context.parentURL?.startsWith(sharedRoot))) {
       const url = new URL(specifier, context.parentURL);
       for (const suffix of [".ts", ".tsx"]) {
         if (existsSync(fileURLToPath(url) + suffix)) {
@@ -18,7 +19,7 @@ export const hooks = registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
-    if (url.startsWith(sourceRoot)) {
+    if (url.startsWith(sourceRoot) || url.startsWith(sharedRoot)) {
       if (url.endsWith(".json")) {
         return { format: "module", source: `export default ${readFileSync(new URL(url), "utf8")}`, shortCircuit: true };
       }

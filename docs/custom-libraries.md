@@ -7,22 +7,35 @@ one documented interface. **Model > Custom Libraries** lists loaded, rejected
 and unavailable packages, identities, versions, contributions and provenance.
 About and the status bar summarize the selected set.
 
-Core provides 164 public-cloud node types, configurable authentication and
-classification libraries, and reusable security/privacy boundary definitions.
-Inventory ID is an optional text field; a selected library can provide a
-custom label, GUID validation and a required-value rule. Optional packages can
-add organization-specific catalog entries, metadata and guidance without
-replacing the shared model contract.
-Core includes Geo boundary, IFrame, CSP, Azure, User browser and User Tenant
-Trust, plus VNet, Subnet, Container, Process and Machine security boundaries.
-Existing IDs/order and the IFrame creation default are unchanged. The same
-twelve Purview-aligned/supplemental classification definitions are available
-with or without optional packages. Guidance belongs in optional help rather
-than a duplicate classification dictionary.
-Service configuration is selected separately using `SDS_SERVICE_CONFIG`
+Core defaults exclude four owner-specific authentication methods, two tenant
+choices and the private policy/identity definitions. The **169 neutral core
+entries** include Microsoft Dataverse (`Dataverse`), its table and plug-in
+components, Microsoft Copilot Studio (`CopilotStudio`) and Power Platform
+connectors (`PowerPlatformConnectors`). These public choices do not require
+an optional package. Inventory ID is an optional text field in core; a selected
+library can supply its ServiceTree label, GUID validation and required-value
+rule. The two compliance perimeters, four organization-specific deployment
+boundaries and ESTS evidence label also require an available library for new
+selections. Core retains Geo boundary, IFrame, CSP, Azure, User browser and
+User Tenant Trust, and adds VNet, Subnet, Container, Process and Machine security
+boundaries. Existing IDs/order and the IFrame creation default are unchanged.
+Both core-only and companion-library configurations inherit
+the same twelve Purview-aligned/supplemental classification definitions.
+Private guidance stays in optional help rather than duplicating the common
+dictionary. Service configuration is selected separately using `SDS_SERVICE_CONFIG`
 or explicit endpoint environment settings; no service destinations are inferred.
 This is not public-release certification.
 The default selection is empty even if an `internal` directory exists.
+
+The optional Custom package contains 13 retained definitions. Its three
+same-ID Dataverse definitions explicitly override the neutral core bases when
+selected, producing 179 combined IDs, not duplicate products. Its spaced
+`Copilot Studio` and `Connectors` IDs retain their narrower private API meaning;
+they are **not aliases** for `CopilotStudio` and `PowerPlatformConnectors`.
+Existing saved definitions remain authoritative, including an absent guidance
+field. A pre-overlay package lacking the three explicit override declarations
+is rejected atomically rather than silently winning collisions; use a
+compatible updated package. No package is enabled by this catalog update.
 
 ## Select local packages
 
@@ -42,14 +55,12 @@ Remove-Item Env:SDS_LIBRARY_PATHS -ErrorAction SilentlyContinue
 npm run build
 ```
 
-The example is synthetic and selected only explicitly. Keep private packages
-under the ignored `internal\` overlay in an authorized workspace, not in public
-source or artifacts. Gitignore is not sanitization: never ship an artifact
-that was built with confidential packages to an unauthorized audience.
+The example is synthetic and selected only explicitly. Keep confidential packages
+outside public source and artifacts. Never distribute artifacts built with
+confidential packages to an unauthorized audience.
 
-Selection changes require a restart/rebuild. A browser cannot scan a sibling
-folder; a built standalone file cannot discover a later-added `internal`
-directory. No arbitrary JavaScript, TypeScript modules, `eval`, URL-installed
+Selection changes require a restart/rebuild. Built browser applications cannot
+discover additional directories. No arbitrary JavaScript, TypeScript modules, `eval`, URL-installed
 packages, custom React components or external assets are supported in v1.
 
 ## Delivery and failure behavior
@@ -86,7 +97,7 @@ The root fields are `format: "secure-design-studio-library"`, `apiVersion: 1`,
 |---|---|
 | `catalogs.authentication` | Existing strict authentication definitions. Protected built-in behavior/aliases remain protected. New methods remain unverified; prose does not establish security semantics. |
 | `catalogs.classifications` | One complete validated Classification Library, with enabled default and existing presentation/guidance rules. Overrides `classifications/default` explicitly; never silently replaces a stored profile list. |
-| `catalogs.nodes` | Stable bounded node ID (including existing spaces/parentheses), label and explicit node definition: auth/data policy, optional current geo/retention/GDPR metadata, endpoint hints, description and existing bundled icon references. Optional `defaultDfdRole` is exactly `Process`, `DataStore`, or `ExternalInteractor`; an unknown package role rejects the package. Curated data policy requires one wildcard fallback. |
+| `catalogs.nodes` | Stable bounded node ID (including existing spaces/parentheses), label and explicit node definition: auth/data policy, optional current geo/retention/GDPR metadata, endpoint hints, description, optional `aiDesignGuidance` and existing bundled icon references. Optional `defaultDfdRole` is exactly `Process`, `DataStore`, or `ExternalInteractor`; an unknown package role rejects the package. Curated data policy requires one wildcard fallback. |
 | `catalogs.taxonomy` | Existing portable tenant, privacy/security boundary and deviation definitions. Classification entries use the dedicated Classification Library instead. |
 | `fields` | Stable ID, node/edge target, label/description and storage binding. The inventory (`serviceTreeId`) binding additionally supports `validation: "guid"`; other metadata uses declarative validation rules. Generic values use `metadata`; node fields may bind existing `serviceTreeId` or `endpointRegex`. Core `serviceTreeId` is labeled Inventory ID and permits ordinary text; bindings cannot be changed by an overlay. |
 | `rules` | Stable finding ID, target, `fieldId`, `check: "required"` or `"guid"`, title/description and optional guidance. GUID checks allow blank values; combine with a required check when blank must also be flagged. No arbitrary expressions or scripts. |
@@ -125,9 +136,7 @@ the example, queries telemetry, signs in or contacts imported endpoint URLs.
 Clipboard denial selects the text and explains how to copy it manually.
 
 The synthetic example demonstrates these slots without confidential content.
-Public setup and tests require no private package. Keep confidential packages
-and their guidance out of shared source and artifacts; an unconfigured build
-must not contain content from unselected packages.
+Public setup and tests must not depend on private companion packages.
 
 ## Review guidance
 
@@ -163,7 +172,9 @@ model. Saved definitions govern that model; merely opening or selecting it
 must not replace them with a same-ID installed definition. An ID-only reference
 without an available definition remains ID-only: normalization does not invent
 an empty saved override that would block resolution when its library returns.
-An explicitly saved Unspecified definition still wins.
+An explicitly saved Unspecified definition still wins. Saved definitions also
+win when `aiDesignGuidance` is absent: clearing guidance does not reactivate an
+installed same-ID field.
 For taxonomy, portable meaning is keyed by `(kind, id)` and carries `label`,
 optional `description`, and optional library ID/version, not arbitrary
 executable metadata. A saved snapshot wins even when its library is absent
@@ -178,6 +189,12 @@ catalog hydration; only an explicit **Use type default** action removes that
 legacy pin. `dfdRoleOverride` wins independently of the service type and is
 never erased by type changes. Unknown saved role tokens remain unresolved
 evidence, not authority to treat a node as external.
+
+Public node definitions materialize an absent `resourceProviders` list as
+`[]` before entering the registry or being captured into a document. Native
+Open uses the same representation, so saving and reopening a newly captured
+public definition does not add an empty array or change a full-model diff.
+Explicit provider values, policies and other optional metadata are retained.
 
 `Scenario.nodeScopeReasons[nodeId]` holds per-scenario scope text. An effective
 out-of-scope reason requires a nonblank string and a resolved Process/DataStore
@@ -239,6 +256,70 @@ The CLI applies the same availability check to new/changed selections while
 retaining old values through unrelated updates. Reports and visual exports
 resolve saved definitions first and capture referenced available definitions,
 not entire optional catalogs.
+
+## AI design guidance
+
+Node definitions may include this optional object (synthetic example):
+
+```json
+{
+  "aiDesignGuidance": {
+    "content": "If ingress is public, ask the owner about authentication and the intended trust boundary.\nVerify deployment controls separately.",
+    "sources": ["https://example.invalid/design-reference"],
+    "revision": 1,
+    "updatedOn": "2026-10-08"
+  }
+}
+```
+
+`content` is one nonblank multiline string, at most 8,000 JavaScript string
+characters; disallowed control characters are rejected. `sources` is optional:
+at most 16 absolute HTTP(S) URLs, each at most 2,048 characters, without
+credentials or whitespace. URLs are citations, not auto-fetched instructions.
+`revision` is a positive safe integer. `updatedOn` is a real calendar date in
+`YYYY-MM-DD` form, recording editing, not an independent review.
+Unknown fields, `null`, invalid dates/revisions/URLs and oversized content reject
+the new metadata before document or catalog mutation. Missing legacy metadata
+remains absent; ordinary descriptions are never migrated. Malformed
+autosave/embedded/history guidance pauses recovery without overwriting stored
+data. Current peers synchronize the guidance object atomically inside the
+existing node definition.
+
+The catalog editor and expandable node Properties editor save diagram-local
+type definitions. Guidance-only edits preserve all other definition fields,
+instance metadata, policies, geometry and scenarios. Cancel and unchanged Save
+do not create history. Clear retains the definition, so installed guidance
+cannot silently return. A saved definition is authoritative in both AI
+experiences even if an available library has a newer revision.
+
+Both consumers use the same effective-guidance resolver and send exact type
+IDs, content, revision, edit date, source URLs and saved/available/core origin.
+Design Assistant sends guidance only for included interiors in the selected
+scenario, with explicit node bindings; endpoint-only nodes supply crossing
+identity, never permission to review their interiors. Threat Model Designer
+also includes complete guidance for available proposed type choices, once per
+type; it does not copy every unused definition into the saved document.
+It marks existing nodes as interior/endpoint-only and omits endpoint interior
+descriptions. Neither path changes fixed checks or resolves findings.
+
+Serialized guidance has a 384,000-byte UTF-8 aggregate limit; the entire AI
+request, including context, question and conversation, has a 500,000-byte
+limit. Oversized requests fail visibly, never silently truncate/drop guidance
+or contact AI. A synthetic 177-type catalog with approximately 1,600-character
+guidance on every type is covered by tests and fits both contexts. The 8,000
+per-entry limit is not a promise that 177 maximum-length records fit one
+request. Shorten overly verbose guidance or reduce the selected library/model
+scope before retrying; no retrieval backend or multi-stage protocol is added.
+
+Trusted application/API instructions treat all guidance as untrusted reference
+data, never control evidence, risk acceptance, permission for actions, or
+dependency-creation commands. Accepted issue/work-item descriptions retain
+relevant request-time type/revision/source references marked **unverified
+reference context**, not model-invented citations or claims that the AI used
+every supplied source. No assessment/checklist model or analyzer policy is
+introduced. Native `.tma`, autosave, catalog JSON, standalone HTML and compatible
+current peers preserve the optional field; older writers and lossy external
+formats may not. Preserve a native backup before using those readers.
 
 ## Validation
 

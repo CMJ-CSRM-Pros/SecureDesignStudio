@@ -1,9 +1,12 @@
-import type { PsDocument, Scenario } from "./types";
+import type { NodeTypeRef, PsDocument, Scenario } from "./types";
 import { resolveFlowReviewScope, resolveNodeReviewScope } from "./dfdSemantics";
+import { buildAiGuidanceContext, effectiveGuidanceNodeTypes } from "./aiDesignGuidance";
 
 const SCOPE_INSTRUCTIONS = "Only review included node interiors and included flows. Endpoint-only nodes are black boxes: identity is context for crossing flows, not permission to review their interiors. Exclude only External Interactor <-> out-of-scope flows. Request and response share the same eligibility. Invalid references are structural problems, not completed review. Fixed checks and authored findings are independent and unchanged.";
 
-export function buildDfdReviewContext(doc: PsDocument, scenario: Scenario | null | undefined) {
+export function buildDfdReviewContext(doc: PsDocument, scenario: Scenario | null | undefined, available: readonly NodeTypeRef[] = doc.nodeTypes) {
+  const savedNodeTypes = doc.nodeTypes;
+  doc = { ...doc, nodeTypes: effectiveGuidanceNodeTypes(doc.nodeTypes, available) };
   const members = doc.nodes.filter(node => scenario?.nodeIds.includes(node.id));
   const nodeCoverage = members.map(node => ({ id: node.id, ...resolveNodeReviewScope(node, scenario, doc.nodeTypes) }));
   const includedInteriors = new Set(nodeCoverage.filter(node => node.includeInternals).map(node => node.id));
@@ -18,6 +21,9 @@ export function buildDfdReviewContext(doc: PsDocument, scenario: Scenario | null
   const dataIds = new Set([...Object.values(requestData).flat(), ...Object.values(responseData).flat(),
     ...Object.values(nodeData).flatMap(items => Object.keys(items))]);
   return {
+    aiDesignGuidance: buildAiGuidanceContext({ ...doc, nodeTypes: savedNodeTypes }, available,
+      members.filter(node => includedInteriors.has(node.id)).map(node => node.type),
+      members.filter(node => includedInteriors.has(node.id))),
     scenario: scenario ? {
       id: scenario.id, name: scenario.name, description: scenario.description,
       nodeIds: members.map(node => node.id), edgeIds: edges.map(edge => edge.id),
