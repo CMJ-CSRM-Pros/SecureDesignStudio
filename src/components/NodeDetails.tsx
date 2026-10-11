@@ -44,6 +44,7 @@ import { useRemoveFromScenarioWithConfirm } from "./useRemoveFromScenarioWithCon
 import { LibraryMetadataFields } from "./LibraryMetadataFields";
 import { useLibraries } from "../libraries/LibraryProvider";
 import { nodeTypeMetadataDefaults } from "../nodeTypeMetadata";
+import { NodeTypeGuidance } from "./NodeTypeGuidance";
 import { inventoryFieldFor, inventoryIdError } from "../inventoryIdentity";
 import { useUiShell } from "../uiShell";
 import { DFD_ROLES, DFD_ROLE_LABELS, DFD_SCOPE_LABELS, formatDfdValue, isDfdRole,
@@ -60,6 +61,7 @@ export function NodeDetails({ node }: { node: PsNode }) {
     deleteNode,
     doc,
     nodeTypeCatalog,
+    authenticationCatalog,
     classificationDefinitions,
     addNodeType,
     activeScenarioId,
@@ -178,7 +180,6 @@ export function NodeDetails({ node }: { node: PsNode }) {
   return (
     <div className="ps-details">
       <h3>Node</h3>
-      <LibraryMetadataFields entity={node} target="node" />
 
       {activeScenarioId && (
         <div className="ps-scenario-membership">
@@ -204,6 +205,12 @@ export function NodeDetails({ node }: { node: PsNode }) {
         generalIncomplete={generalIncomplete}
         privacyIncomplete={privacyIncomplete}
       />
+      {tab === "general" && inScenario && attachedData.length > 0 && (
+        <p className="ps-field-help">
+          {attachedData.length} privacy data {attachedData.length === 1 ? "item is" : "items are"} recorded in this scenario.{" "}
+          <button type="button" onClick={() => setTab("privacy")}>View privacy data</button>
+        </p>
+      )}
 
       {tab === "general" && (
         <>
@@ -366,6 +373,7 @@ export function NodeDetails({ node }: { node: PsNode }) {
               <button type="button" onClick={applyTypeMetadata}>Use type metadata</button>
             </div>
           </div>}
+          {node.type && <NodeTypeGuidance key={node.type} typeId={node.type} />}
           {metadataError && <p className="ps-auth-selection-warning" role="alert">{metadataError}</p>}
           <label>
             {inventoryField.label}
@@ -484,6 +492,7 @@ export function NodeDetails({ node }: { node: PsNode }) {
                       </td>
                       <td>
                         <select
+                          aria-label={`Retention for ${d.name || "unnamed data"}`}
                           value={scenarioNodeMap[d.id]}
                           onChange={(e) =>
                             changeRetention(d.id, e.target.value as Retention)
@@ -497,7 +506,7 @@ export function NodeDetails({ node }: { node: PsNode }) {
                             )
                             .map((r) => (
                               <option key={r} value={r}>
-                                {RETENTION_LABELS[r]}
+                                {RETENTION_LABELS[r] || "Not specified"}
                               </option>
                             ))}
                         </select>
@@ -570,6 +579,7 @@ export function NodeDetails({ node }: { node: PsNode }) {
       )}
 
       <TargetIssuesSection targetKind="node" targetId={node.id} />
+      <LibraryMetadataFields entity={node} target="node" />
 
       <button className="ps-danger" onClick={() => deleteNode(node.id)}>
         Delete node

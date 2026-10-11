@@ -3,6 +3,58 @@ import { test } from "node:test";
 import { modelFixture, autosaveKey } from "./fixture.mjs";
 
 export function registerNodeMetadataContracts({ getHarness, exportModel }) {
+  for (const target of ["node", "edge"]) {
+    test(`usability: custom metadata follows issues in ${target} properties`, async () => {
+      await getHarness().run(`usability: ${target} custom metadata order`, async ({ page }) => {
+        const model = modelFixture();
+        const entity = target === "node" ? model.doc.nodes[0] : model.doc.edges[0];
+        entity.metadata = { "example.reference": "Saved reference" };
+        entity.metadataFields = [{
+          id: "example.reference", target, storage: "metadata", label: "Review reference",
+        }];
+        await page.locator("#ps-file-open-input").setInputFiles({
+          name: "metadata-order.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(model)),
+        });
+        await page.getByLabel("Document status").getByText("metadata-order.tma", { exact: true }).waitFor();
+        await page.locator(target === "node"
+          ? '.react-flow__node-process[data-id="n_client"] .ps-node-title'
+          : '.ps-edge-label[data-edge-id="e_request"] .ps-edge-num').click();
+        const properties = page.locator("#ps-inspector-panel-properties");
+        const metadata = properties.getByRole("group", { name: "Custom metadata", exact: true });
+        const reference = metadata.getByRole("textbox", { name: "Review reference", exact: true });
+        assert.equal(await reference.inputValue(), "Saved reference");
+
+        for (const width of [1366, 320]) {
+          await page.setViewportSize({ width, height: 900 });
+          for (const tab of ["General / Security", "Privacy"]) {
+            await properties.getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
+            const issues = properties.getByRole("group", { name: /^Issues/ });
+            const issueBox = await issues.boundingBox();
+            const metadataBox = await metadata.boundingBox();
+            const deleteBox = await properties.getByRole("button", { name: `Delete ${target}`, exact: true }).boundingBox();
+            assert.ok(issueBox && metadataBox && deleteBox);
+            assert.ok(metadataBox.y >= issueBox.y + issueBox.height,
+              `${target} metadata must be below Issues on ${tab} at ${width}px`);
+            assert.ok(deleteBox.y >= metadataBox.y + metadataBox.height,
+              "The delete action remains after custom metadata");
+            assert.equal(await reference.inputValue(), "Saved reference");
+          }
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true);
+        }
+
+        await page.setViewportSize({ width: 1366, height: 900 });
+        await reference.fill("Edited reference");
+        await page.getByRole("tab", { name: /^Issues/ }).click();
+        await page.getByRole("tab", { name: /^Properties/ }).click();
+        assert.equal(await reference.inputValue(), "Edited reference");
+        const saved = await exportModel(page);
+        const savedEntity = (target === "node" ? saved.doc.nodes : saved.doc.edges).find(item => item.id === entity.id);
+        assert.deepEqual(savedEntity.metadata, { "example.reference": "Edited reference" });
+        assert.deepEqual(savedEntity.metadataFields, entity.metadataFields);
+      });
+    });
+  }
+
   test("regression: opening node properties preserves saved metadata; type defaults are explicit and undoable", async () => {
     await getHarness().run("regression: non-mutating node metadata", async ({ page }) => {
       const model = modelFixture();

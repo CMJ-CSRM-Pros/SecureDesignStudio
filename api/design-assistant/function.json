@@ -5,7 +5,7 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["post", "options"],
+      "methods": ["get", "post", "options"],
       "route": "design-assistant"
     },
     {
@@ -14,5 +14,5 @@
       "name": "res"
     }
   ],
-  "scriptFile": "../dist/design-assistant/index.js"
+  "scriptFile": "../dist/api/design-assistant/index.js"
 }

@@ -12,6 +12,7 @@
 // `setDocFromCollab` (a snapshot-free setDoc).
 
 import * as Y from "yjs";
+import { validateNodeTypeGuidanceEntries } from "../../shared/aiDesignGuidance";
 import {
   type PsBoundary,
   type PsTextAnnotation,
@@ -151,6 +152,7 @@ export function reconcileLocalToY(
   y: YShape, doc: PsDocument, availableClassifications?: readonly CatalogDefinitionSnapshot[],
 ): void {
   assertAuthenticationVersion(y);
+  validateNodeTypeGuidanceEntries(doc.nodeTypes);
   readCatalogDefinitions(y);
   // An absent optional field is not a deletion by a reader without catalog support.
   const definitions = doc.catalogDefinitions === undefined ? undefined

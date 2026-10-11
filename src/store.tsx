@@ -17,6 +17,8 @@ import {
 } from "react";
 import type { ChangeItem, ChangeTarget } from "./diff";
 import type { AssistantFinding } from "./designAssistant";
+import { propagateScenarioEdgeData } from "./dataPropagation";
+import { applyDesignerResult, buildDesignerContext, designerDocumentKey, describeDesignerChanges, type DesignRequestSnapshot } from "./threatModelDesigner";
 import { loadAutosaveRaw, saveAutosave } from "./autosave";
 import { useUiShell } from "./uiShell";
 import { resetDetailsTab } from "./components/detailsTabStore";
@@ -113,6 +115,8 @@ import { isAuthoredThreatNote, removeThreatNoteScenario, threatNoteFields, valid
 import { safeNavigationHref } from "./urlSafety";
 import { useLibraries } from "./libraries/LibraryProvider";
 import { libraryNodeTypes, withLibraryDefinitions } from "./libraries/document";
+import { validateAiDesignGuidance, validateNodeTypeGuidanceEntries, type AiDesignGuidance } from "../shared/aiDesignGuidance";
+import { withNodeTypeGuidance } from "./aiDesignGuidance";
 import { normalizeEntityMetadata } from "./libraries/validation";
 import { inventoryIdError, inventoryFieldFor } from "./inventoryIdentity";
 import { allowedAuthMethodsForNode } from "./policy";
@@ -282,6 +286,7 @@ function normalizeNodeTypeDefinition(
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
   const fallback = emptyNodeTypeDefinition();
+  const aiDesignGuidance = validateAiDesignGuidance(raw.aiDesignGuidance);
 
   const endpointCandidate =
     typeof raw.endpointRegex === "string" &&
@@ -427,6 +432,7 @@ function normalizeNodeTypeDefinition(
   }
 
   return {
+    ...(aiDesignGuidance ? { aiDesignGuidance } : {}),
     ...(raw.defaultDfdRole !== undefined ? { defaultDfdRole: normalizeDfdValue(raw.defaultDfdRole, 128) } : {}),
     serviceTreeId:
       typeof raw.serviceTreeId === "string" &&
@@ -556,6 +562,9 @@ export interface ImportPrivacyManagerSummary {
 
 interface StoreApi {
   doc: PsDocument;
+  documentSessionId: number;
+  prepareThreatModelDesign: () => DesignRequestSnapshot;
+  applyThreatModelDesign: (result: unknown, expected: DesignRequestSnapshot) => { scenarioId: string | null; changed: boolean; summary: string };
   authenticationLibrary: readonly AuthTypeDef[];
   authenticationCatalog: readonly AuthTypeDef[];
   authenticationWarnings: string[];
@@ -844,6 +853,7 @@ interface StoreApi {
   // if the label is blank.
   addNodeType: (label: string) => string | undefined;
   saveNodeType: (nodeType: NodeTypeRef) => boolean;
+  saveNodeTypeGuidance: (id: string, guidance: AiDesignGuidance | undefined) => void;
   removeNodeType: (
     id: string,
   ) => "deleted" | "reset" | "in-use" | "missing";
@@ -1001,6 +1011,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         for (const saved of [value, ...history]) {
           if (saved && typeof saved === "object") {
+            validateNodeTypeGuidanceEntries((saved as Partial<PsDocument>).nodeTypes);
             const annotations = normalizeTextAnnotations(saved as Partial<PsDocument>);
             for (const scenario of (saved as Partial<PsDocument>).scenarios ?? []) {
               normalizeTextAnnotationIds(scenario, annotations ?? []);
@@ -1149,6 +1160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (initial?.classificationHistoryError) setClassificationStorageError(initial.classificationHistoryError);
   }, [initial]);
   const [documentRecoveryError, setDocumentRecoveryError] = useState(initial?.recoveryError ?? null);
+  const [documentSessionId, setDocumentSessionId] = useState(0);
 
   const [documentHistory, setDocumentHistory] = useState<DocumentHistoryState>(() => ({
     doc: initial?.doc ?? emptyDocument(),
@@ -1473,6 +1485,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, [updateDocumentHistory]);
 
+  const designerCatalog = useCallback(() => {
+    const current = docRef.current;
+    return {
+      nodeTypes: libraryNodeTypes(current, libraries),
+      authentication: authenticationCatalogFor(current, libraryRef.current, libraries.authentication).filter(method =>
+        !method.disabled && !method.legacy && !method.unavailableReason &&
+        libraryRef.current.some(item => item.id === method.id && !item.disabled)),
+      classifications: classificationLibraryRef.current,
+    };
+  }, [libraries]);
+
+  const prepareThreatModelDesign = useCallback((): DesignRequestSnapshot => {
+    const current = docRef.current;
+    const scenarioId = current.scenarios.length ? activeScenarioIdRef.current : null;
+    const catalog = designerCatalog();
+    return {
+      scenarioId, documentKey: designerDocumentKey(current), catalogKey: JSON.stringify(catalog),
+      context: buildDesignerContext(current, scenarioId, catalog),
+    };
+  }, [designerCatalog]);
+
+  const applyThreatModelDesign = useCallback((result: unknown, expected: DesignRequestSnapshot) => {
+    const current = prepareThreatModelDesign();
+    if (current.scenarioId !== expected.scenarioId || current.documentKey !== expected.documentKey ||
+        current.catalogKey !== expected.catalogKey ||
+        JSON.stringify(current.context) !== JSON.stringify(expected.context)) {
+      throw new Error("The model, scenario or catalog changed while AI was working. No changes were applied; send your prompt again.");
+    }
+    const previous = docRef.current;
+    const applied = applyDesignerResult(previous, current.scenarioId, result, designerCatalog());
+    const changed = applied.doc !== previous;
+    if (changed) {
+      const next = withCatalogDefinitions(
+        withLibraryDefinitions(applied.doc, libraries, libraryRef.current, classificationDefinitionsRef.current),
+        [...classificationDefinitionsRef.current, ...libraries.taxonomy],
+      );
+      updateDocumentHistory(state => ({
+        ...state, doc: next, past: appendHistory(state.past, { doc: state.doc }), future: [],
+        ordinarySnapshot: null, scopeReasonEdit: null,
+      }));
+      setSelection(null);
+      setActiveScenarioId(applied.scenarioId);
+    }
+    return { scenarioId: applied.scenarioId, changed, summary: describeDesignerChanges(previous, applied.doc) };
+  }, [designerCatalog, prepareThreatModelDesign, libraries, updateDocumentHistory, setSelection, setActiveScenarioId]);
+
   const restoreHistorySelection = useCallback((entry: HistoryEntry, previousDoc: PsDocument) => {
     const context = entry.scopeReason;
     const scenario = context && entry.doc.scenarios.find(item => item.id === context.scenarioId);
@@ -1590,6 +1648,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const newDocument = useCallback(() => {
     snapshot();
     setDoc(emptyDocument());
+    setDocumentSessionId(current => current + 1);
     setDocumentRecoveryError(null);
     setActiveScenarioId(null);
     setSelection(null);
@@ -2420,48 +2479,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       snapshot();
       setDoc((d) => ({
         ...d,
-        scenarios: d.scenarios.map((s) => {
-          if (s.id !== scenarioId) return s;
-          const scenarioEdgeIds = new Set(s.edgeIds);
-          const incomingByNode = new Map<string, Set<string>>();
-          for (const nodeId of s.nodeIds) {
-            incomingByNode.set(nodeId, new Set());
-          }
-          for (const edge of d.edges) {
-            if (!scenarioEdgeIds.has(edge.id)) continue;
-            const reqBucket = incomingByNode.get(edge.target);
-            if (reqBucket) {
-              for (const did of s.edgeRequestData[edge.id] ?? []) {
-                reqBucket.add(did);
-              }
-            }
-            const respBucket = incomingByNode.get(edge.source);
-            if (respBucket) {
-              for (const did of s.edgeResponseData[edge.id] ?? []) {
-                respBucket.add(did);
-              }
-            }
-          }
-          const newNodeData = { ...s.nodeData };
-          let changed = false;
-          for (const [nodeId, incomingIds] of incomingByNode) {
-            if (incomingIds.size === 0) continue;
-            const existing = newNodeData[nodeId] ?? {};
-            const updated: Record<string, Retention> = { ...existing };
-            let nodeChanged = false;
-            for (const did of incomingIds) {
-              if (!(did in updated)) {
-                updated[did] = "";
-                nodeChanged = true;
-              }
-            }
-            if (nodeChanged) {
-              newNodeData[nodeId] = updated;
-              changed = true;
-            }
-          }
-          return changed ? { ...s, nodeData: newNodeData } : s;
-        }),
+        scenarios: d.scenarios.map(scenario => scenario.id === scenarioId
+          ? propagateScenarioEdgeData(scenario, d.edges) : scenario),
       }));
     },
     [snapshot]
@@ -3695,7 +3714,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         window.alert(identityError);
         return false;
       }
-      const definition = normalizeNodeTypeDefinition(nodeType.definition);
+      let definition: NodeTypeDefinition | undefined;
+      try { definition = normalizeNodeTypeDefinition(nodeType.definition); }
+      catch (error) {
+        window.alert(error instanceof Error ? error.message : "Invalid AI design guidance.");
+        return false;
+      }
       if (!id || !label || !definition) return false;
       const previous = resolveNodeTypeDef(id, libraryNodeTypes(docRef.current, libraries));
       try { assertCatalogSelection("privacyBoundary", definition.defaultPrivacyBoundary, previous?.defaultPrivacyBoundary, libraries.taxonomy); }
@@ -3720,6 +3744,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [snapshot],
   );
+
+  const saveNodeTypeGuidance = useCallback((id: string, guidance: AiDesignGuidance | undefined) => {
+    const current = docRef.current;
+    const next = withNodeTypeGuidance(current, libraryNodeTypes(current, libraries), id, guidance);
+    if (next === current) return;
+    snapshot();
+    setDoc(next);
+  }, [snapshot, libraries]);
 
   const removeNodeType = useCallback(
     (id: string): "deleted" | "reset" | "in-use" | "missing" => {
@@ -4083,6 +4115,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }, classificationDefinitionsRef.current);
       snapshot();
       setDoc(newDoc);
+      setDocumentSessionId(current => current + 1);
       setDocumentRecoveryError(null);
 
       let nextActive: string | null = null;
@@ -4422,6 +4455,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const api: StoreApi = {
+    documentSessionId,
+    prepareThreatModelDesign,
+    applyThreatModelDesign,
     availableCatalogDefinitions,
     nodeTypeCatalog,
     authenticationLibrary,
@@ -4551,6 +4587,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     renumberScenario,
     addNodeType,
     saveNodeType,
+    saveNodeTypeGuidance,
     removeNodeType,
     importNodeTypeCatalog,
     exportNodeTypeCatalog,
@@ -4757,6 +4794,8 @@ export function normalizeDoc(
   const catalogDefinitions = doc.catalogDefinitions === undefined
     ? undefined : validateCatalogDefinitions(doc.catalogDefinitions);
   const rawNodeTypes = doc.nodeTypes ?? base.nodeTypes;
+  // Validate new authored fields even on entries legacy normalization would skip.
+  validateNodeTypeGuidanceEntries(rawNodeTypes);
   const seenIds = new Set<string>();
   const nodeTypes: NodeTypeRef[] = [];
   for (const entry of rawNodeTypes as unknown[]) {

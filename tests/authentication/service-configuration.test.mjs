@@ -76,7 +76,7 @@ test("services: standalone sharing requires a safe hosted destination and an abs
 test("services: runtime provider overrides and Assistant calls cannot bypass local disabled state", async () => {
   const { SERVICES } = await import("../../src/services.ts");
   const { WebPubSubProvider } = await import("../../src/collab/WebPubSubProvider.ts");
-  const { askDesignAssistant } = await import("../../src/designAssistant.ts");
+  const { askDesignAssistant, askThreatModelDesigner } = await import("../../src/designAssistant.ts");
   assert.equal(SERVICES.collaboration.enabled, false);
   assert.equal(SERVICES.assistant.enabled, false);
   const originalFetch = globalThis.fetch;
@@ -86,6 +86,7 @@ test("services: runtime provider overrides and Assistant calls cannot bypass loc
   try {
     assert.throws(() => new WebPubSubProvider({ ydoc, room: "synthetic-room", tokenEndpoint: configured.tokenEndpoint }), /local-only/);
     await assert.rejects(askDesignAssistant({ mode: "chat", question: "Synthetic", context: {} }), /credential-free local mode/);
+    await assert.rejects(askThreatModelDesigner({ mode: "design", question: "Synthetic", context: {}, history: [] }), /credential-free local mode/);
     assert.equal(requests, 0);
   } finally { ydoc.destroy(); globalThis.fetch = originalFetch; }
 });

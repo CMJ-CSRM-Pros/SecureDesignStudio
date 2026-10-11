@@ -9,6 +9,7 @@ import { UiShellProvider, useUiShell } from "./uiShell";
 import { BreachSimulationProvider } from "./breachSimulation";
 import { LibrarySummary } from "./components/LibraryDetails";
 import { SERVICES } from "./services";
+import { AiProviderProvider } from "./aiProvider";
 import "./styles.css";
 
 // Auto-join a collaborative session in collaboration-enabled builds when the
@@ -110,10 +111,12 @@ export default function App() {
   return (
     <UiShellProvider>
       <StoreProvider>
+        <AiProviderProvider>
         <BreachSimulationProvider>
           {SERVICES.collaboration.enabled && <HashRoomJoiner />}
           <AppShell />
         </BreachSimulationProvider>
+        </AiProviderProvider>
       </StoreProvider>
     </UiShellProvider>
   );

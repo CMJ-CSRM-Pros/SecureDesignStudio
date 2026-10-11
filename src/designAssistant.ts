@@ -1,4 +1,9 @@
 import { SERVICES } from "./services";
+import { parseDesignResult, type DesignResult, type DesignTurn } from "../shared/designContract";
+import type { DesignRequestSnapshot } from "./threatModelDesigner";
+import { assertAiRequestBudget, validateAiGuidanceContext, type AiGuidanceReference } from "../shared/aiDesignGuidance";
+import { guidanceReferencesForFinding } from "./aiDesignGuidance";
+import type { AiProviderId } from "../shared/aiProviders";
 
 export type AssistantMode = "chat" | "analyze";
 
@@ -9,6 +14,7 @@ export interface AssistantReference {
 }
 
 export interface AssistantFinding {
+  guidanceReferences?: AiGuidanceReference[];
   id: string;
   category: string;
   severity: "critical" | "high" | "medium" | "low";
@@ -25,6 +31,7 @@ export interface AssistantResponse {
 }
 
 export interface AssistantRequest {
+  provider?: AiProviderId;
   mode: AssistantMode;
   question: string;
   context: unknown;
@@ -78,9 +85,30 @@ export async function askDesignAssistant(
   request: AssistantRequest,
   signal?: AbortSignal,
 ): Promise<AssistantResponse> {
+  const response = parseResponse(await requestAssistant(request, signal));
+  // Provenance comes from the exact request, never from model-authored citations.
+  const context = request.context as Parameters<typeof guidanceReferencesForFinding>[0];
+  return { ...response, findings: response.findings.map(finding => ({
+    ...finding, guidanceReferences: guidanceReferencesForFinding(context, finding.references),
+  })) };
+}
+
+export async function askThreatModelDesigner(
+  request: { mode: "design"; question: string; context: DesignRequestSnapshot["context"]; history: DesignTurn[]; provider?: AiProviderId },
+  signal?: AbortSignal,
+): Promise<DesignResult> {
+  return parseDesignResult(await requestAssistant(request, signal), { existingScenario: request.context.scenario !== null });
+}
+
+async function requestAssistant(
+  request: AssistantRequest | { mode: "design"; question: string; context: unknown; history: DesignTurn[]; provider?: AiProviderId },
+  signal?: AbortSignal,
+): Promise<unknown> {
   if (!SERVICES.assistant.enabled) {
     throw new Error(SERVICES.assistant.message);
   }
+  validateAiGuidanceContext((request.context as { aiDesignGuidance?: unknown })?.aiDesignGuidance);
+  assertAiRequestBudget(request);
 
   const response = await fetch(SERVICES.assistant.endpoint, {
     method: "POST",
@@ -97,5 +125,5 @@ export async function askDesignAssistant(
         : `Design Assistant request failed (${response.status}).`;
     throw new Error(message);
   }
-  return parseResponse(payload);
+  return payload;
 }

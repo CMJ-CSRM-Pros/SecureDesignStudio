@@ -20,6 +20,8 @@ import { registerTm7Contracts } from "./tm7-contracts.mjs";
 import { registerTextAnnotationContracts } from "./text-annotation-contracts.mjs";
 import { registerThreatNoteContracts } from "./threat-note-contracts.mjs";
 import { registerSampleContracts } from "./sample-contracts.mjs";
+import { registerDesignerContracts } from "./designer-contracts.mjs";
+import { registerAiGuidanceContracts } from "./ai-guidance-contracts.mjs";
 
 let harness;
 before(async () => { harness = await startHarness(); });
@@ -61,6 +63,190 @@ registerTm7Contracts({ getHarness: () => harness, exportModel });
 registerTextAnnotationContracts({ getHarness: () => harness, exportModel });
 registerThreatNoteContracts({ getHarness: () => harness, exportModel });
 registerSampleContracts({ getHarness: () => harness, exportModel });
+registerDesignerContracts({ getHarness: () => harness });
+registerAiGuidanceContracts({ getHarness: () => harness, exportModel });
+
+for (const { boundaryType, theme } of ["security", "privacy"].flatMap(boundaryType =>
+  ["light", "dark"].map(theme => ({ boundaryType, theme })))) {
+  test(`regression: ${boundaryType} boundary moves only from its perimeter, not its empty interior (${theme})`, async () => {
+    await harness.run(`regression: ${boundaryType} boundary perimeter interaction (${theme})`, async ({ page }) => {
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      if (theme === "dark") {
+        await page.getByRole("button", { name: "Settings", exact: true }).click();
+        await page.getByRole("menuitemcheckbox", { name: /Dark Theme/ }).click();
+        await page.keyboard.press("Escape");
+      }
+      const input = modelFixture();
+      input.doc.nodes = input.doc.nodes.slice(0, 2);
+      input.doc.nodes[0].position = { x: 180, y: 190 };
+      input.doc.nodes[1].position = { x: 520, y: 190 };
+      input.doc.edges = input.doc.edges.slice(0, 1);
+      input.doc.scenarios = input.doc.scenarios.slice(0, 1);
+      input.doc.scenarios[0].edgeIds = ["e_request"];
+      input.doc.scenarios[0].edgeNumbers = { e_request: 7 };
+      input.doc.boundaries = [{
+        id: "b_drag", type: boundaryType, title: "Drag perimeter", nodeIds: ["n_client", "n_api"],
+        position: { x: 80, y: 80 }, size: { width: 760, height: 460 },
+      }];
+      input.doc.scenarios[0].boundaryIds = ["b_drag"];
+      await page.locator("#ps-file-open-input").setInputFiles({
+        name: "boundary-drag.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+      });
+      const boundary = page.locator('.react-flow__node-boundary[data-id="b_drag"]');
+      await boundary.waitFor();
+      await page.getByRole("button", { name: "Fit model to view", exact: true }).click();
+      await page.getByRole("button", { name: /^Reset canvas zoom to 100%/ }).click();
+      await until(() => page.locator(".react-flow__viewport").evaluate(el =>
+        new DOMMatrix(getComputedStyle(el).transform).a === 1), "exact authored scale after fitting");
+      const initialBox = await boundary.boundingBox();
+      const canvasBox = await page.locator(".ps-canvas").boundingBox();
+      const panX = canvasBox.x + canvasBox.width - 30;
+      const panY = canvasBox.y + canvasBox.height - 120;
+      await page.mouse.move(panX, panY);
+      await page.mouse.down();
+      await page.mouse.move(
+        panX + canvasBox.x + (canvasBox.width - initialBox.width) / 2 - initialBox.x,
+        panY + canvasBox.y + (canvasBox.height - initialBox.height) / 2 - initialBox.y,
+        { steps: 10 },
+      );
+      await page.mouse.up();
+      await until(async () => {
+        const box = await boundary.boundingBox();
+        const canvas = await page.locator(".ps-canvas").boundingBox();
+        return box && box.x > canvas.x && box.y > canvas.y &&
+          box.x + box.width < canvas.x + canvas.width && box.y + box.height < canvas.y + canvas.height;
+      }, "boundary fitted inside canvas");
+      const read = () => page.evaluate(async key => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.dispatchEvent(new Event("pagehide"));
+        return JSON.parse(localStorage.getItem(key));
+      }, autosaveKey);
+      const drag = async (x, y, dx, dy) => {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.move(x + dx, y + dy, { steps: 10 });
+        await page.mouse.up();
+      };
+      const before = await read();
+      let box = await boundary.boundingBox();
+      await drag(box.x + box.width * .65, box.y + box.height * .72, 25, 20);
+      let state = await read();
+      assert.deepEqual(state.doc, before.doc, "Empty interior drag must not move the boundary or its nodes");
+      assert.deepEqual(state.past, before.past, "Canvas panning must not create a model history entry");
+
+      // All four border strips must move the boundary and both members together.
+      for (const side of ["left", "right", "top", "bottom"]) {
+        const prior = await read();
+        box = await boundary.boundingBox();
+        const x = side === "left" ? box.x + 1 : side === "right" ? box.x + box.width - 1 : box.x + box.width * .72;
+        const y = side === "top" ? box.y + 1 : side === "bottom" ? box.y + box.height - 1 : box.y + box.height * .72;
+        await drag(x, y, 18, 12);
+        state = await read();
+        const moved = state.doc.boundaries[0];
+        const original = prior.doc.boundaries[0];
+        assert.ok(moved.position.x > original.position.x && moved.position.y > original.position.y, `${side} border drag moves`);
+        assert.deepEqual(moved.size, original.size, "Border dragging is not resizing");
+        for (const n of state.doc.nodes) {
+          const old = prior.doc.nodes.find(item => item.id === n.id);
+          assert.ok(Math.abs(n.position.x - old.position.x - moved.position.x + original.position.x) < .01);
+          assert.ok(Math.abs(n.position.y - old.position.y - moved.position.y + original.position.y) < .01);
+        }
+        assert.equal(state.past.length, prior.past.length + 1, "One snapshot per perimeter gesture");
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+        assert.deepEqual((await read()).doc, prior.doc);
+        await page.getByRole("button", { name: "Redo", exact: true }).click();
+        assert.deepEqual((await read()).doc, state.doc);
+        await page.getByRole("button", { name: "Undo", exact: true }).click();
+      }
+
+      await boundary.locator(".ps-boundary-title").click();
+      const selected = await read();
+      box = await boundary.boundingBox();
+      await drag(box.x + box.width * .7, box.y + box.height * .75, -20, -15);
+      assert.deepEqual((await read()).doc, selected.doc, "Selected boundary interior also passes through");
+      assert.deepEqual((await read()).past, selected.past);
+      const edge = page.locator('.react-flow__edge[data-id="e_request"]');
+      const edgePoint = await edge.locator(".react-flow__edge-path").evaluate(path => {
+        const point = path.getPointAtLength(path.getTotalLength() * .65);
+        const screen = new DOMPoint(point.x, point.y).matrixTransform(path.getScreenCTM());
+        return { x: screen.x, y: screen.y };
+      });
+      await page.mouse.click(edgePoint.x, edgePoint.y);
+      await until(() => edge.getAttribute("class").then(value => /\bselected\b/.test(value)), "flow under boundary interior selectable");
+      const routed = await read();
+      assert.deepEqual(routed.doc.boundaries, selected.doc.boundaries, "Editing the underlying flow must not move the boundary");
+      assert.deepEqual(routed.doc.nodes, selected.doc.nodes);
+      assert.equal(routed.doc.edges[0].waypoints.length, 1, "The existing flow-line gesture still creates its routing waypoint");
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual((await read()).doc, selected.doc);
+      await node(page, "n_client").click();
+      const nodeBefore = await read();
+      const nodeBox = await node(page, "n_client").boundingBox();
+      await drag(nodeBox.x + nodeBox.width * .5, nodeBox.y + nodeBox.height * .75, 20, 12);
+      const nodeAfter = await read();
+      assert.deepEqual(nodeAfter.doc.boundaries, nodeBefore.doc.boundaries, "Dragging a member inside must not move the boundary");
+      assert.notDeepEqual(nodeAfter.doc.nodes[0].position, nodeBefore.doc.nodes[0].position);
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual((await read()).doc, nodeBefore.doc);
+
+      await boundary.locator(".ps-boundary-title").dblclick();
+      await boundary.locator(".ps-boundary-title-input").fill("Renamed boundary");
+      await boundary.locator(".ps-boundary-title-input").press("Enter");
+      await until(async () => (await read()).doc.boundaries[0].title === "Renamed boundary", "boundary title remains editable");
+      const resizeBefore = await read();
+      const handle = boundary.locator(".ps-boundary-resize-handle.bottom.right");
+      const handleBox = await handle.boundingBox();
+      assert.ok(handleBox, "Selected boundary keeps its resize handle");
+      await drag(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2, 25, 18);
+      const resized = await read();
+      assert.ok(resized.doc.boundaries[0].size.width > resizeBefore.doc.boundaries[0].size.width);
+      assert.deepEqual(resized.doc.nodes, resizeBefore.doc.nodes);
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual((await read()).doc, resizeBefore.doc);
+    });
+  });
+}
+
+test("regression: an outer boundary does not intercept an inner boundary perimeter", async () => {
+  await harness.run("regression: nested boundary perimeter", async ({ page }) => {
+    const input = modelFixture();
+    input.doc.nodes = input.doc.nodes.slice(0, 2);
+    input.doc.edges = input.doc.edges.slice(0, 2);
+    input.doc.scenarios = input.doc.scenarios.slice(0, 1);
+    input.doc.boundaries = [
+      { id: "inner", title: "Inner boundary", type: "privacy", nodeIds: ["n_client", "n_api"],
+        position: { x: 60, y: 60 }, size: { width: 640, height: 360 } },
+      { id: "outer", title: "Outer boundary", type: "security", nodeIds: ["n_client", "n_api"],
+        position: { x: 0, y: 0 }, size: { width: 820, height: 520 } },
+    ];
+    input.doc.scenarios[0].boundaryIds = ["inner", "outer"];
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "nested-boundaries.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    const inner = page.locator('.react-flow__node-boundary[data-id="inner"]');
+    const outer = page.locator('.react-flow__node-boundary[data-id="outer"]');
+    await inner.waitFor();
+    await page.getByRole("button", { name: "Fit model to view", exact: true }).click();
+    await outer.locator(".ps-boundary-title").click();
+    const read = () => page.evaluate(async key => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      window.dispatchEvent(new Event("pagehide"));
+      return JSON.parse(localStorage.getItem(key));
+    }, autosaveKey);
+    const before = await read();
+    const box = await inner.boundingBox();
+    await page.mouse.move(box.x + box.width - 1, box.y + box.height * .7);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width + 19, box.y + box.height * .7 + 10, { steps: 10 });
+    await page.mouse.up();
+    const after = await read();
+    assert.notDeepEqual(after.doc.boundaries.find(b => b.id === "inner").position, before.doc.boundaries.find(b => b.id === "inner").position);
+    assert.deepEqual(after.doc.boundaries.find(b => b.id === "outer"), before.doc.boundaries.find(b => b.id === "outer"));
+    assert.equal(after.past.length, before.past.length + 1);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    assert.deepEqual((await read()).doc, before.doc);
+  });
+});
 
 test("usability: service disclosure reflects credential-free local configuration without destinations or requests", async () => {
   await harness.run("usability: local service disclosure", async ({ page }) => {
@@ -525,6 +711,16 @@ test("usability: File menu keyboard navigation and focus return", async () => {
     await until(() => page.locator(":focus").innerText().then(text => /New/.test(text)), "first menu item focus");
     await page.keyboard.press("ArrowDown");
     await until(() => page.locator(":focus").innerText().then(text => /Open/.test(text)), "next menu item focus");
+    await page.keyboard.press("ArrowDown");
+    await until(() => page.locator(":focus").innerText().then(text => /Design with AI/.test(text)), "AI builder follows Open");
+    await page.keyboard.press("Enter");
+    const designer = page.getByRole("dialog", { name: "Threat Model Designer", exact: true });
+    await designer.waitFor();
+    await page.keyboard.press("Escape");
+    await designer.waitFor({ state: "detached" });
+    await until(() => trigger.evaluate(element => element === document.activeElement), "AI builder returns focus to File");
+    await page.keyboard.press("ArrowDown");
+    await until(() => page.locator(":focus").innerText().then(text => /New/.test(text)), "reopened menu receives initial focus");
     await page.keyboard.press("End");
     await until(() => page.locator(":focus").innerText().then(text => /Compare/.test(text)), "last menu item focus");
     await page.keyboard.press("Escape");

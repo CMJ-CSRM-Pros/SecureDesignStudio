@@ -3,6 +3,8 @@ import { SERVICES } from "../services";
 import { useStore } from "../store";
 import { referencedCatalogDefinitions } from "../catalogDefinitions";
 import { buildDfdReviewContext } from "../dfdReviewContext";
+import { formatGuidanceReferences } from "../aiDesignGuidance";
+import { assertAiRequestBudget } from "../../shared/aiDesignGuidance";
 import {
   askDesignAssistant,
   type AssistantFinding,
@@ -11,6 +13,8 @@ import {
   type AssistantResponse,
 } from "../designAssistant";
 import { useUiShell } from "../uiShell";
+import { useAiProvider } from "../aiProvider";
+import { AiProviderSelector } from "./AiProviderSelector";
 import {
   useBreachSimulation,
   type BreachSimulationPlan,
@@ -97,12 +101,15 @@ function buildConnectedPath(
 }
 
 export function DesignAssistantPanel() {
+  const aiProvider = useAiProvider();
+  const providerRef = useRef(aiProvider.provider);
   const {
     doc,
     activeScenario,
     setActiveScenarioId,
     authenticationCatalog,
     classificationDefinitions,
+    nodeTypeCatalog,
     selection,
     setSelection,
     setFocusTarget,
@@ -123,29 +130,49 @@ export function DesignAssistantPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const assistantUnavailable = !SERVICES.assistant.enabled;
-
-  const context = useMemo(() => {
-    const projection = buildDfdReviewContext(doc, activeScenario);
-    const authIds = new Set(projection.edges.flatMap(edge => edge.authenticationTypes ?? []));
-    const scopedDoc = {
-      ...doc,
-      nodes: doc.nodes.filter(node => projection.nodes.some(item => item.id === node.id)),
-      edges: projection.edges,
-      boundaries: projection.boundaries,
-      data: projection.data,
-      deviations: [],
-      nodeTypes: [],
-    };
-    return {
-      ...projection,
-      authenticationDefinitions: authenticationCatalog.filter(def => authIds.has(def.id)),
-      authenticationCaution: "Definitions are modeling metadata, not proof of security or target acceptance. Custom methods are unverified; unresolved and legacy selections require owner review.",
-      catalogDefinitions: referencedCatalogDefinitions(scopedDoc, classificationDefinitions),
-      catalogCaution: "Saved labels and claimed library provenance are unverified display metadata, not installed capabilities or evidence of compliance.",
-      selection,
-    };
-  }, [activeScenario, doc, selection, authenticationCatalog, classificationDefinitions]);
+  useEffect(() => {
+    if (providerRef.current === aiProvider.provider) return;
+    providerRef.current = aiProvider.provider;
+    setMessages([]);
+    setFindings([]);
+    setAcceptedFindingIds(new Set());
+    setSelectedFindingId(null);
+    simulation.reset();
+    setError(null);
+  }, [aiProvider.provider]);
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [activeScenario?.id]);
+  const contextState = useMemo(() => {
+    try {
+      const projection = buildDfdReviewContext(doc, activeScenario, nodeTypeCatalog);
+      const authIds = new Set(projection.edges.flatMap(edge => edge.authenticationTypes ?? []));
+      const scopedDoc = {
+        ...doc,
+        nodes: doc.nodes.filter(node => projection.nodes.some(item => item.id === node.id)),
+        edges: projection.edges,
+        boundaries: projection.boundaries,
+        data: projection.data,
+        deviations: [],
+        nodeTypes: [],
+      };
+      const context = {
+        ...projection,
+        authenticationDefinitions: authenticationCatalog.filter(def => authIds.has(def.id)),
+        authenticationCaution: "Definitions are modeling metadata, not proof of security or target acceptance. Custom methods are unverified; unresolved and legacy selections require owner review.",
+        catalogDefinitions: referencedCatalogDefinitions(scopedDoc, classificationDefinitions),
+        catalogCaution: "Saved labels and claimed library provenance are unverified display metadata, not installed capabilities or evidence of compliance.",
+        selection,
+      };
+      assertAiRequestBudget({ context });
+      return { context, error: null };
+    } catch (cause) {
+      return { context: null, error: cause instanceof Error ? cause.message : "Cannot prepare AI context." };
+    }
+  }, [activeScenario, doc, selection, authenticationCatalog, classificationDefinitions, nodeTypeCatalog]);
+  const context = contextState.context;
+  const assistantUnavailable = !aiProvider.ready || !context;
 
   const referenceExists = (reference: AssistantReference) => {
     const items = reference.kind === "node" ? doc.nodes
@@ -187,7 +214,7 @@ export function DesignAssistantPanel() {
       target.id,
       activeScenario ? [activeScenario.id] : [],
       finding.title,
-      `${finding.rationale}\n\nRecommended action: ${finding.recommendation}`,
+      `${finding.rationale}\n\nRecommended action: ${finding.recommendation}${formatGuidanceReferences(finding.guidanceReferences)}`,
     );
     setAcceptedFindingIds((current) => new Set(current).add(finding.id));
     openInspector("issues");
@@ -196,7 +223,7 @@ export function DesignAssistantPanel() {
   const acceptAsWorkItem = (finding: AssistantFinding) => {
     const item = createWorkItem();
     updateWorkItem(item.id, {
-      description: `${finding.title}\n\n${finding.recommendation}`,
+      description: `${finding.title}\n\n${finding.recommendation}${formatGuidanceReferences(finding.guidanceReferences)}`,
     });
     setAcceptedFindingIds((current) => new Set(current).add(finding.id));
     openInspector("work");
@@ -204,7 +231,8 @@ export function DesignAssistantPanel() {
 
   const runRequest = async (requestMode: AssistantMode, prompt: string) => {
     const trimmed = prompt.trim();
-    if (!trimmed || busy || !activeScenario) return null;
+    if (!trimmed || busy || !activeScenario || !context || !aiProvider.ready) return null;
+    const finishRequest = aiProvider.beginRequest();
 
     if (requestMode === "chat") {
       setMessages((current) => [
@@ -219,11 +247,13 @@ export function DesignAssistantPanel() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const timer = window.setTimeout(() => controller.abort(), 100_000);
     try {
       const response: AssistantResponse = await askDesignAssistant(
-        { mode: requestMode, question: trimmed, context },
+        { mode: requestMode, question: trimmed, context, ...(__PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {}) },
         controller.signal,
       );
+      if (controller.signal.aborted || abortRef.current !== controller) return null;
       if (requestMode === "chat") {
         setMessages((current) => [
           ...current,
@@ -240,17 +270,22 @@ export function DesignAssistantPanel() {
       }
       return response;
     } catch (requestError) {
-      if ((requestError as Error).name !== "AbortError") {
-        setError((requestError as Error).message);
+      if (controller.signal.aborted && abortRef.current === controller) {
+        setError("The AI request timed out. No pending response was applied; try a smaller prompt.");
+      } else if (abortRef.current === controller) {
+        setError(requestError instanceof Error ? requestError.message : "The AI request failed.");
       }
       return null;
     } finally {
+      window.clearTimeout(timer);
+      finishRequest();
       if (abortRef.current === controller) abortRef.current = null;
       setBusy(false);
     }
   };
 
   const simulateBreach = async () => {
+    if (!context) return;
     let availableFindings = findings;
     if (availableFindings.length === 0) {
       const response = await runRequest(
@@ -275,7 +310,7 @@ export function DesignAssistantPanel() {
       mitigations: [...new Set(
         [...availableFindings]
           .sort((left, right) => SEVERITY_ORDER[right.severity] - SEVERITY_ORDER[left.severity])
-          .map((candidate) => candidate.recommendation.trim())
+          .map((candidate) => candidate.recommendation.trim() + formatGuidanceReferences(candidate.guidanceReferences))
           .filter(Boolean),
       )].slice(0, 4),
     };
@@ -293,11 +328,12 @@ export function DesignAssistantPanel() {
   };
 
   const contextSummary = activeScenario
-    ? `${activeScenario.name} · ${context.nodes.length} nodes · ${context.edges.length} flows`
+    ? `${activeScenario.name} · ${context?.nodes.length ?? 0} nodes · ${context?.edges.length ?? 0} flows`
     : "No active scenario";
 
   return (
     <div className="ps-assistant">
+      <AiProviderSelector />
       <div className="ps-assistant-mode" role="tablist" aria-label="Design Assistant modes">
         {(["analyze", "chat"] as const).map((candidate) => (
           <button
@@ -316,6 +352,7 @@ export function DesignAssistantPanel() {
         <span>Current context</span>
         <strong>{contextSummary}</strong>
       </div>
+      {contextState.error && <div className="ps-assistant-notice" role="alert">{contextState.error}</div>}
 
       <div className="ps-assistant-notice ps-service-notice" role={SERVICES.assistant.state === "invalid" ? "alert" : "status"}>
         {SERVICES.assistant.message}

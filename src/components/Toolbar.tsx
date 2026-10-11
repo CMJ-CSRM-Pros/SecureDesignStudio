@@ -30,6 +30,7 @@ import { SECURE_DESIGN_STUDIO_DOCUMENT_FORMAT } from "../documentFormat";
 import { DataModal } from "./DataModal";
 import { WorkItemsModal } from "./WorkItemsModal";
 import { NewScenarioDialog } from "./NewScenarioDialog";
+import { ThreatModelDesignerDialog } from "./ThreatModelDesignerDialog";
 import { PrivacyManagerImportDialog } from "./PrivacyManagerImportDialog";
 import { VsdxExportNoticeDialog } from "./VsdxExportNoticeDialog";
 import { ImportEndpointsDialog } from "./ImportEndpointsDialog";
@@ -98,6 +99,7 @@ type CommandId =
   | "scenario.settings"
   | "scenario.delete"
   | "model.catalog"
+  | "file.design"
   | "model.annotation"
   | "model.authentication"
   | "model.classifications"
@@ -132,6 +134,7 @@ export function Toolbar() {
   const inventoryField = inventoryFieldFor(libraries.fields);
   const {
     doc,
+    documentSessionId,
     nodeTypeCatalog,
     authenticationCatalog,
     authenticationWarnings,
@@ -217,6 +220,8 @@ export function Toolbar() {
   const reviewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const viewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [dataModalOpen, setDataModalOpen] = useState(false);
+  const [designerOpen, setDesignerOpen] = useState(false);
+  const designerReturnRef = useRef<string>("ps-command-menu-file");
   const [nodeTypeCatalogOpen, setNodeTypeCatalogOpen] = useState(false);
   const [authenticationLibraryOpen, setAuthenticationLibraryOpen] = useState(false);
   const [classificationLibraryOpen, setClassificationLibraryOpen] = useState(false);
@@ -328,7 +333,7 @@ export function Toolbar() {
     const bar = commandBarRef.current;
     if (!bar) return;
     const updateLayout = () => {
-      bar.style.setProperty(
+      bar.closest<HTMLElement>(".ps-shell")?.style.setProperty(
         "--ps-command-bar-height",
         `${bar.getBoundingClientRect().height}px`,
       );
@@ -1694,6 +1699,12 @@ export function Toolbar() {
         restoreFocus = false;
         setNodeTypeCatalogOpen(true);
         break;
+      case "file.design":
+        restoreFocus = false;
+        designerReturnRef.current = returnControlsId ?? "ps-command-menu-file";
+        setNewScenarioOpen(false);
+        setDesignerOpen(true);
+        break;
       case "model.annotation": {
         restoreFocus = false;
         const annotation = createTextAnnotation({ x: 100, y: 100 });
@@ -1888,6 +1899,10 @@ export function Toolbar() {
                 </button>
                 <button role="menuitem" onClick={() => executeCommand("file.open")}>
                   <span>Open…</span><kbd>Ctrl+O</kbd>
+                </button>
+                <button role="menuitem" onClick={() => executeCommand("file.design")}>
+                  <span>Design with AI</span>
+                  <small>Build a threat model from your prompts</small>
                 </button>
                 <button role="menuitem" onClick={() => executeCommand("file.save")}>
                   <span>Save</span><kbd>Ctrl+S</kbd>
@@ -3217,8 +3232,17 @@ export function Toolbar() {
     {workItemsModalOpen && (
       <WorkItemsModal onClose={() => setWorkItemsModalOpen(false)} />
     )}
-    {!authenticationLibraryOpen && !classificationLibraryOpen && !customLibrariesOpen && (newScenarioOpen || doc.scenarios.length === 0) && (
+    <ThreatModelDesignerDialog key={documentSessionId} open={designerOpen} onClose={() => {
+      setDesignerOpen(false);
+      if (doc.scenarios.length === 0) {
+        window.setTimeout(() => document.getElementById("ps-scenario-design")?.focus(), 0);
+      } else {
+        restoreCommandFocus(designerReturnRef.current);
+      }
+    }} />
+    {!designerOpen && !authenticationLibraryOpen && !classificationLibraryOpen && !customLibrariesOpen && (newScenarioOpen || doc.scenarios.length === 0) && (
       <NewScenarioDialog
+        onDesign={doc.scenarios.length === 0 ? () => executeCommand("file.design") : undefined}
         defaultName={`Scenario ${doc.scenarios.length + 1}`}
         sourceOptions={doc.scenarios.map((s) => ({ id: s.id, name: s.name }))}
         required={doc.scenarios.length === 0}

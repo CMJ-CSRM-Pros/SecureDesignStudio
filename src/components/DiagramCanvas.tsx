@@ -456,6 +456,8 @@ function InnerDiagram() {
         (selection?.kind === "boundary" && selection.id === b.id) ||
         multiSet.has(b.id),
       draggable: true,
+      dragHandle: ".ps-boundary-drag",
+      style: { pointerEvents: "none" },
       selectable: true,
       zIndex: -1,
     }));

@@ -32,6 +32,8 @@ import { classificationOptions } from "../classificationLibrary";
 import { useLibraries } from "../libraries/LibraryProvider";
 import { inventoryFieldFor, inventoryIdError } from "../inventoryIdentity";
 import { DFD_ROLES, DFD_ROLE_LABELS, formatDfdValue, isDfdRole } from "../dfdSemantics";
+import { AiDesignGuidanceEditor } from "./AiDesignGuidanceEditor";
+import { validateAiDesignGuidance } from "../../shared/aiDesignGuidance";
 
 function cloneDefinition(definition: NodeTypeDefinition): NodeTypeDefinition {
   return JSON.parse(JSON.stringify(definition)) as NodeTypeDefinition;
@@ -69,6 +71,7 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
     doc,
     nodeTypeCatalog,
     saveNodeType,
+    saveNodeTypeGuidance,
     removeNodeType,
     importNodeTypeCatalog,
     exportNodeTypeCatalog,
@@ -80,6 +83,7 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
   const [importNotice, setImportNotice] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const draftBaseline = useRef<string>();
 
   useEffect(() => {
     searchRef.current?.focus();
@@ -88,7 +92,7 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (draft) setDraft(null);
+        if (draft) { setDraft(null); requestAnimationFrame(() => searchRef.current?.focus()); }
         else onClose();
       }
     };
@@ -124,6 +128,7 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const edit = (ref: NodeTypeRef) => {
+    draftBaseline.current = JSON.stringify(resolveNodeTypeDef(ref.id, nodeTypeCatalog));
     setDraft({
       id: ref.id,
       label: ref.label,
@@ -158,6 +163,11 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
     if (!draft?.definition) return;
     const id = draft.id.trim();
     const label = draft.label.trim();
+    const original = resolveNodeTypeDef(draft.id, nodeTypeCatalog);
+    if (!isNew && draftBaseline.current !== JSON.stringify(original)) {
+      setError("This type changed while you were editing. Cancel and reopen it before saving; no changes were applied.");
+      return;
+    }
     if (isNew && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) {
       setError(
         "Stable ID must start with a letter or number and use only letters, numbers, dots, underscores, or hyphens.",
@@ -176,6 +186,7 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
       return;
     }
     try {
+      validateAiDesignGuidance(draft.definition.aiDesignGuidance);
       assertCatalogSelection("privacyBoundary", draft.definition.defaultPrivacyBoundary,
         resolveNodeTypeDef(draft.id, nodeTypeCatalog)?.defaultPrivacyBoundary, libraries.taxonomy);
     } catch (cause) {
@@ -239,6 +250,23 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
       return;
     }
 
+    const withoutGuidance = (definition: NodeTypeDefinition) => {
+      const { aiDesignGuidance, catalogSource, ...rest } = definition;
+      return JSON.stringify(rest);
+    };
+    if (!isNew && original && original.label === label) {
+      const { id: _id, label: _label, ...originalDefinition } = original;
+      if (withoutGuidance(originalDefinition) === withoutGuidance(draft.definition)) {
+        try {
+          saveNodeTypeGuidance(id, draft.definition.aiDesignGuidance);
+          setDraft(null); setIsNew(false); setError(null);
+          requestAnimationFrame(() => searchRef.current?.focus());
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Guidance could not be saved.");
+        }
+        return;
+      }
+    }
     if (
       saveNodeType({
         id,
@@ -534,6 +562,9 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
                     />
                   </label>
                 </div>
+
+                <AiDesignGuidanceEditor value={draft.definition.aiDesignGuidance}
+                  onChange={aiDesignGuidance => updateDefinition({ aiDesignGuidance })} />
 
                 <fieldset className="ps-catalog-policy">
                   <legend>Policy</legend>

@@ -4,14 +4,18 @@
 
 .DESCRIPTION
     Same app as Start-SecureDesignStudio.ps1, plus a local Azure Functions host
-    that forwards Design Assistant requests to YOUR OWN Azure OpenAI deployment.
+    that forwards requests to your Azure deployment, Claude Code subscription,
+    or ChatGPT subscription through Codex CLI. Choose once here, switch in SDS.
 
-    This is bring-your-own-AI: no AI service ships with the app, and none is
-    provided for you. You need an Azure OpenAI resource you are allowed to use,
-    its endpoint, a model deployment name, and a signed-in Azure identity holding
-    a data-plane role on it.
+    This is bring-your-own-AI: no AI account ships with the app. Azure needs
+    your authorized endpoint/deployment and Entra identity. Claude/Codex need
+    their official CLI and consumer subscription sign-in, not Azure credentials.
 
-    See docs/bring-your-own-ai.md to create and secure that resource.
+    See docs/bring-your-own-ai.md for provider setup and data handling.
+
+.PARAMETER Provider
+    Initial AI provider: Azure, Claude or Codex. Omit for an interactive menu.
+    Non-interactive callers must specify the provider.
 
 .PARAMETER SkipAuthCheck
     Start without checking for an Azure identity. Vite and the API still run, but
@@ -27,9 +31,14 @@
 
 .EXAMPLE
     .\Start-SecureDesignStudio-WithAI.ps1 -VerifyEndpoint
+
+.EXAMPLE
+    .\Start-SecureDesignStudio-WithAI.ps1 -Provider Claude
 #>
 [CmdletBinding()]
 param(
+    [ValidateSet("Azure", "Claude", "Codex")]
+    [string]$Provider,
     [switch]$SkipAuthCheck,
     [switch]$VerifyEndpoint
 )
@@ -44,7 +53,9 @@ $byoAiDoc = "docs\bring-your-own-ai.md"
 
 Write-Host ""
 Write-Host "SecureDesignStudio - with AI Design Assistant" -ForegroundColor Cyan
-Write-Host "Bring your own Azure OpenAI deployment. See $byoAiDoc." -ForegroundColor DarkGray
+Write-Host "Use your Azure deployment, Claude subscription, or ChatGPT subscription." -ForegroundColor DarkGray
+Write-Host "Prompts and included model context are sent to the provider you choose." -ForegroundColor DarkGray
+Write-Host "See $byoAiDoc. Ordinary startup checks do not run inference." -ForegroundColor DarkGray
 Write-Host ""
 
 if (-not (Test-Path -LiteralPath "package.json")) {
@@ -60,6 +71,32 @@ if (-not (Test-Path -LiteralPath "package.json")) {
     )
     exit 1
 }
+
+if (-not $Provider) {
+    if (-not (Test-LauncherInteractive)) {
+        Write-SetupError @("Specify -Provider Azure, -Provider Claude, or -Provider Codex for non-interactive startup.")
+        exit 1
+    }
+    Write-Host "Choose your initial AI provider:"
+    Write-Host "  1. Azure OpenAI / Foundry"
+    Write-Host "  2. Claude Code - your Claude subscription"
+    Write-Host "  3. Codex - your ChatGPT subscription"
+    do {
+        $choice = Read-Host "Enter 1, 2 or 3"
+        $Provider = switch ($choice) { "1" { "Azure" } "2" { "Claude" } "3" { "Codex" } }
+        if (-not $Provider) { Write-Host "Choose 1, 2 or 3." -ForegroundColor Yellow }
+    } until ($Provider)
+}
+if ($SkipAuthCheck -and $Provider -ne "Azure") {
+    Write-SetupError @("-SkipAuthCheck applies only to Azure. Subscription sign-in must be verified for Claude and Codex.")
+    exit 1
+}
+if ($VerifyEndpoint -and $Provider -ne "Azure") {
+    Write-SetupError @("-VerifyEndpoint currently probes Azure only. Claude/Codex startup verifies sign-in without consuming inference.")
+    exit 1
+}
+$env:SDS_AI_PROVIDER = $Provider.ToLowerInvariant()
+$env:SDS_LOCAL_AI = "1"
 
 $nodeVersion = Assert-NodeToolchain
 if ($nodeVersion) {
@@ -112,6 +149,7 @@ if ($nodeVersion -and ($script:FunctionsNodeMajors -notcontains $nodeVersion.Maj
 # -----------------------------------------------------------------------------
 # Your Azure OpenAI deployment
 # -----------------------------------------------------------------------------
+if ($Provider -eq "Azure") {
 $endpoint = Get-ConfiguredValue -SettingNames @("AZURE_OPENAI_ENDPOINT", "AZURE_AI_ENDPOINT") -EnvNames @("AZURE_OPENAI_ENDPOINT", "AZURE_AI_ENDPOINT")
 $deployment = Get-ConfiguredValue -SettingNames @("MODEL_DEPLOYMENT_NAME") -EnvNames @("MODEL_DEPLOYMENT_NAME")
 
@@ -230,7 +268,7 @@ if ($SkipAuthCheck) {
     }
 
     if ($VerifyEndpoint) {
-        Write-SetupStep "Verifying $deployment on $endpoint ..."
+        Write-SetupStep "Verifying $deployment on $endpoint (inference probe; may incur usage) ..."
         $token = (Invoke-AzQuiet @("account", "get-access-token", "--resource", "https://cognitiveservices.azure.com", "--query", "accessToken", "-o", "tsv")).Output
         $probeUri = "$($endpoint.TrimEnd('/'))/openai/deployments/$([System.Uri]::EscapeDataString($deployment))/chat/completions?api-version=2024-10-21"
         $probeBody = @{ messages = @(@{ role = "user"; content = "ping" }); max_tokens = 1 } | ConvertTo-Json -Depth 5
@@ -256,6 +294,32 @@ if ($SkipAuthCheck) {
     }
 }
 
+} else {
+    $cliName = $Provider.ToLowerInvariant()
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & node "scripts\ai-provider-preflight.mjs" --provider $cliName 2>$null | Out-String
+        $exitCode = $LASTEXITCODE
+        try { $readiness = $output | ConvertFrom-Json -ErrorAction Stop } catch { $readiness = $null }
+    } finally { $ErrorActionPreference = $previous }
+    if ($exitCode -ne 0 -or -not $readiness -or $readiness.id -ne $cliName -or -not $readiness.available) {
+        $instructions = if ($Provider -eq "Claude") {
+            "Install the native Claude Code CLI from https://code.claude.com/docs/en/setup, then run 'claude auth login' and choose your Claude subscription."
+        } else {
+            "Install the native Codex CLI from https://developers.openai.com/codex/cli, then run 'codex login' and sign in with ChatGPT."
+        }
+        $message = if ($readiness -and $readiness.message) { $readiness.message } else { "Local provider readiness could not be verified within 15 seconds." }
+        Write-SetupError @(
+            "$Provider is unavailable: $message",
+            $instructions,
+            "No provider fallback was attempted. No credentials were printed."
+        )
+        exit 1
+    }
+    Write-Host "Initial provider: $Provider ($($readiness.message))" -ForegroundColor DarkGray
+}
+
 # -----------------------------------------------------------------------------
 # Ports and dependencies
 # -----------------------------------------------------------------------------
@@ -268,6 +332,7 @@ Install-ProjectDependencies -RelativePath "api" -Label "API"
 Write-Host ""
 Write-SetupStep "Starting SecureDesignStudio at http://localhost:5173/"
 Write-Host "Select a scenario, then choose Review > Design Assistant." -ForegroundColor DarkGray
+Write-Host "Initial AI provider: $Provider. Both AI surfaces share the provider selector." -ForegroundColor DarkGray
 Write-Host "Press Ctrl+C in this window to stop the app and the API." -ForegroundColor DarkGray
 Write-Host ""
 
