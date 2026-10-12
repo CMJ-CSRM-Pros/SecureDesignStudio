@@ -3,9 +3,9 @@
     Starts SecureDesignStudio with the optional AI Design Assistant enabled.
 
 .DESCRIPTION
-    Same app as Start-SecureDesignStudio.ps1, plus a local Azure Functions host
-    that forwards requests to your Azure deployment, Claude Code subscription,
-    or ChatGPT subscription through Codex CLI. Choose once here, switch in SDS.
+    Same app as Start-SecureDesignStudio.ps1. Claude and Codex use a local Vite
+    bridge; Azure uses the local Azure Functions host. Choose once here, switch
+    in SDS.
 
     This is bring-your-own-AI: no AI account ships with the app. Azure needs
     your authorized endpoint/deployment and Entra identity. Claude/Codex need
@@ -25,6 +25,18 @@
     Additionally probe the configured deployment before starting, which detects a
     missing data-plane role, a rotated client IP, or a wrong deployment name.
 
+.PARAMETER DiagnoseProvider
+    Check Claude/Codex readiness and show executable-discovery diagnostics only.
+    Does not install dependencies, start servers, or run inference.
+
+.PARAMETER DebugAI
+    Enable bounded, sanitized interaction diagnostics in local AI responses.
+    Omit this switch to disable debugging. No prompts or raw CLI output are logged.
+
+.PARAMETER DebugAIContent
+    Also log full prompts, model context and provider responses to a local
+    temporary file. Sensitive content is included; do not share the file blindly.
+
 .EXAMPLE
     az login
     .\Start-SecureDesignStudio-WithAI.ps1
@@ -40,7 +52,10 @@ param(
     [ValidateSet("Azure", "Claude", "Codex")]
     [string]$Provider,
     [switch]$SkipAuthCheck,
-    [switch]$VerifyEndpoint
+    [switch]$VerifyEndpoint,
+    [switch]$DiagnoseProvider,
+    [switch]$DebugAI,
+    [switch]$DebugAIContent
 )
 
 $ErrorActionPreference = "Stop"
@@ -95,12 +110,84 @@ if ($VerifyEndpoint -and $Provider -ne "Azure") {
     Write-SetupError @("-VerifyEndpoint currently probes Azure only. Claude/Codex startup verifies sign-in without consuming inference.")
     exit 1
 }
+if ($DiagnoseProvider -and $Provider -eq "Azure") {
+    Write-SetupError @("-DiagnoseProvider applies to Claude and Codex. Use -VerifyEndpoint for Azure.")
+    exit 1
+}
 $env:SDS_AI_PROVIDER = $Provider.ToLowerInvariant()
 $env:SDS_LOCAL_AI = "1"
+$env:SDS_AI_DEBUG = if ($DebugAI -or $DebugAIContent) { "1" } else { "0" }
+$env:SDS_AI_DEBUG_CONTENT = if ($DebugAIContent) { "1" } else { "0" }
+if ($DebugAI) { Write-Host "AI interaction diagnostics enabled (sanitized; no raw provider output)." -ForegroundColor Yellow }
+if ($DebugAIContent) {
+    Write-Host "WARNING: AI content logging includes full prompts, model context and responses. Logs are local temporary files; protect and delete them after debugging." -ForegroundColor Yellow
+}
 
-$nodeVersion = Assert-NodeToolchain
+$nodeVersion = Assert-NodeToolchain -NoInstallOffer:$DiagnoseProvider
 if ($nodeVersion) {
     Write-Host "Node.js $nodeVersion" -ForegroundColor DarkGray
+}
+
+if ($Provider -ne "Azure") {
+    $cliName = $Provider.ToLowerInvariant()
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & node "scripts\ai-provider-preflight.mjs" --provider $cliName --diagnostics 2>$null | Out-String
+        $exitCode = $LASTEXITCODE
+        try { $readiness = $output | ConvertFrom-Json -ErrorAction Stop } catch { $readiness = $null }
+    } finally { $ErrorActionPreference = $previous }
+    $validReadiness = $readiness -and $readiness.id -eq $cliName -and
+        $readiness.available -is [bool] -and $readiness.message -is [string]
+    $ready = $exitCode -eq 0 -and $validReadiness -and $readiness.available
+    if ($DiagnoseProvider -or -not $ready) {
+        Write-LocalProviderDiagnostics -Provider $cliName -PreflightExitCode $exitCode -ParsedReadiness ([bool]$validReadiness) -Diagnostics $readiness.diagnostics
+    }
+    if (-not $ready) {
+        $instructions = if ($Provider -eq "Claude") {
+            "Use the official native Claude Code CLI from https://code.claude.com/docs/en/setup, then run 'claude auth login' and choose your Claude subscription."
+        } else {
+            "Use the official native Codex CLI from https://developers.openai.com/codex/cli, then run 'codex login' and sign in with ChatGPT."
+        }
+        $message = if ($validReadiness) { $readiness.message } else {
+            "The readiness helper did not return a valid response (exit $exitCode). Check Node.js type-stripping support and that scripts\ai-provider-preflight.mjs exists."
+        }
+        Write-SetupError @(
+            "$Provider is unavailable: $message",
+            $instructions,
+            "A completed login does not establish executable discovery or isolation support.",
+            "No provider fallback was attempted. No credentials were printed."
+        )
+        exit 1
+    }
+    Write-Host "Initial provider: $Provider ($($readiness.message))" -ForegroundColor DarkGray
+    if ($DiagnoseProvider) {
+        Write-Host "Diagnostics complete. No servers started and no inference requested." -ForegroundColor DarkGray
+        exit 0
+    }
+}
+
+if ($Provider -ne "Azure") {
+    Assert-PortFree -Port 5173 -Purpose "SecureDesignStudio"
+    Install-ProjectDependencies -RelativePath "." -Label "app"
+
+    Write-Host ""
+    Write-SetupStep "Starting SecureDesignStudio at http://localhost:5173/ with the local $Provider bridge."
+    Write-Host "No Azure Functions host or API package is needed for Claude/Codex." -ForegroundColor DarkGray
+    Write-Host "Select a scenario, then choose Review > Design Assistant." -ForegroundColor DarkGray
+    Write-Host "Both AI surfaces share the provider selector. Press Ctrl+C to stop." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $previousCliOnly = $env:SDS_LOCAL_AI_CLI_ONLY
+    $env:SDS_LOCAL_AI_CLI_ONLY = "1"
+    try {
+        npm run dev:ai:local
+        $localExitCode = $LASTEXITCODE
+    } finally {
+        if ($null -eq $previousCliOnly) { Remove-Item Env:SDS_LOCAL_AI_CLI_ONLY -ErrorAction SilentlyContinue }
+        else { $env:SDS_LOCAL_AI_CLI_ONLY = $previousCliOnly }
+    }
+    exit $localExitCode
 }
 
 # -----------------------------------------------------------------------------
@@ -111,7 +198,7 @@ if (-not $funcPath) {
     Write-SetupError @(
         "MISSING PREREQUISITE: Azure Functions Core Tools ('func')",
         "",
-        "Only this optional AI workflow needs it; it runs the local API on port 7071.",
+        "The Azure provider needs it; it runs the local API on port 7071.",
         "",
         "Install it once, using either option:",
         "",
@@ -294,30 +381,6 @@ if ($SkipAuthCheck) {
     }
 }
 
-} else {
-    $cliName = $Provider.ToLowerInvariant()
-    $previous = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try {
-        $output = & node "scripts\ai-provider-preflight.mjs" --provider $cliName 2>$null | Out-String
-        $exitCode = $LASTEXITCODE
-        try { $readiness = $output | ConvertFrom-Json -ErrorAction Stop } catch { $readiness = $null }
-    } finally { $ErrorActionPreference = $previous }
-    if ($exitCode -ne 0 -or -not $readiness -or $readiness.id -ne $cliName -or -not $readiness.available) {
-        $instructions = if ($Provider -eq "Claude") {
-            "Install the native Claude Code CLI from https://code.claude.com/docs/en/setup, then run 'claude auth login' and choose your Claude subscription."
-        } else {
-            "Install the native Codex CLI from https://developers.openai.com/codex/cli, then run 'codex login' and sign in with ChatGPT."
-        }
-        $message = if ($readiness -and $readiness.message) { $readiness.message } else { "Local provider readiness could not be verified within 15 seconds." }
-        Write-SetupError @(
-            "$Provider is unavailable: $message",
-            $instructions,
-            "No provider fallback was attempted. No credentials were printed."
-        )
-        exit 1
-    }
-    Write-Host "Initial provider: $Provider ($($readiness.message))" -ForegroundColor DarkGray
 }
 
 # -----------------------------------------------------------------------------

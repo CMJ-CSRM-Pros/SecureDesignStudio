@@ -38,6 +38,56 @@ function Write-SetupStep {
     Write-Host $Message -ForegroundColor Cyan
 }
 
+function Write-LocalProviderDiagnostics {
+    param(
+        [ValidateSet("claude", "codex")][string]$Provider,
+        [int]$PreflightExitCode,
+        [bool]$ParsedReadiness,
+        [object[]]$Diagnostics
+    )
+    Write-Host ""
+    Write-Host "Local provider diagnostics (no inference or credential output):" -ForegroundColor Cyan
+    Write-Host "  Preflight exit code: $PreflightExitCode; valid readiness response: $ParsedReadiness"
+    Write-Host "  PowerShell: $($PSVersionTable.PSVersion); OS architecture: $env:PROCESSOR_ARCHITECTURE"
+    Write-Host "  Native executable required: $Provider.exe outside the SDS repository"
+
+    $commands = @(Get-Command $Provider -All -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)
+    if ($commands.Count -eq 0) {
+        Write-Host "  PowerShell found no file-backed '$Provider' command."
+    }
+    foreach ($command in $commands) {
+        Write-Host "  PowerShell command: $($command.CommandType) - $($command.Path)"
+    }
+
+    $nativeCandidates = 0
+    $ignoredEntries = 0
+    foreach ($directory in ($env:PATH -split [System.IO.Path]::PathSeparator)) {
+        if (-not $directory -or -not [System.IO.Path]::IsPathRooted($directory) -or
+            $directory -notmatch '^(?:[A-Za-z]:[\\/]|\\\\)') {
+            $ignoredEntries++
+            continue
+        }
+        $candidate = Join-Path $directory "$Provider.exe"
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $nativeCandidates++
+            Write-Host "  Native PATH candidate: $candidate"
+        }
+    }
+    Write-Host "  Native PATH candidates: $nativeCandidates; non-absolute/empty PATH entries ignored: $ignoredEntries"
+    foreach ($entry in $Diagnostics) {
+        if ($entry.stage -is [string] -and $entry.message -is [string]) {
+            Write-Host "  [$($entry.stage)] $($entry.message)"
+        }
+    }
+    Write-Host "  PATH candidates alone are not proof of readiness; the shared resolver also checks"
+    Write-Host "  supported Codex npm packages. The last stage above identifies where checking stopped."
+    Write-Host "  Repository-local binaries and shell wrappers are never executed."
+    if ($Provider -eq "codex") {
+        Write-Host "  If npm discovery fails, 'npm root -g' locates packages for installation inspection."
+        Write-Host "  Do not rename a wrapper to .exe or copy login tokens into SDS."
+    }
+}
+
 function Get-NodeVersion {
     $command = Get-Command node -ErrorAction SilentlyContinue
     if (-not $command) { return $null }
@@ -349,6 +399,7 @@ function Invoke-NodeInstallOffer {
 # Node and npm must both exist and be new enough for the locked toolchain.
 # Returns the detected Node version; exits with guidance when unusable.
 function Assert-NodeToolchain {
+    param([switch]$NoInstallOffer)
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
         Write-SetupError @(
             "MISSING PREREQUISITE: Node.js",
@@ -396,9 +447,9 @@ function Assert-NodeToolchain {
             "Older versions fail with confusing dependency or syntax errors.",
             "",
             "Node $($script:RecommendedNodeMajor) LTS is the recommended version: it satisfies this",
-            "toolchain and the Azure Functions host used by the optional AI mode."
+            "toolchain and AI runtimes used by the optional AI mode."
         )
-        Invoke-NodeInstallOffer | Out-Null
+        if (-not $NoInstallOffer) { Invoke-NodeInstallOffer | Out-Null }
         exit 1
     }
 

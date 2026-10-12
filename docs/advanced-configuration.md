@@ -1,6 +1,6 @@
 # Advanced configuration and implementation reference
 
-*Updated: 2026-09-22 - Start from the root launcher scripts.*
+*Updated: 2026-10-11 - Claude/Codex use the Vite-hosted local bridge.*
 
 Start with the [user guide](user-guide.md). None of the optional service
 configuration below is required for ordinary modeling with
@@ -13,7 +13,8 @@ someone else's running preview.
 | Mode | Local processes and network behavior |
 |---|---|
 | `.\Start-SecureDesignStudio.ps1` (`npm run dev`) | Vite only, strict `http://localhost:5173/`. No Azure credentials, API, room persistence, or model-service requests. Room/key fragments are ignored and left untouched. |
-| `.\Start-SecureDesignStudio-WithAI.ps1` (`npm run dev:ai`) | Explicit opt-in: Vite on 5173, API build watcher, and local Azure Functions on 7071. The bridge calls your Azure deployment or the locally installed Claude/Codex CLI selected in SDS. Collaboration stays disabled. |
+| `.\Start-SecureDesignStudio-WithAI.ps1 -Provider Claude|Codex` (`npm run dev:ai:local`) | Explicit opt-in: Vite on 5173 serves the app and local CLI bridge in one process. No Azure Functions host, API package installation, or Azure credentials. Collaboration stays disabled. |
+| `.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure` (`npm run dev:ai`) | Explicit opt-in: Vite on 5173, API build watcher, and local Azure Functions on 7071. The bridge calls your Azure deployment. Collaboration stays disabled. |
 | Deployed `dist` | Local modeling by default. Collaboration and Assistant require explicit build configuration; using them is a network operation. |
 | Standalone `dist-single\index.html` | Browser-openable local editor by default. Explicitly configured services may use the network; collaboration also requires a hosted share destination. |
 
@@ -23,7 +24,8 @@ in parentheses; the npm scripts remain available and perform no checks.
 Local Vite rejects `VITE_COLLAB_TOKEN_ENDPOINT` and
 `VITE_DESIGN_ASSISTANT_ENDPOINT` overrides. Do not use overrides to bypass the
 local-mode boundary. For AI opt-in it uses the fixed
-`http://localhost:7071/api/design-assistant` endpoint.
+`http://localhost:5173/api/design-assistant` endpoint for Claude/Codex. Azure
+uses the Functions endpoint at `http://localhost:7071/api/design-assistant`.
 
 Production builds have **no built-in service destinations**, including no
 implicit `/api/design-assistant` endpoint. Service selection is explicit and
@@ -238,8 +240,8 @@ access, and assigning the data-plane role — follow
 workflow consumes it.
 
 In addition to the [source setup](user-guide.md#2-how-to-install-and-run),
-this workflow needs Azure Functions Core Tools (`func`). Choose Claude Code or
-Codex with a consumer subscription sign-in as described in
+Azure Functions Core Tools (`func`) are needed only for `-Provider Azure`.
+Choose Claude Code or Codex with a consumer subscription sign-in as described in
 [bring your own AI](bring-your-own-ai.md#choose-a-provider-at-startup-or-in-sds).
 The following Azure-specific setup applies only to `-Provider Azure`: an Azure CLI identity
 authorized to invoke an existing Azure AI deployment, its HTTPS endpoint,
@@ -247,7 +249,7 @@ and its model deployment name. If you are using someone else's deployment,
 obtain those from its owner. Basic use of SecureDesignStudio does not require
 creating Azure resources.
 
-Install Core Tools once if `func --version` does not work, then open a new
+For Azure, install Core Tools once if `func --version` does not work, then open a new
 PowerShell window so the PATH update applies:
 
 ```powershell

@@ -10,7 +10,7 @@ import { modelFixture, autosaveKey } from "./fixture.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const origin = "http://localhost:5173";
-const endpoint = "http://localhost:7071/api/design-assistant";
+const endpoint = "http://localhost:5173/api/design-assistant";
 const capabilities = {
   defaultProvider: "claude",
   providers: [
@@ -80,8 +80,15 @@ test("AI providers: shared selection, readiness, request routing, persistence an
     const selection = analysis.getByLabel("AI provider", { exact: true });
     await until(async () => await selection.inputValue() === "claude", "launcher default applied");
     assert.equal(await selection.locator('option[value="azure"]').isDisabled(), true);
-    assert.match(await analysis.innerText(), /Configure an Azure deployment/);
+    const otherSetup = analysis.locator(".ps-ai-provider details");
+    assert.equal(await otherSetup.getAttribute("open"), null);
+    assert.match(await analysis.locator(".ps-ai-provider [role=status]").innerText(), /Claude Code: Synthetic Claude/);
+    await otherSetup.getByText("Other provider setup", { exact: true }).click();
+    assert.match(await otherSetup.innerText(), /Configure an Azure deployment/);
+    await otherSetup.getByText("Other provider setup", { exact: true }).click();
     await selection.selectOption("codex");
+    assert.match(await analysis.locator(".ps-ai-provider [role=status]").innerText(), /Codex: Synthetic ChatGPT/);
+    assert.doesNotMatch(await analysis.locator(".ps-ai-provider [role=status]").innerText(), /Azure|Foundry/);
     await analysis.getByRole("button", { name: "Analyze model", exact: true }).click();
     await until(() => posts.length === 1, "review sent");
     assert.equal(posts[0].provider, "codex");

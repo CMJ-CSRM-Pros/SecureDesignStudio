@@ -19,7 +19,7 @@ export interface ServiceConfigurationInput {
   source?: string;
 }
 
-export const LOCAL_ASSISTANT_ENDPOINT = "http://localhost:7071/api/design-assistant";
+export const LOCAL_ASSISTANT_ENDPOINT = "http://localhost:5173/api/design-assistant";
 export const LOCAL_ONLY_COLLAB_MESSAGE = "Collaboration is disabled in local-only mode.";
 
 function unavailable(message: string, state: "disabled" | "invalid" = "disabled"): ServiceAvailability {

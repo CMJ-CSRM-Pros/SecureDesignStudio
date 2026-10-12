@@ -20,9 +20,13 @@ export function AiProviderSelector() {
       </select>
       <button type="button" disabled={loading || pending > 0} onClick={refresh}>Refresh providers</button>
     </div>
-    <p id={`${id}-notice`} role="status">{loading ? "Checking installed providers and sign-in..." : selected?.message}</p>
-    {capabilities?.providers.filter(item => !item.available && item.id !== provider).map(item =>
-      <p key={item.id}>{item.label}: {item.message}</p>)}
+    <p id={`${id}-notice`} role="status">{loading ? "Checking installed providers and sign-in..." :
+      selected ? `${selected.label}: ${selected.message}` : ""}</p>
+    {capabilities?.providers.some(item => !item.available && item.id !== provider) && <details>
+      <summary>Other provider setup</summary>
+      {capabilities.providers.filter(item => !item.available && item.id !== provider).map(item =>
+        <p key={item.id}>{item.label}: {item.message}</p>)}
+    </details>}
     <p>Prompts and included model context go to the selected provider. Claude and Codex use your subscription allowance.
       Switching providers starts a new conversation; it does not change the diagram.</p>
     {error && <p role="alert">{error}</p>}

@@ -1,5 +1,4 @@
 import type { AzureFunction, Context, HttpRequest } from "@azure/functions";
-import { DefaultAzureCredential } from "@azure/identity";
 import {
   DESIGN_SYSTEM_PROMPT, designCatalogChoices, designResponseFormat,
   parseDesignHistory, parseDesignResult, validateDesignCatalog, type DesignTurn,
@@ -15,8 +14,6 @@ const API_VERSION = process.env.AZURE_OPENAI_API_VERSION || "2024-10-21";
 const MODEL_DEPLOYMENT_NAME = process.env.MODEL_DEPLOYMENT_NAME;
 const configuredEndpoint =
   process.env.AZURE_OPENAI_ENDPOINT || process.env.AZURE_AI_ENDPOINT;
-
-const credential = new DefaultAzureCredential();
 
 const RESPONSE_HEADERS = {
   "Content-Type": "application/json",
@@ -260,6 +257,7 @@ const httpTrigger: AzureFunction = async function (
   req: HttpRequest,
 ): Promise<void> {
   const local = process.env.SDS_LOCAL_AI === "1";
+  const localCliOnly = local && process.env.SDS_LOCAL_AI_CLI_ONLY === "1";
   const method = (req.method ?? "POST").toUpperCase();
   // No wildcard CORS response. Browser requests must come from the launcher;
   // readiness scripts with no Origin may inspect capabilities.
@@ -295,8 +293,10 @@ const httpTrigger: AzureFunction = async function (
     const capabilities: AiProviderCapabilities = {
       defaultProvider, providers: [
         { id: "azure", label: "Azure OpenAI / Foundry",
-          available: Boolean(configuredEndpoint && MODEL_DEPLOYMENT_NAME),
-          message: configuredEndpoint && MODEL_DEPLOYMENT_NAME
+          available: !localCliOnly && Boolean(configuredEndpoint && MODEL_DEPLOYMENT_NAME),
+          message: localCliOnly
+            ? "Start with -Provider Azure to use an Azure deployment."
+            : configuredEndpoint && MODEL_DEPLOYMENT_NAME
             ? "Azure deployment is configured; Entra authorization is checked when requested."
             : "Configure an Azure endpoint and MODEL_DEPLOYMENT_NAME." },
         await localProviderStatus("claude"), await localProviderStatus("codex"),
@@ -319,6 +319,10 @@ const httpTrigger: AzureFunction = async function (
       return;
     }
     provider = request.provider;
+  }
+  if (localCliOnly && provider === "azure") {
+    fail(context, 403, "This local Vite bridge supports Claude and Codex only. Restart with -Provider Azure to use an Azure deployment.");
+    return;
   }
   if (!local && provider !== "azure") {
     fail(context, 403, "Subscription CLI providers are available only through the local launcher. Hosted requests use Azure.");
@@ -360,22 +364,42 @@ const httpTrigger: AzureFunction = async function (
       : { type: "json_object" };
     if (provider !== "azure") {
       const { runLocalProvider, LocalProviderError } = await import("./localProviders");
+      const debug = local && process.env.SDS_AI_DEBUG === "1";
+      const contentDebug = debug && process.env.SDS_AI_DEBUG_CONTENT === "1";
+      const diagnostics: string[] = [];
+      const diagnostic = debug ? (stage: string, message: string) => {
+        if (diagnostics.length < 80) diagnostics.push(`[${stage}] ${message}`);
+      } : undefined;
       try {
+        if (contentDebug) context.log.error("AI interaction content", JSON.stringify({
+          phase: "request", provider, mode: request.mode, messages,
+        }));
         const schema = choices
           ? designResponseFormat(choices, typeof request.context.scenario?.id === "string").json_schema.schema
           : reviewResponseSchema();
-        const content = await runLocalProvider(provider, messages[0].content, messages[1].content, schema);
-        context.res = { status: 200, headers: RESPONSE_HEADERS, body: validatedResult(request, content, choices) };
+        const content = await runLocalProvider(provider, messages[0].content, messages[1].content, schema, diagnostic);
+        if (contentDebug) context.log.error("AI interaction content", JSON.stringify({
+          phase: "response", provider, content,
+        }));
+        const result = validatedResult(request, content, choices);
+        if (debug) context.log.error("AI interaction diagnostics", diagnostics.join("\n"));
+        context.res = { status: 200, headers: RESPONSE_HEADERS, body: result };
       } catch (error) {
+        if (debug) context.log.error("AI interaction diagnostics", diagnostics.join("\n"));
         if (error instanceof LocalProviderError) {
-          fail(context, error.status, error.message);
+          fail(context, error.status, error.message + (debug ? `\nAI debug trace:\n${diagnostics.join("\n")}` : ""));
+          return;
+        }
+        if (debug) {
+          fail(context, 502, `The local AI response could not be validated. No changes were applied.\nAI debug trace:\n${diagnostics.join("\n")}`);
           return;
         }
         throw error;
       }
       return;
     }
-    const accessToken = await credential.getToken(TOKEN_SCOPE);
+    const { DefaultAzureCredential } = await import("@azure/identity");
+    const accessToken = await new DefaultAzureCredential().getToken(TOKEN_SCOPE);
     if (!accessToken) throw new Error("Managed identity did not return a token.");
 
     const endpoint = normalizeEndpoint(configuredEndpoint!);
