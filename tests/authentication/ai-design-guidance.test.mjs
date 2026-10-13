@@ -10,7 +10,7 @@ import { modelFixture } from "../browser/fixture.mjs";
 const contract = await import("../../shared/aiDesignGuidance.ts");
 const designContract = await import("../../shared/designContract.ts");
 const { normalizeDoc } = await import("../../src/store.tsx");
-const { buildDesignerContext, buildDesignPlanContext, applyDesignerResult } = await import("../../src/threatModelDesigner.ts");
+const { buildDesignerContext, buildDesignPlanContext } = await import("../../src/threatModelDesigner.ts");
 const { buildDfdReviewContext } = await import("../../src/dfdReviewContext.ts");
 const guidanceRuntime = await import("../../src/aiDesignGuidance.ts");
 const { resolveAiDesignGuidance, withNodeTypeGuidance, guidanceReferencesForFinding, formatGuidanceReferences } = guidanceRuntime;
