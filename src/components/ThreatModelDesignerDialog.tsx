@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { DesignTurn } from "../../shared/designContract";
-import { askThreatModelDesigner } from "../designAssistant";
+import { askThreatModelDesigner, planThreatModelDesign } from "../designAssistant";
+import { jsonByteLength } from "../../shared/aiDesignGuidance";
+import type { DesignRequestSnapshot } from "../threatModelDesigner";
 import { SERVICES } from "../services";
 import { useStore } from "../store";
 import { useUiShell } from "../uiShell";
@@ -9,10 +11,13 @@ import { AiProviderSelector } from "./AiProviderSelector";
 
 type Message = DesignTurn & { assumptions?: string[] };
 
+// ~24K tokens: comfortably inside small per-minute token limits with the output reservation.
+const SINGLE_CALL_CONTEXT_BYTES = 96_000;
+
 export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const aiProvider = useAiProvider();
   const {
-    doc, activeScenario, prepareThreatModelDesign, applyThreatModelDesign,
+    doc, activeScenario, prepareThreatModelDesign, prepareThreatModelDesignPlan, applyThreatModelDesign,
     undo, redo, canUndo, canRedo, setViewMode, filter, clearFilter,
   } = useStore();
   const { requestFitView } = useUiShell();
@@ -128,13 +133,34 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
     setBusy(true);
     setError(null);
     setStatus("");
-    const timer = window.setTimeout(() => controller.abort(), 100_000);
+    const timer = window.setTimeout(() => controller.abort(), 180_000);
     try {
-      const expected = prepareThreatModelDesign();
+      const history = messages.slice(-12).map(({ role, text }) => ({ role, text }));
+      const provider = __PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {};
+      // Small libraries go in one call; otherwise a planning call selects the
+      // component types so the design call carries only their entries and guidance.
+      let expected: DesignRequestSnapshot | null = null;
+      try {
+        const full = prepareThreatModelDesign();
+        if (jsonByteLength(full.context) <= SINGLE_CALL_CONTEXT_BYTES) expected = full;
+      } catch {
+        expected = null;
+      }
+      let scopeNote = "";
+      if (!expected) {
+        setStatus("Selecting the component types this design needs…");
+        const planContext = prepareThreatModelDesignPlan();
+        const plan = await planThreatModelDesign({
+          mode: "design-plan", question: prompt, context: planContext, history, ...provider,
+        }, controller.signal);
+        if (controller.signal.aborted || abortRef.current !== controller) return;
+        expected = prepareThreatModelDesign(plan.nodeTypeIds);
+        const offered = expected.context.catalogScope?.nodeTypeIds.length ?? 0;
+        scopeNote = ` Used ${offered} of ${planContext.nodeTypeIndex.length} component types.`;
+        setStatus(`Designing with ${offered} of ${planContext.nodeTypeIndex.length} component types…`);
+      }
       const response = await askThreatModelDesigner({
-        mode: "design", question: prompt, context: expected.context,
-        history: messages.slice(-12).map(({ role, text }) => ({ role, text })),
-        ...(__PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {}),
+        mode: "design", question: prompt, context: expected.context, history, ...provider,
       }, controller.signal);
       if (controller.signal.aborted || abortRef.current !== controller) return;
       const outcome = applyThreatModelDesign(response, expected);
@@ -144,9 +170,10 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
         { role: "assistant", text: response.answer, assumptions: response.assumptions },
       ]);
       setQuestion("");
-      setStatus(outcome.changed ? `Design applied to the diagram. ${outcome.summary} Undo reverses this entire response.`
+      setStatus((outcome.changed ? `Design applied to the diagram. ${outcome.summary} Undo reverses this entire response.`
         : response.design ? "The requested design already matches the model. No changes were applied."
-        : "No model changes were applied. The diagram has not changed.");
+        : "No model changes were applied. The diagram has not changed.") + scopeNote +
+        (outcome.warning ? ` Warning: ${outcome.warning}` : ""));
       if (outcome.changed) {
         const edit = response.design;
         const orderOnly = edit?.edgeOrder != null && !edit.nodes.length && !edit.edges.length &&

@@ -5,8 +5,7 @@ import { classificationDefinitionsForLibrary, isEnabledClassification, type Clas
 import { allowedAuthMethodsForNode } from "./policy";
 import { nodeRect, containsRect, boundaryRect, expandRectToContain, placeNodeOutsideBoundary, overlapRatio } from "./boundaryGeometry";
 import { resolveDfdRole, resolveNodeReviewScope } from "./dfdSemantics";
-import { buildAiGuidanceContext, effectiveGuidanceNodeTypes } from "./aiDesignGuidance";
-import { assertAiRequestBudget } from "../shared/aiDesignGuidance";
+import { buildAiGuidanceContext, effectiveGuidanceNodeTypes, resolveAiDesignGuidance } from "./aiDesignGuidance";
 import { propagateScenarioEdgeData } from "./dataPropagation";
 import { catalogDefinitionsFor, resolveNodeTypeDef, uid, type NodeTypeRef, type PsDocument, type PsNode, type Scenario } from "./types";
 
@@ -20,6 +19,7 @@ export interface DesignRequestSnapshot {
   scenarioId: string | null;
   documentKey: string;
   catalogKey: string;
+  scope?: readonly string[];
   context: ReturnType<typeof buildDesignerContext>;
 }
 
@@ -31,10 +31,17 @@ function selectedScenario(doc: PsDocument, scenarioId: string | null): Scenario 
   return scenario;
 }
 
-export function buildDesignerContext(doc: PsDocument, scenarioId: string | null, catalog: DesignerCatalog) {
+// A planned scope narrows catalog entries and guidance to the selected types plus
+// every type already used in the scenario; it never hides model content.
+export function buildDesignerContext(
+  doc: PsDocument, scenarioId: string | null, catalog: DesignerCatalog, scope?: readonly string[],
+) {
   catalog = { ...catalog, nodeTypes: effectiveGuidanceNodeTypes(doc.nodeTypes, catalog.nodeTypes) };
   const scenario = selectedScenario(doc, scenarioId);
   const nodes = doc.nodes.filter(item => scenario?.nodeIds.includes(item.id));
+  const available = catalog.nodeTypes.filter(type => resolveNodeTypeDef(type.id, catalog.nodeTypes));
+  const scopeIds = scope ? new Set([...scope, ...nodes.map(node => node.type)]) : undefined;
+  const offered = scopeIds ? available.filter(type => scopeIds.has(type.id)) : available;
   const edgesById = new Map(doc.edges.map(edge => [edge.id, edge]));
   const edges = (scenario?.edgeIds ?? []).flatMap(id => {
     const edge = edgesById.get(id);
@@ -50,7 +57,8 @@ export function buildDesignerContext(doc: PsDocument, scenarioId: string | null,
   const sharedInOtherScenarios = (kind: "nodeIds" | "edgeIds" | "boundaryIds", id: string) =>
     doc.scenarios.some(other => other.id !== scenarioId && other[kind].includes(id));
   const context = {
-    aiDesignGuidance: buildAiGuidanceContext(doc, catalog.nodeTypes, catalog.nodeTypes.map(type => type.id),
+    aiDesignGuidance: buildAiGuidanceContext(doc, catalog.nodeTypes,
+      scopeIds ? catalog.nodeTypes.map(type => type.id).filter(id => scopeIds.has(id)) : catalog.nodeTypes.map(type => type.id),
       nodes.filter(node => resolveNodeReviewScope(node, scenario, catalog.nodeTypes).includeInternals)),
     scenario: scenario ? {
       id: scenario.id, name: scenario.name, description: scenario.description,
@@ -85,7 +93,7 @@ export function buildDesignerContext(doc: PsDocument, scenarioId: string | null,
     data: doc.data.filter(item => dataIds.has(item.id)).map(({ id, name, classification }) => ({ id, name, classification })),
     catalog: {
       unspecifiedNodeType: { id: "", label: "Unspecified component", description: "Use for people, browsers and generic components without a suitable catalog entry; set their DFD role separately." },
-      nodeTypes: catalog.nodeTypes.filter(type => resolveNodeTypeDef(type.id, catalog.nodeTypes)).map(type => {
+      nodeTypes: offered.map(type => {
         const definition = resolveNodeTypeDef(type.id, catalog.nodeTypes);
         return { id: type.id, label: type.label, description: definition?.description ?? "",
           defaultDfdRole: definition?.defaultDfdRole,
@@ -99,9 +107,35 @@ export function buildDesignerContext(doc: PsDocument, scenarioId: string | null,
         .filter(item => isEnabledClassification(catalog.classifications, item.id))
         .map(({ id, label, description }) => ({ id, label, description })),
     },
+    ...(scopeIds ? { catalogScope: {
+      nodeTypeIds: offered.map(type => type.id),
+      availableNodeTypes: available.length,
+      note: "Planned subset of the component library; omitted types were not selected for this request.",
+    } } : {}),
   };
-  assertAiRequestBudget({ context });
   return context;
+}
+
+// Compact planning projection: the full type index without descriptions or guidance.
+export function buildDesignPlanContext(doc: PsDocument, scenarioId: string | null, catalog: DesignerCatalog) {
+  catalog = { ...catalog, nodeTypes: effectiveGuidanceNodeTypes(doc.nodeTypes, catalog.nodeTypes) };
+  const scenario = selectedScenario(doc, scenarioId);
+  const guided = new Set(catalog.nodeTypes.map(type => type.id)
+    .filter(id => resolveAiDesignGuidance(id, doc.nodeTypes, catalog.nodeTypes)));
+  return {
+    scenario: scenario ? { id: scenario.id, name: scenario.name, description: scenario.description } : null,
+    nodes: doc.nodes.filter(item => scenario?.nodeIds.includes(item.id)).map(node =>
+      ({ id: node.id, title: node.title, type: node.type, dfdRole: resolveDfdRole(node, catalog.nodeTypes).role })),
+    edges: (scenario?.edgeIds ?? []).flatMap(id => doc.edges.filter(edge => edge.id === id))
+      .map(({ id, source, target, title }) => ({ id, source, target, title })),
+    boundaries: doc.boundaries.filter(item => scenario?.boundaryIds.includes(item.id))
+      .map(({ id, type, title }) => ({ id, type, title })),
+    nodeTypeIndex: catalog.nodeTypes.flatMap(type => {
+      const definition = resolveNodeTypeDef(type.id, catalog.nodeTypes);
+      return definition ? [{ id: type.id, label: type.label, category: definition.category ?? "",
+        defaultDfdRole: definition.defaultDfdRole ?? "", hasGuidance: guided.has(type.id) }] : [];
+    }),
+  };
 }
 
 // Geometry measurements may arrive during inference; semantic edits must invalidate it.
@@ -147,8 +181,8 @@ export function describeDesignerChanges(before: PsDocument, after: PsDocument): 
 }
 
 export function applyDesignerResult(
-  doc: PsDocument, scenarioId: string | null, value: unknown, catalog: DesignerCatalog,
-): { doc: PsDocument; scenarioId: string | null } {
+  doc: PsDocument, scenarioId: string | null, value: unknown, catalog: DesignerCatalog, scope?: readonly string[],
+): { doc: PsDocument; scenarioId: string | null; warning?: string } {
   catalog = { ...catalog, nodeTypes: effectiveGuidanceNodeTypes(doc.nodeTypes, catalog.nodeTypes) };
   const scenario = selectedScenario(doc, scenarioId);
   const result = parseDesignResult(value, { existingScenario: Boolean(scenario) });
@@ -159,7 +193,7 @@ export function applyDesignerResult(
   if (name === undefined || description === undefined) {
     throw new Error("AI design requires a scenario name and description. No changes were applied.");
   }
-  const context = buildDesignerContext(doc, scenarioId, catalog);
+  const context = buildDesignerContext(doc, scenarioId, catalog, scope);
   const removal = design.remove ?? { nodeIds: [], edgeIds: [], boundaryIds: [] };
   const validateRemovals = (requested: string[], available: readonly { id: string }[]) => {
     for (const id of requested) {
@@ -415,7 +449,14 @@ export function applyDesignerResult(
       ...(item.nodeScopeReasons ? { nodeScopeReasons: omitRemoved(item.nodeScopeReasons, removedNodes) } : {}),
     };
   });
-  if (design.edgeOrder != null) {
+  const emptyOrderWithEdits = design.edgeOrder?.length === 0 &&
+    (design.nodes.length > 0 || design.edges.length > 0 || design.boundaries.length > 0 ||
+      design.data.length > 0 || removal.nodeIds.length > 0 || removal.edgeIds.length > 0 ||
+      removal.boundaryIds.length > 0);
+  const warning = emptyOrderWithEdits && scenarios.find(item => item.id === nextScenario.id)!.edgeIds.length > 0
+    ? "AI returned an empty flow order. Existing flow order and numbers were preserved; new connections were appended. Review the sequence."
+    : undefined;
+  if (design.edgeOrder != null && !warning) {
     const orderedIds = design.edgeOrder.map(id => reference(edgeIds, id));
     const target = scenarios.find(item => item.id === nextScenario.id)!;
     const surviving = new Set(target.edgeIds);
@@ -448,5 +489,6 @@ export function applyDesignerResult(
       return retained;
     }),
   }, catalog.authentication);
-  return { doc: JSON.stringify(next) === JSON.stringify(doc) ? doc : next, scenarioId: nextScenario.id };
+  return { doc: JSON.stringify(next) === JSON.stringify(doc) ? doc : next, scenarioId: nextScenario.id,
+    ...(warning ? { warning } : {}) };
 }

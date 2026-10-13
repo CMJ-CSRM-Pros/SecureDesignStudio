@@ -573,7 +573,7 @@ test("designer sequence: invalid or incomplete orders fail atomically even along
   const { doc } = applyDesignerResult(emptyDocument(), null, draft(), catalog);
   const before = structuredClone(doc);
   const [first, second] = doc.edges.map(edge => edge.id);
-  for (const order of [[], [first], [first, first], [first, "missing"], [first, second, "extra"],
+  for (const order of [[first], [first, first], [first, "missing"], [first, second, "extra"],
     "not an array", {}, [first, 7], Array(1001).fill(first)]) {
     const response = nodeRefinement(doc);
     response.design.nodes[0].title = "Must not apply";
@@ -590,6 +590,26 @@ test("designer sequence: invalid or incomplete orders fail atomically even along
   emptyCreation.design.scenario = { name: "Empty", description: "No generated elements" };
   emptyCreation.design.edgeOrder = [];
   assert.throws(() => applyDesignerResult(emptyDocument(), null, emptyCreation, catalog), /design is empty/);
+});
+
+test("designer sequence: empty order alongside edits preserves order with an explicit warning", () => {
+  const proposed = draft();
+  proposed.design.edgeOrder = [];
+  const created = applyDesignerResult(emptyDocument(), null, proposed, catalog);
+  assert.match(created.warning, /empty flow order/);
+  assert.deepEqual(Object.values(created.doc.scenarios[0].edgeNumbers), [1, 2]);
+  const before = structuredClone(created.doc);
+  const response = nodeRefinement(created.doc);
+  response.design.edgeOrder = [];
+  response.design.nodes[0].title = "Updated title";
+  const edited = applyDesignerResult(created.doc, created.scenarioId, response, catalog);
+  assert.match(edited.warning, /Review the sequence/);
+  assert.deepEqual(edited.doc.scenarios[0].edgeIds, before.scenarios[0].edgeIds);
+  assert.deepEqual(edited.doc.scenarios[0].edgeNumbers, before.scenarios[0].edgeNumbers);
+  assert.deepEqual(created.doc, before);
+  const reorderOnly = editOnly();
+  reorderOnly.design.edgeOrder = [];
+  assert.throws(() => applyDesignerResult(created.doc, created.scenarioId, reorderOnly, catalog), /every remaining connection/);
 });
 
 function existingEdgeEdit(doc, edge = doc.edges[0]) {

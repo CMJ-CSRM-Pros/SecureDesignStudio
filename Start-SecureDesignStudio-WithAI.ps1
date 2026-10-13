@@ -30,8 +30,8 @@
     Does not install dependencies, start servers, or run inference.
 
 .PARAMETER DebugAI
-    Enable bounded, sanitized interaction diagnostics in local AI responses.
-    Omit this switch to disable debugging. No prompts or raw CLI output are logged.
+    Enable bounded, sanitized interaction diagnostics. Azure logs request sizing
+    and exact usage when available; no prompts or raw CLI output are logged.
 
 .PARAMETER DebugAIContent
     Also log full prompts, model context and provider responses to a local

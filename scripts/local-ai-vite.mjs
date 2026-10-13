@@ -8,11 +8,34 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-export function localAiVitePlugin() {
+export function localAiVitePlugin({ cliOnly = true } = {}) {
   return {
     name: "secure-design-studio-local-ai",
     apply: "serve",
+    config() {
+      if (cliOnly) return;
+      return {
+        server: {
+          proxy: {
+            "^/api/design-assistant(?:\\?|$)": {
+              target: "http://localhost:7071",
+              changeOrigin: false,
+              configure(proxy) {
+                proxy.on("error", (_error, _request, response) => {
+                  if (typeof response.setHeader === "function" && !response.headersSent && !response.writableEnded) {
+                    sendJson(response, 503, {
+                      error: "The local AI API is unavailable or still starting. Wait for Functions to start, then refresh providers. If it persists, inspect the API terminal.",
+                    });
+                  }
+                });
+              },
+            },
+          },
+        },
+      };
+    },
     configureServer(server) {
+      if (!cliOnly) return;
       let logPath;
       const writeLog = (...values) => {
         const content = values[0] === "AI interaction content";

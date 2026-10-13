@@ -18,7 +18,7 @@ import {
 import type { ChangeItem, ChangeTarget } from "./diff";
 import type { AssistantFinding } from "./designAssistant";
 import { propagateScenarioEdgeData } from "./dataPropagation";
-import { applyDesignerResult, buildDesignerContext, designerDocumentKey, describeDesignerChanges, type DesignRequestSnapshot } from "./threatModelDesigner";
+import { applyDesignerResult, buildDesignerContext, buildDesignPlanContext, designerDocumentKey, describeDesignerChanges, type DesignRequestSnapshot } from "./threatModelDesigner";
 import { loadAutosaveRaw, saveAutosave } from "./autosave";
 import { useUiShell } from "./uiShell";
 import { resetDetailsTab } from "./components/detailsTabStore";
@@ -563,8 +563,9 @@ export interface ImportPrivacyManagerSummary {
 interface StoreApi {
   doc: PsDocument;
   documentSessionId: number;
-  prepareThreatModelDesign: () => DesignRequestSnapshot;
-  applyThreatModelDesign: (result: unknown, expected: DesignRequestSnapshot) => { scenarioId: string | null; changed: boolean; summary: string };
+  prepareThreatModelDesign: (scope?: readonly string[]) => DesignRequestSnapshot;
+  prepareThreatModelDesignPlan: () => ReturnType<typeof buildDesignPlanContext>;
+  applyThreatModelDesign: (result: unknown, expected: DesignRequestSnapshot) => { scenarioId: string | null; changed: boolean; summary: string; warning?: string };
   authenticationLibrary: readonly AuthTypeDef[];
   authenticationCatalog: readonly AuthTypeDef[];
   authenticationWarnings: string[];
@@ -1496,25 +1497,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [libraries]);
 
-  const prepareThreatModelDesign = useCallback((): DesignRequestSnapshot => {
+  const prepareThreatModelDesign = useCallback((scope?: readonly string[]): DesignRequestSnapshot => {
     const current = docRef.current;
     const scenarioId = current.scenarios.length ? activeScenarioIdRef.current : null;
     const catalog = designerCatalog();
     return {
       scenarioId, documentKey: designerDocumentKey(current), catalogKey: JSON.stringify(catalog),
-      context: buildDesignerContext(current, scenarioId, catalog),
+      ...(scope ? { scope: [...scope] } : {}),
+      context: buildDesignerContext(current, scenarioId, catalog, scope),
     };
   }, [designerCatalog]);
 
+  const prepareThreatModelDesignPlan = useCallback(() => {
+    const current = docRef.current;
+    const scenarioId = current.scenarios.length ? activeScenarioIdRef.current : null;
+    return buildDesignPlanContext(current, scenarioId, designerCatalog());
+  }, [designerCatalog]);
+
   const applyThreatModelDesign = useCallback((result: unknown, expected: DesignRequestSnapshot) => {
-    const current = prepareThreatModelDesign();
+    const current = prepareThreatModelDesign(expected.scope);
     if (current.scenarioId !== expected.scenarioId || current.documentKey !== expected.documentKey ||
         current.catalogKey !== expected.catalogKey ||
         JSON.stringify(current.context) !== JSON.stringify(expected.context)) {
       throw new Error("The model, scenario or catalog changed while AI was working. No changes were applied; send your prompt again.");
     }
     const previous = docRef.current;
-    const applied = applyDesignerResult(previous, current.scenarioId, result, designerCatalog());
+    const applied = applyDesignerResult(previous, current.scenarioId, result, designerCatalog(), expected.scope);
     const changed = applied.doc !== previous;
     if (changed) {
       const next = withCatalogDefinitions(
@@ -1528,7 +1536,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSelection(null);
       setActiveScenarioId(applied.scenarioId);
     }
-    return { scenarioId: applied.scenarioId, changed, summary: describeDesignerChanges(previous, applied.doc) };
+    return { scenarioId: applied.scenarioId, changed, summary: describeDesignerChanges(previous, applied.doc),
+      warning: applied.warning };
   }, [designerCatalog, prepareThreatModelDesign, libraries, updateDocumentHistory, setSelection, setActiveScenarioId]);
 
   const restoreHistorySelection = useCallback((entry: HistoryEntry, previousDoc: PsDocument) => {
@@ -4457,6 +4466,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const api: StoreApi = {
     documentSessionId,
     prepareThreatModelDesign,
+    prepareThreatModelDesignPlan,
     applyThreatModelDesign,
     availableCatalogDefinitions,
     nodeTypeCatalog,

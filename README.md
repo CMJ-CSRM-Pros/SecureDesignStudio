@@ -248,6 +248,10 @@ retain their separate terms; the project license grants no trademark rights.
 
 ## Recent changes
 
+- Version 1.0.31 scopes Design with AI requests with two-phase component planning, so large libraries no longer exceed Azure token-per-minute limits.
+- Designer recovers valid edits when a model returns an empty flow order, and -DebugAI reports request sizing.
+- The local Azure proxy reports a clear diagnostic while the Functions API is still starting.
+
 - Version 1.0.27 adds shared Azure/Claude/Codex selection through the local AI launcher.
 - AI design authoring, refinement, deletion/rerouting and flow ordering apply as complete undoable edits.
 - Editable node-type AI guidance and restored Power Platform catalog types support both AI surfaces.

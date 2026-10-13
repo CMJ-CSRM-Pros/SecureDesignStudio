@@ -10,11 +10,11 @@ import { modelFixture } from "../browser/fixture.mjs";
 const contract = await import("../../shared/aiDesignGuidance.ts");
 const designContract = await import("../../shared/designContract.ts");
 const { normalizeDoc } = await import("../../src/store.tsx");
-const { buildDesignerContext, applyDesignerResult } = await import("../../src/threatModelDesigner.ts");
+const { buildDesignerContext, buildDesignPlanContext, applyDesignerResult } = await import("../../src/threatModelDesigner.ts");
 const { buildDfdReviewContext } = await import("../../src/dfdReviewContext.ts");
 const guidanceRuntime = await import("../../src/aiDesignGuidance.ts");
 const { resolveAiDesignGuidance, withNodeTypeGuidance, guidanceReferencesForFinding, formatGuidanceReferences } = guidanceRuntime;
-const { emptyNodeTypeDefinition, AUTH_TYPE_DEFS } = await import("../../src/types.ts");
+const { emptyNodeTypeDefinition, emptyDocument, AUTH_TYPE_DEFS, NODE_TYPE_DEFS } = await import("../../src/types.ts");
 const { DEFAULT_CLASSIFICATION_LIBRARY } = await import("../../src/classificationLibrary.ts");
 const { validateLibraryPackage } = await import("../../src/libraries/validation.ts");
 const { resolveLibraries } = await import("../../src/libraries/registry.ts");
@@ -140,6 +140,74 @@ test("AI guidance: endpoint-only interiors and unused review types never leak, e
   assert.equal(designer.aiDesignGuidance.length, 2, "Authoring includes available choices with complete guidance");
   doc.nodes[1].dfdRoleOverride = "ExternalInteractor";
   assert.deepEqual(buildDfdReviewContext(doc, doc.scenarios[0], available).aiDesignGuidance, []);
+});
+
+test("AI guidance: two-phase planning sends an index, then only planned and in-use types with their guidance", () => {
+  const doc = fixture();
+  doc.nodeTypes.find(item => item.id === "nt_browser").definition.aiDesignGuidance = guidance();
+  const available = [type(), type("planned"), type("unplanned", { aiDesignGuidance: guidance({ content: "UNPLANNED_REFERENCE" }) }), type("bare", { aiDesignGuidance: undefined })];
+  const scenarioId = doc.scenarios[0].id;
+  const plan = buildDesignPlanContext(doc, scenarioId, catalog(available));
+  assert.equal(plan.aiDesignGuidance, undefined);
+  assert.equal(plan.catalog, undefined);
+  assert.doesNotMatch(JSON.stringify(plan), /Synthetic design reference|UNPLANNED_REFERENCE/);
+  const index = Object.fromEntries(plan.nodeTypeIndex.map(entry => [entry.id, entry]));
+  assert.equal(index.planned.hasGuidance, true);
+  assert.equal(index.bare.hasGuidance, false);
+  const choices = designContract.designPlanChoices(plan);
+  assert.ok(["nt_browser", "planned", "unplanned", "bare"].every(id => choices.includes(id)));
+
+  const full = buildDesignerContext(doc, scenarioId, catalog(available));
+  assert.equal(full.catalogScope, undefined, "Unscoped single-call context is unchanged");
+  const scoped = buildDesignerContext(doc, scenarioId, catalog(available), ["planned"]);
+  const offered = scoped.catalog.nodeTypes.map(entry => entry.id);
+  assert.ok(offered.includes("planned") && offered.includes("nt_browser"), "Planned plus in-use types are offered");
+  assert.ok(!offered.includes("unplanned") && !offered.includes("bare"));
+  assert.deepEqual(scoped.aiDesignGuidance.map(entry => entry.typeId).sort(), ["nt_browser", "planned"]);
+  assert.doesNotMatch(JSON.stringify(scoped), /UNPLANNED_REFERENCE/);
+  assert.deepEqual([...scoped.catalogScope.nodeTypeIds].sort(), [...offered].sort());
+  assert.equal(scoped.catalogScope.availableNodeTypes, full.catalog.nodeTypes.length);
+  assert.ok(scoped.catalogScope.note.length > 0);
+});
+
+test("AI guidance: design plan contract is a strict enum of known IDs and rejects invented, extra or excessive selections", () => {
+  const context = { nodeTypeIndex: [{ id: "a" }, { id: "b" }, { id: "a" }] };
+  const choices = designContract.designPlanChoices(context);
+  assert.deepEqual(choices, ["a", "b"]);
+  const format = designContract.designPlanResponseFormat(choices);
+  assert.equal(format.type, "json_schema");
+  assert.equal(format.json_schema.strict, true);
+  assert.equal(format.json_schema.schema.additionalProperties, false);
+  assert.deepEqual(format.json_schema.schema.properties.nodeTypeIds.items.enum, ["a", "b"]);
+  assert.deepEqual(designContract.parseDesignPlan({ nodeTypeIds: ["b", "a", "b"], rationale: "" }, choices),
+    { nodeTypeIds: ["b", "a"], rationale: "" });
+  for (const value of [
+    { nodeTypeIds: ["c"], rationale: "" },
+    { nodeTypeIds: ["a"], rationale: "", extra: 1 },
+    { nodeTypeIds: ["a"] },
+    { nodeTypeIds: "a", rationale: "" },
+    { nodeTypeIds: ["a"], rationale: "x".repeat(2001) },
+    null,
+  ]) assert.throws(() => designContract.parseDesignPlan(value, choices), undefined, JSON.stringify(value));
+  const many = Array.from({ length: designContract.MAX_PLANNED_NODE_TYPES + 1 }, (_, i) => `t${i}`);
+  assert.throws(() => designContract.parseDesignPlan({ nodeTypeIds: many, rationale: "" }, many));
+  assert.throws(() => designContract.designPlanChoices({ nodeTypeIndex: [] }));
+  assert.throws(() => designContract.designPlanChoices({}));
+});
+
+test("AI guidance: shipped library plan and scoped design requests fit a 50K tokens-per-minute deployment", () => {
+  const shipped = NODE_TYPE_DEFS.map(({ id, label, ...definition }) => ({ id, label, definition }));
+  assert.ok(shipped.filter(entry => entry.definition.aiDesignGuidance).length > 100);
+  const doc = emptyDocument();
+  const scenarioId = doc.scenarios[0]?.id ?? null;
+  const tokens = context => Math.ceil(Buffer.byteLength(JSON.stringify(context)) / 4);
+  const plan = buildDesignPlanContext(doc, scenarioId, catalog(shipped));
+  assert.equal(plan.nodeTypeIndex.length, shipped.length);
+  assert.ok(tokens(plan) < 20_000, `plan context ~${tokens(plan)} tokens`);
+  const picked = shipped.filter(entry => entry.definition.aiDesignGuidance).slice(0, designContract.MAX_PLANNED_NODE_TYPES).map(entry => entry.id);
+  const scoped = buildDesignerContext(doc, scenarioId, catalog(shipped), picked);
+  assert.equal(scoped.aiDesignGuidance.length, picked.length);
+  assert.ok(tokens(scoped) + 8_000 < 50_000, `scoped design ~${tokens(scoped)} tokens + 8000 output`);
 });
 
 test("AI guidance: 177 fully populated compact types fit both real contexts without silent omission", () => {

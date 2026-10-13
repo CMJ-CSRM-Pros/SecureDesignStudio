@@ -1,7 +1,8 @@
 import type { AzureFunction, Context, HttpRequest } from "@azure/functions";
 import {
-  DESIGN_SYSTEM_PROMPT, designCatalogChoices, designResponseFormat,
-  parseDesignHistory, parseDesignResult, validateDesignCatalog, type DesignTurn,
+  DESIGN_PLAN_SYSTEM_PROMPT, DESIGN_SYSTEM_PROMPT, designCatalogChoices, designPlanChoices,
+  designPlanResponseFormat, designResponseFormat, parseDesignHistory, parseDesignPlan,
+  parseDesignResult, validateDesignCatalog, type DesignTurn,
 } from "../../shared/designContract";
 import { AI_GUIDANCE_POLICY, MAX_AI_REQUEST_BYTES, validateAiGuidanceContext } from "../../shared/aiDesignGuidance";
 import type { AiProviderCapabilities, AiProviderId } from "../../shared/aiProviders";
@@ -40,7 +41,7 @@ type AssistantResult = {
 
 type AssistantRequest = {
   provider?: AiProviderId;
-  mode: "chat" | "analyze" | "design";
+  mode: "chat" | "analyze" | "design" | "design-plan";
   question: string;
   history?: DesignTurn[];
   context: {
@@ -52,8 +53,29 @@ type AssistantRequest = {
     selection?: unknown;
     catalog?: unknown;
     aiDesignGuidance?: unknown;
+    nodeTypeIndex?: unknown;
   };
 };
+
+async function azureErrorDetail(response: Response): Promise<{
+  code?: string; message?: string; retryAfterSeconds?: number;
+}> {
+  const retryMs = Number(response.headers?.get("retry-after-ms"));
+  const retry = Number(response.headers?.get("retry-after"));
+  const retryAfterSeconds = Number.isFinite(retryMs) && retryMs > 0
+    ? Math.ceil(retryMs / 1000)
+    : Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : undefined;
+  let code: string | undefined;
+  let message: string | undefined;
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown; message?: unknown } };
+    if (typeof body?.error?.code === "string") code = body.error.code.slice(0, 80);
+    if (typeof body?.error?.message === "string") message = body.error.message.replace(/\s+/g, " ").slice(0, 400);
+  } catch {
+    // Non-JSON error bodies are not logged.
+  }
+  return { code, message, retryAfterSeconds };
+}
 
 function fail(context: Context, status: number, error: string): void {
   context.res = { status, headers: RESPONSE_HEADERS, body: { error } };
@@ -71,7 +93,7 @@ function parseRequest(req: HttpRequest): AssistantRequest | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AssistantRequest>;
   if (
-    (candidate.mode !== "chat" && candidate.mode !== "analyze" && candidate.mode !== "design") ||
+    (candidate.mode !== "chat" && candidate.mode !== "analyze" && candidate.mode !== "design" && candidate.mode !== "design-plan") ||
     typeof candidate.question !== "string" ||
     !candidate.question.trim() ||
     candidate.question.length > MAX_QUESTION_LENGTH ||
@@ -81,7 +103,7 @@ function parseRequest(req: HttpRequest): AssistantRequest | null {
   ) {
     return null;
   }
-  if (candidate.mode === "design") {
+  if (candidate.mode === "design" || candidate.mode === "design-plan") {
     try { candidate.history = parseDesignHistory(candidate.history); }
     catch { return null; }
   }
@@ -231,17 +253,19 @@ function reviewResponseSchema() {
 
 function trustedMessages(request: AssistantRequest, serializedContext: string) {
   return [
-    { role: "system", content: request.mode === "design" ? DESIGN_SYSTEM_PROMPT : SYSTEM_PROMPT },
+    { role: "system", content: request.mode === "design" ? DESIGN_SYSTEM_PROMPT
+      : request.mode === "design-plan" ? `${DESIGN_PLAN_SYSTEM_PROMPT}\n${AI_GUIDANCE_POLICY}` : SYSTEM_PROMPT },
     { role: "user", content:
       `MODE: ${request.mode}\nQUESTION: ${request.question.trim()}\n` +
       `MODEL_CONTEXT:\n${serializedContext}` +
-      (request.mode === "design" ? `\nCONVERSATION:\n${JSON.stringify(request.history)}` : "") },
+      (request.mode === "design" || request.mode === "design-plan" ? `\nCONVERSATION:\n${JSON.stringify(request.history)}` : "") },
   ];
 }
 
 function validatedResult(request: AssistantRequest, content: string,
-  choices: ReturnType<typeof designCatalogChoices> | undefined) {
+  choices: ReturnType<typeof designCatalogChoices> | undefined, planChoices?: string[]) {
   if (Buffer.byteLength(content, "utf8") > MAX_BODY_BYTES) throw new Error("Response exceeds size limit.");
+  if (planChoices) return parseDesignPlan(JSON.parse(content), planChoices);
   if (choices) {
     const result = parseDesignResult(JSON.parse(content), {
       existingScenario: typeof request.context.scenario?.id === "string",
@@ -356,11 +380,20 @@ const httpTrigger: AzureFunction = async function (
       return;
     }
   }
+  let planChoices: string[] | undefined;
+  if (request.mode === "design-plan") {
+    try { planChoices = designPlanChoices(request.context); }
+    catch {
+      fail(context, 400, "The AI design plan request contains an invalid component type index. Refresh the app and try again.");
+      return;
+    }
+  }
+  const structured = request.mode === "design" || request.mode === "design-plan";
 
   try {
     const messages = trustedMessages(request, serializedContext);
-    const responseFormat = choices
-      ? designResponseFormat(choices, typeof request.context.scenario?.id === "string")
+    const responseFormat = planChoices ? designPlanResponseFormat(planChoices)
+      : choices ? designResponseFormat(choices, typeof request.context.scenario?.id === "string")
       : { type: "json_object" };
     if (provider !== "azure") {
       const { runLocalProvider, LocalProviderError } = await import("./localProviders");
@@ -374,14 +407,14 @@ const httpTrigger: AzureFunction = async function (
         if (contentDebug) context.log.error("AI interaction content", JSON.stringify({
           phase: "request", provider, mode: request.mode, messages,
         }));
-        const schema = choices
-          ? designResponseFormat(choices, typeof request.context.scenario?.id === "string").json_schema.schema
+        const schema = planChoices ? designPlanResponseFormat(planChoices).json_schema.schema
+          : choices ? designResponseFormat(choices, typeof request.context.scenario?.id === "string").json_schema.schema
           : reviewResponseSchema();
         const content = await runLocalProvider(provider, messages[0].content, messages[1].content, schema, diagnostic);
         if (contentDebug) context.log.error("AI interaction content", JSON.stringify({
           phase: "response", provider, content,
         }));
-        const result = validatedResult(request, content, choices);
+        const result = validatedResult(request, content, choices, planChoices);
         if (debug) context.log.error("AI interaction diagnostics", diagnostics.join("\n"));
         context.res = { status: 200, headers: RESPONSE_HEADERS, body: result };
       } catch (error) {
@@ -406,26 +439,85 @@ const httpTrigger: AzureFunction = async function (
     const url =
       `${endpoint}/openai/deployments/${encodeURIComponent(MODEL_DEPLOYMENT_NAME!)}` +
       `/chat/completions?api-version=${encodeURIComponent(API_VERSION)}`;
+    const maxTokens = request.mode === "design" ? 8000 : request.mode === "design-plan" ? 1000 : 3000;
+    const modelRequest = {
+      messages,
+      response_format: responseFormat,
+      temperature: 0.1,
+      max_tokens: maxTokens,
+    };
+    const modelRequestBody = JSON.stringify(modelRequest);
+    const debug = process.env.SDS_AI_DEBUG === "1";
+    if (debug) {
+      const bytes = (value: string) => Buffer.byteLength(value, "utf8");
+      const jsonBytes = (value: unknown) => bytes(JSON.stringify(value) ?? "");
+      const estimatedInputBytes = jsonBytes({ messages, response_format: responseFormat });
+      const estimatedInputTokens = Math.ceil(estimatedInputBytes / 4);
+      const contextFields = Object.entries(request.context).map(([key, value]) => ({
+        key, bytes: jsonBytes(value),
+      }));
+      const contextValueBytes = contextFields.reduce((sum, field) => sum + field.bytes, 0);
+      const catalogBytes = contextFields.filter(field => field.key === "catalog" || field.key === "nodeTypeIndex")
+        .reduce((sum, field) => sum + field.bytes, 0);
+      const guidanceBytes = contextFields.find(field => field.key === "aiDesignGuidance")?.bytes ?? 0;
+      const contextBytes = bytes(serializedContext);
+      const questionBytes = bytes(request.question.trim());
+      const conversationBytes = structured ? jsonBytes(request.history) : 0;
+      const instructionsBytes = bytes(messages[0].content);
+      const outputSchemaBytes = jsonBytes(responseFormat);
+      const breakdown = {
+        instructionsBytes,
+        diagramContextBytes: contextValueBytes - catalogBytes - guidanceBytes,
+        catalogBytes,
+        guidanceBytes,
+        contextStructureBytes: contextBytes - contextValueBytes,
+        questionBytes,
+        conversationBytes,
+        messageWrapperBytes: bytes(messages[1].content) - contextBytes - questionBytes - conversationBytes,
+        outputSchemaBytes,
+        jsonEnvelopeAndEscapingBytes: estimatedInputBytes -
+          bytes(messages[0].content) - bytes(messages[1].content) - outputSchemaBytes,
+      };
+      context.log.error("AI request sizing", JSON.stringify({
+        provider,
+        mode: request.mode,
+        requestBodyUtf8Bytes: Buffer.byteLength(modelRequestBody, "utf8"),
+        estimatedInputUtf8Bytes: estimatedInputBytes,
+        estimatedInputTokens,
+        maxOutputTokens: maxTokens,
+        estimatedTokensWithMaxOutput: estimatedInputTokens + maxTokens,
+        estimate: "rough UTF-8 bytes / 4; not a model tokenizer",
+        breakdown,
+      }));
+    }
     const aiResponse = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken.token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messages,
-        response_format: responseFormat,
-        temperature: 0.1,
-        max_tokens: request.mode === "design" ? 8000 : 3000,
-      }),
+      body: modelRequestBody,
       signal: AbortSignal.timeout(90_000),
     });
 
     if (!aiResponse.ok) {
+      const detail = await azureErrorDetail(aiResponse);
       context.log.error(
-        `Design Assistant model request failed (${aiResponse.status}).`,
+        `Design Assistant model request failed (${aiResponse.status})` +
+          (detail.code ? ` code=${detail.code}` : "") +
+          (detail.retryAfterSeconds !== undefined ? ` retryAfter=${detail.retryAfterSeconds}s` : "") +
+          (detail.message ? `: ${detail.message}` : "."),
       );
-      fail(context, 502, choices && aiResponse.status === 400
+      if (aiResponse.status === 429) {
+        const wait = detail.retryAfterSeconds !== undefined
+          ? ` Retry after about ${detail.retryAfterSeconds} seconds.`
+          : " Wait a minute and retry.";
+        fail(context, 429,
+          `Azure OpenAI rate limit or quota exceeded for deployment '${MODEL_DEPLOYMENT_NAME}' (429).${wait} ` +
+          "If it persists, raise the deployment's tokens-per-minute quota in Azure AI Foundry or reduce the scenario size. No changes were applied.");
+        return;
+      }
+      fail(context, 502, structured && aiResponse.status === 400
         ? "The AI deployment rejected the structured design request. Use a model supporting strict JSON-schema output, such as GPT-4.1, and verify its API version and catalog size. No changes were applied."
         : "The AI model could not complete the request.");
       return;
@@ -433,18 +525,26 @@ const httpTrigger: AzureFunction = async function (
 
     const completion = (await aiResponse.json()) as {
       choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
+    if (debug && completion.usage) {
+      context.log.error("AI response token usage", JSON.stringify({
+        prompt_tokens: completion.usage.prompt_tokens,
+        completion_tokens: completion.usage.completion_tokens,
+        total_tokens: completion.usage.total_tokens,
+      }));
+    }
     const content = completion.choices?.[0]?.message?.content;
     if (typeof content !== "string") {
       throw new Error("The model response did not contain JSON content.");
     }
-    if (request.mode === "design" && (completion.choices?.[0]?.finish_reason !== "stop" ||
+    if (structured && (completion.choices?.[0]?.finish_reason !== "stop" ||
         Buffer.byteLength(content, "utf8") > MAX_BODY_BYTES)) {
       fail(context, 502, "The AI design was incomplete or too large. Ask for a smaller change; no changes were applied.");
       return;
     }
 
-    const result = validatedResult(request, content, choices);
+    const result = validatedResult(request, content, choices, planChoices);
     context.res = {
       status: 200,
       headers: RESPONSE_HEADERS,
@@ -455,7 +555,7 @@ const httpTrigger: AzureFunction = async function (
       "Design Assistant request failed",
       error instanceof Error ? error.name : "Unknown error",
     );
-    fail(context, request.mode === "design" ? 502 : 500, request.mode === "design"
+    fail(context, structured ? 502 : 500, structured
       ? "The AI design could not be completed or validated. No changes were applied; retry with a smaller, more specific prompt."
       : "Design Assistant could not process the request.");
   }

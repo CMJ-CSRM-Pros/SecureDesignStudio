@@ -61,6 +61,7 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
   const browser = await chromium.launch({ channel: process.env.SDS_TEST_BROWSER_CHANNEL ?? "msedge", headless: true });
   const faults = [];
   const requests = [];
+  const planRequests = [];
   const virtualFiles = new Map();
   let context;
   try {
@@ -76,6 +77,13 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
       const url = new URL(request.url());
       if (url.origin === origin && url.pathname === "/api/design-assistant" && request.method() === "POST") {
         const payload = request.postDataJSON();
+        if (payload.mode === "design-plan") {
+          planRequests.push(payload);
+          const available = new Set(payload.context.nodeTypeIndex.map(entry => entry.id));
+          return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+            nodeTypeIds: PLANNED_NODE_TYPES.filter(id => available.has(id)), rationale: "Synthetic plan.",
+          }) });
+        }
         requests.push(payload);
         if (respond) return respond({ route, payload, index: requests.length - 1 });
         return route.fulfill({
@@ -113,7 +121,7 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
         const expectedNodes = active ? input.doc.nodes.filter(node => active.nodeIds.includes(node.id)).length : input.doc.nodes.length;
         await until(() => page.locator(".react-flow__node-process").count().then(count => count === expectedNodes), "designer fixture imported");
       }
-      await exercise({ page, requests, importModel, virtualFiles });
+      await exercise({ page, requests, planRequests, importModel, virtualFiles });
       assert.deepEqual(faults, [], "No external traffic, runtime errors or dialogs");
       return;
     }
@@ -129,13 +137,17 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
     assert.equal(requests.length, 1);
     assert.equal(requests[0].mode, "analyze");
     assert.equal(requests[0].context.scenario.id, "s_primary");
-    await exercise({ page, requests, importModel });
+    await exercise({ page, requests, planRequests, importModel });
     assert.deepEqual(faults, [], "No external traffic, runtime errors or dialogs");
   } finally {
     if (context) await context.close();
     await browser.close();
   }
 }
+
+// Synthetic first-phase reply: large catalogs are planned before the design call.
+const PLANNED_NODE_TYPES = ["nt_browser", "PowerPages", "CopilotStudio", "Dataverse", "Dataverse Table",
+  "Dataverse Plugin", "PowerPlatformConnectors", "CoreServicesIslands"];
 
 const scenario = page => page.getByRole("combobox", { name: "Scenario", exact: true });
 
@@ -170,21 +182,26 @@ test("production: both AI contexts carry complete saved guidance and accepted fi
     await finding(page, "Available reference finding").getByRole("button", { name: "Create work item", exact: true }).click();
     assert.ok((await savedState(page)).doc.workItems.some(item => /nt_browser.*revision 7/.test(item.description)));
   }, { initial });
-  await run(async ({ page, requests }) => {
+  await run(async ({ page, requests, planRequests }) => {
     const before = await savedState(page);
     await openDesigner(page);
     await sendDesign(page, "Give advice only.");
     await designerDialog(page).getByText("Synthetic guidance advice; no changes.", { exact: true }).waitFor();
     const expectedGuidance = [
       { typeId: "nt_browser", definitionSource: "saved", ...guidance, appliesToNodeIds: ["n_api"] },
-      ...coreGuidance.map(type => ({
+      ...coreGuidance.filter(type => PLANNED_NODE_TYPES.includes(type.id)).map(type => ({
         typeId: type.id, definitionSource: "core", ...type.aiDesignGuidance,
         sources: type.aiDesignGuidance.sources ?? [], appliesToNodeIds: [],
       })),
     ];
     const byType = (left, right) => left.typeId.localeCompare(right.typeId);
     assert.deepEqual([...requests[0].context.aiDesignGuidance].sort(byType), expectedGuidance.sort(byType),
-      "Entire Designer guidance array preserves the saved entry and complete available-core content/provenance/bindings");
+      "Scoped Designer guidance preserves the saved entry and complete planned-core content/provenance/bindings");
+    assert.equal(planRequests.length, 1, "The full library exceeds one call, so the Designer plans first");
+    assert.equal(planRequests[0].context.aiDesignGuidance, undefined, "Planning sends only the type index");
+    assert.equal(planRequests[0].context.catalog, undefined);
+    assert.ok(planRequests[0].context.nodeTypeIndex.length > coreGuidance.length);
+    assert.ok(requests[0].context.catalogScope.nodeTypeIds.includes("PowerPages"));
     assert.deepEqual((await savedState(page)).doc, before.doc);
   }, { initial, designer: true, respond: ({ route }) => reply(route, {
     answer: "Synthetic guidance advice; no changes.", assumptions: [], design: null,
@@ -192,6 +209,23 @@ test("production: both AI contexts carry complete saved guidance and accepted fi
 });
 
 const designerDialog = page => page.getByRole("dialog", { name: "Threat Model Designer", exact: true });
+
+test("production designer: empty generated order applies valid edits with a visible sequence warning", async () => {
+  await run(async ({ page }) => {
+    await openDesigner(page, true);
+    await sendDesign(page, "I need a web server to securely host documents for authenticated users.");
+    await designerDialog(page).getByText(/Warning: AI returned an empty flow order/).waitFor();
+    const saved = await savedState(page);
+    const active = saved.doc.scenarios.find(item => item.id === saved.activeScenarioId) ?? saved.doc.scenarios.at(-1);
+    assert.ok(active.edgeIds.length > 0);
+    assert.deepEqual(active.edgeIds.map(id => active.edgeNumbers[id]), active.edgeIds.map((_, index) => index + 1));
+  }, { designer: true, greenfield: true, respond: ({ route, payload }) => {
+    const response = syntheticDesign(payload.context);
+    response.design.edgeOrder = [];
+    return reply(route, response);
+  } });
+});
+
 const designerPrompt = page => designerDialog(page).getByRole("textbox", { name: "What would you like to design or change?", exact: true });
 const reply = (route, body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 async function openDesigner(page, first = false) {
@@ -783,7 +817,7 @@ test("production designer: Stop, Close, scenario switching and timeout discard l
       if (action === "timeout") {
         await page.evaluate(() => {
           const original = window.setTimeout;
-          window.setTimeout = (callback, delay, ...args) => original(callback, delay === 100000 ? 30 : delay, ...args);
+          window.setTimeout = (callback, delay, ...args) => original(callback, delay === 180000 ? 30 : delay, ...args);
         });
       }
       const index = requests.length;

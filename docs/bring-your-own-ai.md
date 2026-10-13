@@ -105,13 +105,45 @@ tool attempts; tool/action responses are still discarded.
 
 ### Debug an AI interaction
 
+On Azure startup, Vite can become ready before the Functions API on port 7071.
+A proxy connection error at that point is not a Foundry authentication error.
+SDS returns an explicit 503 diagnostic; wait for the API to start and use
+**Refresh providers**. Persistent proxy errors require checking the API process.
+The Functions message `Unable to create client for AzureWebJobsStorage` is a
+separate host-storage health issue: the generated local settings use an empty
+storage value for the HTTP-only AI workflow. Successful AI invocations do not
+prove that host storage is healthy. Do not add cloud storage credentials or
+disable health checks merely to hide this message.
+
+Designer preserves strict validation for unknown or incomplete flow orders.
+One recoverable case is an empty `edgeOrder` array accompanying otherwise valid
+entity edits: SDS preserves surviving flow order and numbers, appends new flows,
+and displays a warning to review the sequence. Empty reorder-only requests and
+nonempty invalid orders still fail atomically. This does not bypass authentication,
+boundary, reference, or stale-result validation.
+
 ```powershell
 .\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex -DebugAI
 # Omit -DebugAI on the next launch to turn diagnostics off.
 ```
 
-Debug mode is off by default. Failed Claude/Codex requests include an **AI debug
-trace** in the displayed error. Traces also appear in the launcher terminal and
+For Azure request-size diagnostics, launch with
+`.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure -DebugAI`.
+
+Debug mode is off by default. For Azure, it logs sanitized request sizing to the
+Functions terminal: serialized request bytes, an approximate input-token count,
+the configured output-token ceiling, and their estimated total. The estimate
+uses UTF-8 bytes divided by four, not the model tokenizer; successful Azure
+responses also log the exact token usage reported by the service. The `breakdown`
+reports byte counts for system instructions, diagram context (all context values
+other than catalog/guidance), catalog, guidance, conversation, question, and
+output schema. Context structure, message wrappers and JSON escaping/envelope
+overhead are recorded separately; all breakdown entries sum to
+`estimatedInputUtf8Bytes`. Catalog and guidance also occur inside the context,
+so do not add the full context again. These are sizes only, not text or IDs.
+Nothing is removed, summarized or truncated by debugging. Failed
+Claude/Codex requests include an **AI debug trace** in the displayed error.
+Those traces also appear in the launcher terminal and
 a local `%TEMP%\sds-ai-debug-<unique-id>.jsonl` file. The terminal prints its
 exact path when the first record is written. Response objects retain their
 strict application contract; debug metadata is never added to design results.
@@ -277,6 +309,32 @@ List what exists on an account at any time:
 az cognitiveservices account deployment list `
   --name $account --resource-group $resourceGroup -o table
 ```
+
+### Request size and tokens per minute
+
+Every Standard or GlobalStandard deployment enforces a tokens-per-minute
+limit (1 capacity unit = 1,000 tokens per minute). Azure charges each request's
+prompt tokens plus its `max_tokens` reservation before the model runs, so a
+single request larger than the limit is always rejected with HTTP 429.
+
+To keep requests small, **Design with AI** uses two calls when the full
+component library and its design guidance would exceed about 96 KB:
+
+1. **Plan.** SDS sends the prompt, the scenario outline (names, types and
+   connections) and an index of component types (ID, label, category, default
+   role, whether guidance exists). The model returns up to 24 type IDs the
+   design needs, chosen from a strict list. No guidance text is sent, and the
+   output reservation is 1,000 tokens.
+2. **Design.** SDS sends the normal design request, limited to the planned
+   types plus any types already used in the scenario, with their complete
+   guidance. If the model needs a service that is not in that subset, it leaves
+   the type blank and names the service in its answer.
+
+With the shipped library, both calls are typically well under 50,000 tokens.
+Small catalogs still use a single call. The status line reports how many
+component types were used. Claude and Codex use the same two-phase flow.
+With `-DebugAI`, each call logs its own sizing line (`mode` is `design-plan` or
+`design`).
 
 ## 4. Secure it
 
