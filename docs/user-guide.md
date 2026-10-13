@@ -82,9 +82,10 @@ That mode needs three things beyond the setup above:
 
 | Requirement | Notes |
 |---|---|
-| Azure Functions Core Tools | Runs the local API on port 7071. The launcher reports the install command if it is missing. |
-| Azure CLI, signed in | A secured account accepts Microsoft Entra tokens only, so `az login` is required. No API key is used. |
-| Your own Azure OpenAI deployment | Its HTTPS endpoint and model deployment name. |
+| AI provider | Choose Azure OpenAI/Foundry, Claude Code, or Codex in the launcher or in SDS. |
+| Azure Functions Core Tools | Required only for Azure; runs the local API on port 7071. The launcher reports the install command if it is missing. Claude/Codex use Vite on port 5173 and require no Functions installation. |
+| Azure CLI, signed in | Required only for Azure. A secured account accepts Microsoft Entra tokens, so `az login` is required. No API key is used. |
+| Azure OpenAI deployment | Required only for Azure: its HTTPS endpoint and model deployment name. |
 
 ```powershell
 $env:AZURE_OPENAI_ENDPOINT = "https://<your-resource>.openai.azure.com"

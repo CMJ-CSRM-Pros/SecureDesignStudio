@@ -1,6 +1,6 @@
 # Bring your own AI
 
-*Updated: 2026-10-10 - Added local subscription-backed provider selection.*
+*Updated: 2026-10-11 - Added subscription CLI startup and Codex feature diagnostics.*
 
 The AI Design Assistant is **bring-your-own-AI**. No model service ships with
 SecureDesignStudio, none is shared with you, and the app has no default AI
@@ -17,10 +17,16 @@ Claude and Codex use their official CLI with your eligible consumer subscription
 .\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex
 ```
 
-Non-interactive launchers must supply `-Provider`. Every option needs Node and
-Azure Functions Core Tools for the local bridge. Only Azure needs Azure CLI,
-endpoint/deployment configuration, and Entra access. The Azure setup guide below
-is not a prerequisite for Claude or Codex.
+Non-interactive launchers must supply `-Provider`. Every option needs Node.js.
+Claude and Codex use a local Vite bridge and do not require Azure Functions Core
+Tools, the API package, or Azure credentials. Only Azure needs Functions Core
+Tools, Azure CLI, endpoint/deployment configuration, and Entra access. The Azure
+setup guide below is not a prerequisite for Claude or Codex.
+In Claude/Codex mode, the in-app provider selector switches between those two
+subscription CLIs; restart with `-Provider Azure` to use an Azure deployment.
+The status below the selector names only the selected provider. Unavailable
+alternatives are described under the collapsed **Other provider setup**
+disclosure; these notices do not change request routing.
 
 For Claude, install [Claude Code](https://code.claude.com/docs/en/setup), then run
 `claude auth login` and sign in with your Claude subscription. For Codex, install
@@ -28,12 +34,111 @@ For Claude, install [Claude Code](https://code.claude.com/docs/en/setup), then r
 sign in with ChatGPT. CLI versions must support structured output and the safety
 options used by SDS. Unsupported versions fail rather than relaxing permissions.
 SDS invokes a native CLI executable, not an npm `.cmd` shim. On Windows, make the
-official native `claude.exe` or `codex.exe` available on PATH. Claude requires
+official native `claude.exe` or `codex.exe` available on PATH, or install Codex
+with npm in a global prefix on PATH. SDS discovers the native Codex binary in
+that prefix's `node_modules\@openai\codex` package, including nested/sibling
+Windows platform dependencies and older bundled `vendor` layouts. Windows x64
+and ARM64 packages are selected using Node's architecture. Claude requires
 restricted mode (Claude Code 2.1.248 or later) and safe mode; an older installation
 can sign in successfully but still be unavailable for SDS requests.
 These subscription allowances are distinct from provider API billing.
 SDS will not silently use an API key, a custom gateway, or a different provider.
 Manage any paid extra-usage settings in your provider account.
+
+### Troubleshoot subscription CLI startup
+
+```powershell
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex -DiagnoseProvider
+# For Claude, substitute -Provider Claude.
+```
+
+This checks readiness and prints file-backed PowerShell commands, native PATH
+candidates, shared npm discovery, the selected native executable, the last
+readiness stage, and the preflight exit code. It exits without starting servers,
+installing project dependencies, or making an inference request. Failed ordinary
+subscription startup also prints these diagnostics. It does not print credentials,
+CLI authentication files, raw CLI output, or the full environment.
+
+**A missing native executable is an installation-discovery problem, not
+a failed login.** An official npm installation can expose `codex.cmd` or
+`codex.ps1` while its bundled native executable is elsewhere. `codex login` can
+succeed through that wrapper, but SDS deliberately does not execute shell
+wrappers. Zero direct native PATH candidates is normal for an npm installation:
+the shared resolver locates its bundled executable without modifying PATH.
+If the diagnostic `[npm]` stage still fails, use `Get-Command codex -All` to inspect command resolution and
+`npm root -g` to locate your global packages. Locate the official package's
+platform-specific `codex.exe`; layouts vary by package version. Add its containing
+directory to this PowerShell session if the installation uses an unsupported
+package layout, keeping the existing PATH:
+
+```powershell
+$env:PATH = 'C:\actual\directory\containing\codex.exe' + [IO.Path]::PathSeparator + $env:PATH
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex -DiagnoseProvider
+```
+
+Use the actual installed binary directory, not the placeholder above. Do not
+rename `.cmd`/`.ps1` files to `.exe`, copy tokens, or place the executable inside
+the SDS repository. If the platform dependency is absent or damaged, repair the
+official Codex installation rather than replacing its executable with a wrapper.
+SDS does not automatically install or update provider software. Once discovery succeeds, SDS still checks host policy,
+required isolation capabilities, and ChatGPT subscription login; each can fail
+independently. Diagnostics identify the stage reached; missing isolation flags
+and mismatched feature settings are named without exposing raw CLI output.
+For Codex, the `[features]` stage also reports the CLI version and each required
+feature's observed and required value (`true`, `false`, or `absent`). Command
+execution is blocked by requiring `shell_tool=false`. Current Codex releases
+keep `unified_exec` enabled unless enterprise requirements pin it, so it is
+shown as informational; it only selects the backend of the disabled shell tool.
+A feature reported as enabled by host or managed policy still blocks readiness.
+Run normal startup without `-DiagnoseProvider` only when readiness
+succeeds. Native discovery does not bypass any safety check.
+
+If a Codex response is discarded, the error now identifies the event and
+recognized item type, and a bounded status when available. For example,
+`item=command_execution` is a blocked command attempt; `item=error` is a CLI
+error notification, not proof that a tool ran. Unknown event/item shapes remain
+blocked. These diagnostics never include commands, arguments, paths, model
+content, or raw CLI error text. Include that sanitized error and the
+`-DiagnoseProvider` version/readiness output when reporting a failure.
+Readiness checks do not run inference and cannot prove that a model will avoid
+tool attempts; tool/action responses are still discarded.
+
+### Debug an AI interaction
+
+```powershell
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex -DebugAI
+# Omit -DebugAI on the next launch to turn diagnostics off.
+```
+
+Debug mode is off by default. Failed Claude/Codex requests include an **AI debug
+trace** in the displayed error. Traces also appear in the launcher terminal and
+a local `%TEMP%\sds-ai-debug-<unique-id>.jsonl` file. The terminal prints its
+exact path when the first record is written. Response objects retain their
+strict application contract; debug metadata is never added to design results.
+It reports readiness, Codex version, byte counts, process
+exit, event/item types, and classified error categories (schema, authentication,
+usage limits, network/stream, or model availability). It does not print raw
+provider messages, prompts, model content, commands, paths, or credentials.
+`-DiagnoseProvider` remains a separate readiness-only check.
+
+To additionally capture the complete sent prompt (including system instructions,
+model context and conversation) and the provider's final response:
+
+```powershell
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex -DebugAIContent
+```
+
+This explicitly enables sensitive content logging to the same local JSONL file.
+It is separate from sanitized `-DebugAI`; content is not echoed to the terminal
+or included in browser errors. Protect the file, review before sharing, and
+delete it after analysis. No automatic upload or retention cleanup occurs.
+Restart without either debug switch to turn logging off. File permissions follow
+the user's temporary directory on Windows; the file is not an encrypted vault.
+
+Codex `item=error` notifications are nonfatal in its event contract. SDS allows
+a completed, validated answer after such a notification, but still requires a
+completed answer item and turn, rejects fatal events, and discards every tool
+attempt. Diagnostics do not relax these restrictions.
 
 Both **Design Assistant** and **Threat Model Designer** share an **AI provider**
 selector. Unavailable providers display setup guidance; **Refresh providers**
@@ -67,9 +172,9 @@ SDS's [request disclosure](advanced-configuration.md#what-is-sent-and-what-is-sa
 No inference is made merely by launching or refreshing readiness.
 `-VerifyEndpoint` is an explicit Azure-only inference probe and can incur usage.
 Stopping or closing a browser request prevents its result from being applied.
-The local Functions host cannot signal that cancellation to an already-running
-CLI: it can continue consuming allowance until completion or the bridge's
-80-second inference timeout. Only one consumer CLI inference runs at a time.
+An already-running CLI may continue consuming allowance until completion or
+the bridge's 80-second inference timeout. Only one consumer CLI inference runs
+at a time.
 
 Nothing on this page is needed for ordinary modeling. Analysis, diagrams,
 scenarios, and saving all work with `Start-SecureDesignStudio.ps1`, which needs

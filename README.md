@@ -164,8 +164,9 @@ when `node_modules` is absent. See the
 The AI Design Assistant is **bring your own AI**: no model service ships with
 this app, and none is provided for you. Use an authorized Azure deployment,
 Claude Code with your Claude subscription, or Codex CLI with your ChatGPT
-subscription. All three use the same local bridge and need Azure Functions
-Core Tools; only Azure needs an Azure identity and deployment.
+subscription. Claude and Codex use a local Vite bridge and need no Azure
+Functions installation; Azure uses Azure Functions Core Tools plus an Azure
+identity and deployment.
 
 ```powershell
 .\Start-SecureDesignStudio-WithAI.ps1                 # interactive provider menu
@@ -215,7 +216,7 @@ AI requests send active-scenario context to the configured service; review the
 | Script | What you need |
 |---|---|
 | `.\Start-SecureDesignStudio.ps1` | Git and Node.js. No cloud account. |
-| `.\Start-SecureDesignStudio-WithAI.ps1` | The above plus Azure Functions Core Tools and your selected provider's deployment or installed, subscription-authenticated CLI. |
+| `.\Start-SecureDesignStudio-WithAI.ps1` | The above plus your selected provider. Claude/Codex need an installed, subscription-authenticated CLI. Azure additionally needs Azure Functions Core Tools, Azure CLI, and an authorized deployment. |
 
 ## References
 

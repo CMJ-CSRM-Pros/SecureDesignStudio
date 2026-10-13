@@ -5,6 +5,7 @@ import packageJson from "./package.json";
 import { readLibraryCandidates, libraryBuildBridge } from "./scripts/custom-libraries.mjs";
 import { readServiceConfiguration, serviceBuildConfiguration, serviceBuildReceiptPlugin } from "./scripts/service-configuration.mjs";
 import { distributionLicensePlugin } from "./scripts/distribution-license.mjs";
+import { localAiVitePlugin } from "./scripts/local-ai-vite.mjs";
 
 // Set BUILD_SINGLE_FILE=1 to emit a single self-contained index.html (in
 // dist-single/) with all JS/CSS inlined. The default `npm run build` runs
@@ -42,13 +43,14 @@ export default defineConfig(async ({ command, mode }) => {
   // Local serving never reads a deployment service file.
   const services = localOnly ? {
     tokenEndpoint: "", publicAppUrl: "http://localhost:5173/",
-    assistantEndpoint: localAi ? "http://localhost:7071/api/design-assistant" : "",
+    assistantEndpoint: localAi ? "http://localhost:5173/api/design-assistant" : "",
     selection: { source: localAi ? "Explicit local AI workflow" : "Credential-free local workflow" },
   } : serviceBuildConfiguration(await readServiceConfiguration(env.SDS_SERVICE_CONFIG, env, process.cwd()), singleFile);
   if (services.selection.error) console.warn(`[service-configuration] ${services.selection.error}`);
 
   return {
-    plugins: [react(), libraries.plugin, await distributionLicensePlugin(process.cwd(), packageJson), ...(singleFile ? [viteSingleFile()] : []),
+    plugins: [react(), libraries.plugin, ...(localAi ? [localAiVitePlugin()] : []),
+      await distributionLicensePlugin(process.cwd(), packageJson), ...(singleFile ? [viteSingleFile()] : []),
       ...(!localOnly ? [serviceBuildReceiptPlugin(services, singleFile, packageJson.version)] : [])],
     define: {
       __PS_SINGLE_FILE__: JSON.stringify(singleFile),

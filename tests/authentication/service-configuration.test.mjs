@@ -39,7 +39,10 @@ test("services: endpoint validation rejects credentials, queries, fragments, sch
   assert.equal(serviceEndpoint("/api/design-assistant", true), "/api/design-assistant");
   assert.equal(serviceEndpoint("/api/design-assistant"), null);
   assert.equal(serviceEndpoint(" https://example.invalid/api "), "https://example.invalid/api");
-  assert.equal(serviceEndpoint("http://localhost:7071/api/design-assistant"), LOCAL_ASSISTANT_ENDPOINT);
+  assert.equal(serviceEndpoint("http://localhost:5173/api/design-assistant"), LOCAL_ASSISTANT_ENDPOINT);
+  const wrongLocalPort = resolveServiceConfiguration({ ...configured, localOnly: true, localAi: true,
+    assistantEndpoint: "http://localhost:7071/api/design-assistant" });
+  assert.equal(wrongLocalPort.assistant.enabled, false);
 });
 
 test("services: local-only mode cannot be unlocked by endpoint values; local AI uses only the fixed endpoint", () => {
