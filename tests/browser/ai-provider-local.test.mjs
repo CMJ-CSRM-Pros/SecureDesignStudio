@@ -55,7 +55,9 @@ test("AI providers: shared selection, readiness, request routing, persistence an
         posts.push(payload);
         if (hold) await hold;
         return route.fulfill({ status: 200, contentType: "application/json",
-          body: JSON.stringify(payload.mode === "design"
+          body: JSON.stringify(payload.mode === "design-plan"
+            ? { nodeTypeIds: payload.context.nodeTypeIndex.slice(0, 1).map(type => type.id), rationale: "Synthetic plan." }
+            : payload.mode === "design"
             ? { answer: "Synthetic clarification.", assumptions: [], design: null }
             : { answer: "Synthetic review.", references: [], findings: [] }) });
       }
@@ -110,25 +112,34 @@ test("AI providers: shared selection, readiness, request routing, persistence an
     let release;
     hold = new Promise(resolve => { release = resolve; });
     await designer.getByRole("button", { name: "Build design", exact: true }).click();
-    await until(() => posts.length === 3, "design sent");
+    await until(() => posts.length === 3, "design plan sent");
     assert.equal(posts[2].provider, "claude");
-    assert.equal(posts[2].mode, "design");
+    assert.equal(posts[2].mode, "design-plan");
+    assert.equal(posts[2].context.aiDesignGuidance, undefined);
     assert.equal(await designerSelection.isDisabled(), true);
     assert.equal(await selection.isDisabled(), true);
     release();
     hold = null;
     await designer.getByText("Synthetic clarification.", { exact: true }).waitFor();
+    assert.equal(posts.length, 4);
+    assert.equal(posts[3].provider, "claude");
+    assert.equal(posts[3].mode, "design");
+    assert.ok(posts[3].context.catalogScope);
     await designerSelection.selectOption("codex");
     assert.equal(await designer.getByText("Synthetic clarification.", { exact: true }).count(), 0);
     await designer.getByLabel("What would you like to design or change?").fill("Synthetic stopped request");
     hold = new Promise(resolve => { release = resolve; });
     await designer.getByRole("button", { name: "Build design", exact: true }).click();
-    await until(() => posts.length === 4, "cancelled design sent");
+    await until(() => posts.length === 5, "cancelled design plan sent");
+    assert.equal(posts[4].provider, "codex");
+    assert.equal(posts[4].mode, "design-plan");
     await designer.getByRole("button", { name: "Stop generating", exact: true }).click();
     await until(async () => await designerSelection.isEnabled(), "stop releases provider lock");
     await designerSelection.selectOption("claude");
     release();
     hold = null;
+    await page.waitForTimeout(100);
+    assert.equal(posts.length, 5, "A cancelled plan must not start a design request");
     assert.equal(await designer.getByText("Synthetic clarification.", { exact: true }).count(), 0);
     await designerSelection.selectOption("codex");
     await designer.getByRole("button", { name: "Close Threat Model Designer", exact: true }).click();

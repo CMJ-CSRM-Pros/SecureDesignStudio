@@ -1,6 +1,6 @@
 import { SERVICES } from "./services";
-import { parseDesignResult, type DesignResult, type DesignTurn } from "../shared/designContract";
-import type { DesignRequestSnapshot } from "./threatModelDesigner";
+import { designPlanChoices, parseDesignPlan, parseDesignResult, type DesignPlan, type DesignResult, type DesignTurn } from "../shared/designContract";
+import type { DesignRequestSnapshot, buildDesignPlanContext } from "./threatModelDesigner";
 import { assertAiRequestBudget, validateAiGuidanceContext, type AiGuidanceReference } from "../shared/aiDesignGuidance";
 import { guidanceReferencesForFinding } from "./aiDesignGuidance";
 import type { AiProviderId } from "../shared/aiProviders";
@@ -100,8 +100,17 @@ export async function askThreatModelDesigner(
   return parseDesignResult(await requestAssistant(request, signal), { existingScenario: request.context.scenario !== null });
 }
 
+// Planning step: the model sees only the compact type index and selects the
+// component types whose catalog entries and guidance the design step needs.
+export async function planThreatModelDesign(
+  request: { mode: "design-plan"; question: string; context: ReturnType<typeof buildDesignPlanContext>; history: DesignTurn[]; provider?: AiProviderId },
+  signal?: AbortSignal,
+): Promise<DesignPlan> {
+  return parseDesignPlan(await requestAssistant(request, signal), designPlanChoices(request.context));
+}
+
 async function requestAssistant(
-  request: AssistantRequest | { mode: "design"; question: string; context: unknown; history: DesignTurn[]; provider?: AiProviderId },
+  request: AssistantRequest | { mode: "design" | "design-plan"; question: string; context: unknown; history: DesignTurn[]; provider?: AiProviderId },
   signal?: AbortSignal,
 ): Promise<unknown> {
   if (!SERVICES.assistant.enabled) {

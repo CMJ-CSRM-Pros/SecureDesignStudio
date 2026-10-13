@@ -138,10 +138,12 @@ function harness(env = {}, options = {}) {
     };
     const fetch = async (url, request) => {
       modelCalls.push({ url, ...request });
-      return { ok: true, json: async () => ({ choices: [{ finish_reason: "stop",
-        message: { content: JSON.stringify(result) } }] }) };
+      return options.azureResponse ?? { ok: true, json: async () => ({ choices: [{ finish_reason: "stop",
+        message: { content: JSON.stringify(result) } }], usage: {
+        prompt_tokens: 16, completion_tokens: 1, total_tokens: 17,
+      } }) };
     };
-    vm.runInNewContext(`(function(require,module,exports,process,Buffer,fetch,AbortSignal,setTimeout,clearTimeout){${compiled}\n})`, { URL })(
+    vm.runInNewContext(`(function(require,module,exports,process,Buffer,fetch,AbortSignal,setTimeout,clearTimeout){${compiled}\n})`, { URL, TextEncoder })(
       require, module, module.exports, fakeProcess, Buffer, fetch, AbortSignal,
       (fn, ms) => { timeouts.push(ms); return setTimeout(fn, options.fastTimeout ? 5 : ms); }, clearTimeout,
     );
@@ -191,6 +193,171 @@ test("providers: hosted remains Azure-only with no CLI execution and no fallback
   }
   assert.equal(h.calls.length, 0);
   assert.equal(h.modelCalls.length, 1);
+});
+
+test("providers: Azure debug logs request size without prompt text and exact successful usage", async () => {
+  const prompt = "PRIVATE_SYNTHETIC_PROMPT";
+  const h = harness({ AZURE_OPENAI_ENDPOINT: "https://synthetic.invalid",
+    MODEL_DEPLOYMENT_NAME: "synthetic", SDS_AI_DEBUG: "1" }, {
+    azureResponse: { ok: true, json: async () => ({ choices: [{ finish_reason: "stop",
+      message: { content: JSON.stringify(design) } }], usage: {
+      prompt_tokens: 160, completion_tokens: 12, total_tokens: 172,
+    } }) },
+  });
+  const response = await h.invoke({ mode: "design", question: prompt, context: { catalog }, history: [] });
+  assert.equal(response.status, 200);
+  const sizing = h.logs.find(([message]) => message === "AI request sizing");
+  assert.ok(sizing);
+  const metrics = JSON.parse(sizing[1]);
+  assert.equal(metrics.provider, "azure");
+  assert.equal(metrics.mode, "design");
+  assert.ok(metrics.requestBodyUtf8Bytes > 0);
+  assert.ok(metrics.estimatedInputTokens > 0);
+  assert.equal(metrics.maxOutputTokens, 8000);
+  assert.equal(metrics.estimatedTokensWithMaxOutput, metrics.estimatedInputTokens + 8000);
+  assert.equal(Object.values(metrics.breakdown).reduce((sum, bytes) => sum + bytes, 0),
+    metrics.estimatedInputUtf8Bytes);
+  assert.equal(metrics.breakdown.catalogBytes, Buffer.byteLength(JSON.stringify(catalog)));
+  assert.equal(metrics.breakdown.conversationBytes, 2);
+  assert.equal(metrics.breakdown.guidanceBytes, 0);
+  assert.ok(metrics.breakdown.outputSchemaBytes > 0);
+  assert.match(metrics.estimate, /not a model tokenizer/);
+  assert.doesNotMatch(JSON.stringify(h.logs), new RegExp(prompt));
+  assert.deepEqual(JSON.parse(h.logs.find(([message]) => message === "AI response token usage")[1]),
+    { prompt_tokens: 160, completion_tokens: 12, total_tokens: 172 });
+});
+
+test("providers: Azure sizing accounts for Unicode, escaped diagram text, guidance and conversation without changing payloads", async () => {
+  const body = { mode: "chat", question: "PRIVATE_QUESTION",
+    context: { nodes: [{ id: "n", title: 'PRIVATE_NODE "quoted" \n \u00e9' }],
+      catalog, aiDesignGuidance: [{ typeId: "synthetic-node", definitionSource: "core",
+        revision: 1, updatedOn: "2026-10-12", sources: [], content: "PRIVATE_GUIDANCE",
+        appliesToNodeIds: ["n"] }] } };
+  for (const mode of ["chat", "design"]) {
+    const request = { ...body, mode, ...(mode === "design"
+      ? { history: [{ role: "user", text: "PRIVATE_HISTORY" }] } : {}) };
+    const logsByDebug = [];
+    const payloads = [];
+    for (const debug of ["0", "1"]) {
+      const h = harness({ AZURE_OPENAI_ENDPOINT: "https://synthetic.invalid",
+        MODEL_DEPLOYMENT_NAME: "synthetic", SDS_AI_DEBUG: debug }, {
+        azureResponse: { ok: true, json: async () => ({ choices: [{ finish_reason: "stop",
+          message: { content: JSON.stringify(mode === "design" ? design : result) } }] }) },
+      });
+      const response = await h.invoke(request);
+      assert.equal(response.status, 200, JSON.stringify(response.body));
+      payloads.push(h.modelCalls[0].body);
+      logsByDebug.push(h.logs);
+    }
+    assert.equal(payloads[0], payloads[1], "Debugging must not change or truncate the model request");
+    assert.equal(logsByDebug[0].length, 0);
+    const metrics = JSON.parse(logsByDebug[1].find(([label]) => label === "AI request sizing")[1]);
+    const breakdown = metrics.breakdown;
+    assert.equal(Object.values(breakdown).reduce((sum, count) => sum + count, 0),
+      metrics.estimatedInputUtf8Bytes);
+    assert.equal(metrics.requestBodyUtf8Bytes, Buffer.byteLength(payloads[1]));
+    assert.equal(breakdown.diagramContextBytes, Buffer.byteLength(JSON.stringify(body.context.nodes)));
+    assert.equal(breakdown.guidanceBytes, Buffer.byteLength(JSON.stringify(body.context.aiDesignGuidance)));
+    assert.equal(breakdown.conversationBytes, mode === "design"
+      ? Buffer.byteLength(JSON.stringify(request.history)) : 0);
+    assert.doesNotMatch(JSON.stringify(logsByDebug), /PRIVATE_|synthetic-token/);
+  }
+});
+
+test("providers: Azure debug logs estimated size before a throttled response", async () => {
+  const h = harness({ AZURE_OPENAI_ENDPOINT: "https://synthetic.invalid",
+    MODEL_DEPLOYMENT_NAME: "synthetic", SDS_AI_DEBUG: "1" }, {
+    azureResponse: {
+      ok: false,
+      status: 429,
+      headers: { get: name => name === "retry-after" ? "30" : null },
+      json: async () => ({ error: { code: "rate_limit_exceeded", message: "Synthetic throttling." } }),
+    },
+  });
+  const response = await h.invoke({ mode: "design", question: "PRIVATE_SYNTHETIC_PROMPT",
+    context: { catalog }, history: [] });
+  assert.equal(response.status, 429);
+  assert.ok(h.logs.some(([message]) => message === "AI request sizing"));
+  assert.doesNotMatch(JSON.stringify(h.logs), /PRIVATE_SYNTHETIC_PROMPT/);
+  assert.ok(!h.logs.some(([message]) => message === "AI response token usage"));
+});
+
+const planContext = {
+  scenario: null, nodes: [], edges: [], boundaries: [],
+  nodeTypeIndex: [
+    { id: "Dataverse Table", label: "Dataverse table", category: "Data", defaultDfdRole: "DataStore", hasGuidance: true },
+    { id: "synthetic-node", label: "Synthetic node", category: "", defaultDfdRole: "", hasGuidance: false },
+  ],
+};
+const plan = { nodeTypeIds: ["Dataverse Table"], rationale: "Synthetic rationale." };
+
+test("providers: Azure design planning uses the index-only enum schema and a small output reservation", async () => {
+  const h = harness({ AZURE_OPENAI_ENDPOINT: "https://synthetic.invalid",
+    MODEL_DEPLOYMENT_NAME: "synthetic", SDS_AI_DEBUG: "1" }, {
+    azureResponse: { ok: true, json: async () => ({ choices: [{ finish_reason: "stop",
+      message: { content: JSON.stringify(plan) } }] }) },
+  });
+  const response = await h.invoke({ mode: "design-plan", question: "PRIVATE_PLAN_PROMPT", context: planContext,
+    history: [{ role: "user", text: "PRIVATE_HISTORY" }] });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), plan);
+  const body = JSON.parse(h.modelCalls[0].body);
+  assert.equal(body.max_tokens, 1000);
+  assert.equal(body.response_format.json_schema.name, "threat_model_design_plan");
+  assert.deepEqual(body.response_format.json_schema.schema.properties.nodeTypeIds.items.enum,
+    ["Dataverse Table", "synthetic-node"]);
+  assert.match(body.messages[0].content, /planning step/);
+  assert.match(body.messages[0].content, /untrusted authored reference data/);
+  assert.match(body.messages[1].content, /^MODE: design-plan/);
+  assert.match(body.messages[1].content, /CONVERSATION:/);
+  const metrics = JSON.parse(h.logs.find(([label]) => label === "AI request sizing")[1]);
+  assert.equal(metrics.mode, "design-plan");
+  assert.equal(metrics.maxOutputTokens, 1000);
+  assert.equal(metrics.breakdown.catalogBytes, Buffer.byteLength(JSON.stringify(planContext.nodeTypeIndex)));
+  assert.doesNotMatch(JSON.stringify(h.logs), /PRIVATE_/);
+});
+
+test("providers: design plans reject unknown, oversized and malformed selections and invalid indexes", async () => {
+  const azure = { AZURE_OPENAI_ENDPOINT: "https://synthetic.invalid", MODEL_DEPLOYMENT_NAME: "synthetic" };
+  for (const output of [
+    { nodeTypeIds: ["invented"], rationale: "x" },
+    { nodeTypeIds: ["Dataverse Table"], rationale: "x", extra: true },
+    { nodeTypeIds: "Dataverse Table", rationale: "x" },
+    { nodeTypeIds: ["Dataverse Table"] },
+  ]) {
+    const h = harness(azure, { azureResponse: { ok: true, json: async () => ({ choices: [{ finish_reason: "stop",
+      message: { content: JSON.stringify(output) } }] }) } });
+    const response = await h.invoke({ mode: "design-plan", question: "Synthetic", context: planContext, history: [] });
+    assert.equal(response.status, 502, JSON.stringify(output));
+  }
+  const truncated = harness(azure, { azureResponse: { ok: true, json: async () => ({ choices: [{ finish_reason: "length",
+    message: { content: JSON.stringify(plan) } }] }) } });
+  assert.equal((await truncated.invoke({ mode: "design-plan", question: "Synthetic", context: planContext, history: [] })).status, 502);
+  for (const context of [{}, { nodeTypeIndex: [] }, { nodeTypeIndex: [{ label: "missing id" }] }]) {
+    const h = harness(azure);
+    assert.equal((await h.invoke({ mode: "design-plan", question: "Synthetic", context, history: [] })).status, 400);
+    assert.equal(h.modelCalls.length, 0);
+  }
+  const h = harness(azure);
+  assert.equal((await h.invoke({ mode: "design-plan", question: "Synthetic", context: planContext,
+    history: [{ role: "system", text: "x" }] })).status, 400);
+  assert.equal(h.modelCalls.length, 0);
+});
+
+test("providers: local Claude and Codex planning use the same validated plan schema", async () => {
+  for (const provider of ["claude", "codex"]) {
+    const h = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: provider }, { output: plan });
+    const response = await h.invoke({ mode: "design-plan", question: "Synthetic", context: planContext, history: [] });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.deepEqual(JSON.parse(JSON.stringify(response.body)), plan);
+    const call = h.calls.at(-1);
+    assert.match(call.input, /^MODE: design-plan/);
+    const schema = provider === "claude" ? call.args[call.args.indexOf("--json-schema") + 1] : undefined;
+    if (schema) assert.deepEqual(JSON.parse(schema).properties.nodeTypeIds.items.enum, ["Dataverse Table", "synthetic-node"]);
+    const invalid = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: provider },
+      { output: { nodeTypeIds: ["invented"], rationale: "x" } });
+    assert.notEqual((await invalid.invoke({ mode: "design-plan", question: "Synthetic", context: planContext, history: [] })).status, 200);
+  }
 });
 
 test("providers: local GET checks subscription readiness without inference or credential leakage", async () => {

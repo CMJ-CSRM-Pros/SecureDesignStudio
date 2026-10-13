@@ -20,6 +20,12 @@ export default defineConfig(async ({ command, mode }) => {
     await readLibraryCandidates(env.SDS_LIBRARY_PATHS, process.cwd()), localOnly || singleFile,
   );
   const localAi = localOnly && mode === "ai";
+  const cliOnly = env.npm_lifecycle_event === "dev:ai:local" ||
+    (env.npm_lifecycle_event !== "dev:ai" && env.SDS_LOCAL_AI_CLI_ONLY === "1");
+  if (localAi) {
+    process.env.SDS_LOCAL_AI = "1";
+    process.env.SDS_LOCAL_AI_CLI_ONLY = cliOnly ? "1" : "0";
+  }
   const hasLocalTokenOverride = Object.prototype.hasOwnProperty.call(
     env,
     "VITE_COLLAB_TOKEN_ENDPOINT",
@@ -49,7 +55,7 @@ export default defineConfig(async ({ command, mode }) => {
   if (services.selection.error) console.warn(`[service-configuration] ${services.selection.error}`);
 
   return {
-    plugins: [react(), libraries.plugin, ...(localAi ? [localAiVitePlugin()] : []),
+    plugins: [react(), libraries.plugin, ...(localAi ? [localAiVitePlugin({ cliOnly })] : []),
       await distributionLicensePlugin(process.cwd(), packageJson), ...(singleFile ? [viteSingleFile()] : []),
       ...(!localOnly ? [serviceBuildReceiptPlugin(services, singleFile, packageJson.version)] : [])],
     define: {
