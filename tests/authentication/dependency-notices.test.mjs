@@ -6,6 +6,43 @@ import { tmpdir } from "node:os";
 import { distributionLicensePlugin } from "../../scripts/distribution-license.mjs";
 
 const notices = JSON.parse(await readFile(new URL("../../src/data/runtimeDependencyNotices.json", import.meta.url), "utf8"));
+test("build dependencies: standalone inlining removes vulnerable dependencies and escapes closing tags", async () => {
+  const { singleFileBuildPlugin } = await import("../../scripts/single-file-build.mjs");
+  const lock = JSON.parse(await readFile(resolve("package-lock.json"), "utf8"));
+  assert.equal(Object.keys(lock.packages).some(path => /node_modules\/(?:braces|micromatch|vite-plugin-singlefile)$/.test(path)), false);
+  const quotes = Object.entries(lock.packages).filter(([path]) => /node_modules\/shell-quote$/.test(path));
+  assert.ok(quotes.length > 0);
+  for (const [, pkg] of quotes) assert.equal(pkg.version, "1.12.0");
+  for (const prefix of ["", "./"]) {
+    const bundle = {
+      "index.html": { type: "asset", fileName: "index.html", source: `<script type="module" src="${prefix}app.js"></script><link href="${prefix}app.css">` },
+      "app.js": { type: "chunk", fileName: "app.js", code: 'console.log("</script></SCRIPT><!-- __VITE_PRELOAD__");' },
+      "app.css": { type: "asset", fileName: "app.css", source: 'body{color:red}/* </style> */' },
+    };
+    const plugin = singleFileBuildPlugin();
+    plugin.generateBundle.call({ error(message) { throw new Error(message); } }, {}, bundle);
+    assert.match(bundle["index.html"].source, /console\.log/);
+    assert.equal("app.js" in bundle, false);
+    assert.equal("app.css" in bundle, false);
+    assert.equal(bundle["index.html"].source.includes("<style>"), true);
+    assert.equal((bundle["index.html"].source.match(/<\/script>/g) ?? []).length, 1);
+    assert.equal(bundle["index.html"].source.includes("</SCRIPT>"), false);
+    assert.equal((bundle["index.html"].source.match(/<\/style>/g) ?? []).length, 1);
+    assert.equal(bundle["index.html"].source.includes("__VITE_PRELOAD__"), false);
+  }
+  const plugin = singleFileBuildPlugin();
+  const context = { error(message) { throw new Error(message); } };
+  assert.throws(() => plugin.generateBundle.call(context, {}, {}), /did not emit HTML/);
+  assert.throws(() => plugin.generateBundle.call(context, {}, {
+    "index.html": { type: "asset", fileName: "index.html", source: "<html></html>" },
+    "app.js": { type: "chunk", fileName: "app.js", code: "void 0;" },
+  }), /not inlined/);
+  const config = {};
+  plugin.config(config);
+  assert.equal(config.build.rollupOptions.output.codeSplitting, false);
+  assert.equal(config.build.assetsInlineLimit(), true);
+});
+
 test("dependency notices: every locked runtime dependency has complete versioned attribution", async () => {
   const expected = new Map();
   for (const scope of [".", "api"]) {

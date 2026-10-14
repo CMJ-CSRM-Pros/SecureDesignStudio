@@ -35,6 +35,14 @@ package, `test:authentication` is an alias for it. Companion integrations have
 their own test command and are not required to run shared runtime tests.
 There is no generic `npm test` or lint script.
 
+Build dependency overrides pin patched `shell-quote`. Standalone HTML uses
+the repository-owned `scripts/single-file-build.mjs` inliner rather than
+`vite-plugin-singlefile`, removing its unpatched `braces` dependency chain.
+The Vite 8 inliner embeds all emitted scripts/styles and fails if any emitted
+script/style is left unembedded. The dependency-notices tests cover inlining,
+literal closing-tag escaping and missing-resource failures. Selective
+glob-based inlining is intentionally not supported.
+
 See the [browser guide](../tests/browser/README.md) for exact coverage,
 configuration-specific production tests, synthetic fixtures and output paths.
 Run browser suites serially; they own and stop only their own server.

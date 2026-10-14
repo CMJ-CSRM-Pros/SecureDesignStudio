@@ -1,7 +1,7 @@
 {
   "name": "secure-design-studio",
   "private": true,
-  "version": "1.0.35",
+  "version": "1.0.36",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -42,8 +42,7 @@
     "cross-env": "^10.1.0",
     "playwright-core": "1.62.1",
     "typescript": "^5.6.3",
-    "vite": "8.1.4",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite": "8.1.4"
   },
   "license": "MIT"
 }

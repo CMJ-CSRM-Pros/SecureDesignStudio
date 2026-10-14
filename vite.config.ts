@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import { viteSingleFile } from "vite-plugin-singlefile";
+import { singleFileBuildPlugin } from "./scripts/single-file-build.mjs";
 import packageJson from "./package.json";
 import { readLibraryCandidates, libraryBuildBridge } from "./scripts/custom-libraries.mjs";
 import { readServiceConfiguration, serviceBuildConfiguration, serviceBuildReceiptPlugin } from "./scripts/service-configuration.mjs";
@@ -56,7 +56,7 @@ export default defineConfig(async ({ command, mode }) => {
 
   return {
     plugins: [react(), libraries.plugin, ...(localAi ? [localAiVitePlugin({ cliOnly })] : []),
-      await distributionLicensePlugin(process.cwd(), packageJson), ...(singleFile ? [viteSingleFile()] : []),
+      await distributionLicensePlugin(process.cwd(), packageJson), ...(singleFile ? [singleFileBuildPlugin()] : []),
       ...(!localOnly ? [serviceBuildReceiptPlugin(services, singleFile, packageJson.version)] : [])],
     define: {
       __PS_SINGLE_FILE__: JSON.stringify(singleFile),
@@ -77,11 +77,8 @@ export default defineConfig(async ({ command, mode }) => {
     build: singleFile
       ? {
           outDir: "dist-single",
-          // viteSingleFile recommendations: avoid chunk-splitting/asset
-          // separation so everything lands in the one html file. The plugin
-          // itself forces a single chunk, picking codeSplitting:false on
-          // Vite 8+ (Rolldown) or inlineDynamicImports:true on older Vite,
-          // so do not set either here — doing so triggers a Rolldown warning.
+          // The single-file plugin configures one Rolldown chunk and inlines
+          // its script and stylesheet into the HTML.
           assetsInlineLimit: 100_000_000,
           chunkSizeWarningLimit: 100_000_000,
           cssCodeSplit: false,
