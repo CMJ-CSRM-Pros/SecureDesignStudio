@@ -94,12 +94,13 @@ for (const delivery of ["hosted", "standalone"]) {
       } else {
         assert.match(text, /Collaboration is configured/);
         if (mocked) {
-          assert.ok(text.includes(tokenEndpoint));
-          assert.ok(text.includes(assistantEndpoint));
-          if (delivery === "standalone") {
-            assert.equal(await about.locator("p").filter({ hasText: "Share destination:" }).locator("code").innerText(), shareAppUrl);
-          }
-          else assert.match(text, /current hosted page/);
+          const displayedServiceAddresses = await about.locator(".ps-about-details code").allTextContents();
+          assert.deepEqual(displayedServiceAddresses, [
+            tokenEndpoint,
+            ...(delivery === "standalone" ? [shareAppUrl] : []),
+            assistantEndpoint,
+          ]);
+          if (delivery !== "standalone") assert.match(text, /current hosted page/);
           if (mode === "profile") assert.match(text, /Example services \(example\)/);
         } else {
           assert.match(text, delivery === "standalone" ? /no endpoint is configured/ : /Design Assistant is configured/);
