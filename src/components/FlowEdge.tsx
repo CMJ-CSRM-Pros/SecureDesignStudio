@@ -27,6 +27,12 @@ export interface FlowEdgeData {
   authenticationAnonymous?: boolean;
   authenticationMultiple?: boolean;
   authenticationReviewRequired?: boolean;
+  protocolLabel?: string;
+  protocolShortLabel?: string;
+  protocolDescription?: string;
+  protocolSemanticsDescription?: string;
+  protocolReviewRequired?: boolean;
+  applicationId?: string;
   classificationLabels?: string[];
   classificationColor?: string;
   classificationForeground?: string;
@@ -217,7 +223,11 @@ export function FlowEdge({
   }) as FlowEdgeData;
   const authenticationSummary = (d.authenticationLabels?.length ?? 0) > 0
     ? `Authentication: ${d.authenticationLabels!.join(", ")}${d.authenticationReviewRequired ? " (unverified or unresolved; review required)" : ""}`
-    : "Authentication is not defined";
+    : "Authentication is not specified; this is not proof of anonymous access";
+  const protocolSummary = d.protocolLabel
+    ? `Communication profile: ${d.protocolLabel}${d.protocolReviewRequired ? " (review required)" : ""}. ${d.protocolDescription ?? ""} ${d.protocolSemanticsDescription ?? ""} Declared design intent only; not evidence of negotiated protection.`
+    : "Communication profile is not specified; this is not proof of plaintext or encryption";
+  const communicationSummary = `${protocolSummary}. ${authenticationSummary}. Caller Application ID: ${d.applicationId || "Not specified"}.`;
 
   const source: Position = { x: sourceX, y: sourceY };
   const target: Position = { x: targetX, y: targetY };
@@ -516,6 +526,7 @@ export function FlowEdge({
             d.simulationActive ? "ps-simulation-active" : ""
           } ${d.simulationCurrent ? "ps-simulation-current" : ""}`}
           data-edge-id={id}
+          title={communicationSummary}
           style={{
             transform: `translate(-50%, -50%) translate(${labelPos.x}px, ${labelPos.y}px)`,
             cursor: editingTitle ? "text" : "move",
@@ -525,6 +536,15 @@ export function FlowEdge({
           <span className="ps-edge-num">
             {d.number != null ? `#${d.number}` : "—"}
           </span>
+          {(d.protocolLabel || d.protocolReviewRequired) && (
+            <span
+              className={`ps-edge-protocol-badge ${d.protocolReviewRequired ? "ps-edge-protocol-review" : ""}`}
+              title={communicationSummary}
+              aria-label={communicationSummary}
+            >
+              {d.protocolShortLabel ?? "Protocol"}
+            </span>
+          )}
           <span
             className={`ps-edge-auth-badge ${
               d.authenticationMultiple
@@ -543,7 +563,7 @@ export function FlowEdge({
             {d.authenticationMultiple
               ? "Multiple auth"
               : (d.authenticationLabels?.length ?? 0) === 0
-              ? "No auth"
+              ? "Auth —"
               : d.authenticationAnonymous
                 ? "Anonymous"
                 : d.authenticationShortLabel ?? "Auth"}

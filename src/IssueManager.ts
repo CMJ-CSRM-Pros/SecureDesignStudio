@@ -20,7 +20,7 @@ import {
   GEO_BOUNDARY_SETTING_DEF_MAP,
   POST_SUBSCRIPTION_RETENTION_DEF_MAP,
   RETENTION_LABELS,
-  edgeRequiresProductionIdentity,
+  edgeRequiresApplicationId,
   formatGeoBoundary,
   formatPostSubscriptionRetention,
   isGuid,
@@ -36,6 +36,7 @@ import {
   isClassificationAllowedByNode,
   nodeTypeDefFor,
 } from "./policy";
+import { PROTOCOL_TYPE_DEFS, resolveProtocolReference, type ProtocolTypeDef } from "./protocols";
 
 // Output of a single analyzer rule: one expected issue per (kind, target).
 // `scenarioIds` is the set of scenarios in which the rule currently triggers.
@@ -64,11 +65,17 @@ export const ANALYZER_RULES = {
   },
   ruleEdgeProductionIdentity: {
     targetKind: "edge",
-    kinds: ["Edge_missing_production_identity", "Edge_invalid_production_identity", "Edge_managed_identity_mismatch"],
+    kinds: ["Edge_missing_application_id", "Edge_invalid_application_id", "Edge_managed_identity_mismatch"],
+  },
+  ruleEdgeProtocolGuidance: {
+    targetKind: "edge", kinds: ["Edge_protocol_guidance_missing", "Edge_protocol_definition_conflict"],
   },
 } as const;
 export type AnalyzerRuleId = keyof typeof ANALYZER_RULES;
 const ALL_RULE_IDS = Object.keys(ANALYZER_RULES) as AnalyzerRuleId[];
+const RETIRED_IDENTITY_FINDING_KINDS = new Set([
+  "Edge_missing_production_identity", "Edge_invalid_production_identity",
+]);
 
 // IssueManager encapsulates the privacy/security analysis pass. It is a
 // pure-functional class: `analyze` takes a document and returns a new
@@ -94,6 +101,7 @@ export class IssueManager {
     private readonly libraryFields: readonly MetadataField[] = [],
     private readonly installedAuthenticationDefinitions: readonly AuthTypeDef[] = AUTH_TYPE_DEFS,
     private readonly libraryHelp: readonly LibraryHelp[] = [],
+    private readonly availableProtocolDefinitions: readonly ProtocolTypeDef[] = PROTOCOL_TYPE_DEFS,
   ) {}
   analyze(doc: PsDocument): PsDocument {
     const propagated = this.propagateEdgeDataToAllScenarios(doc);
@@ -520,17 +528,13 @@ export class IssueManager {
     return n.title?.trim() ? n.title : n.id;
   }
 
-  // Rule: edges using an identity-bearing authentication mechanism must declare a production
-  // identity (Application ID + tenant, or Managed Identity name). Emits two
+  // Rule: methods requiring a caller application ID must declare one. Emits
   // distinct kinds so users can distinguish "not yet specified" from
   // "specified but malformed":
-  //   - Edge_missing_production_identity: required but no value at all
-  //     (or all sub-fields are blank).
-  //   - Edge_invalid_production_identity: value present but incomplete
-  //     (e.g. App ID isn't a valid GUID, Managed Identity name is empty).
+  //   - Edge_missing_application_id: required but no value at all.
+  //   - Edge_invalid_application_id: a value is present but is not a GUID.
   // Issues only fire when the edge's auth selection actually requires the
-  // field, so removing all applicable authentication silences the issue without
-  // requiring the stored value to be cleared.
+  // field, so selecting Managed Identity does not require a redundant identity tag.
   private ruleEdgeProductionIdentity(doc: PsDocument, unavailable: Set<string>): ExpectedIssue[] {
     const out: ExpectedIssue[] = [];
     const catalog = authenticationCatalogFor(doc, this.installedAuthenticationDefinitions, this.installedAuthenticationDefinitions);
@@ -545,50 +549,62 @@ export class IssueManager {
           unavailable.add(this.key(kind, "edge", edge.id));
         }
       }
-      if (!edgeRequiresProductionIdentity(edge.authenticationTypes, catalog)) continue;
-      const pi = edge.productionIdentity;
+      const requiresApplicationId = edgeRequiresApplicationId(edge.authenticationTypes, catalog);
+      const applicationId = edge.applicationId?.trim() ?? "";
       const edgeTitle = edge.title?.trim() ? edge.title : edge.id;
-      if (!pi) {
+      const managedIdentityAuth = (edge.authenticationTypes ?? []).some(id =>
+        authBehavior(id, catalog).managedIdentity,
+      );
+      const legacyIdentityMismatch = edge.productionIdentity?.kind === "AppId"
+        ? managedIdentityAuth
+        : edge.productionIdentity?.kind === "ManagedIdentity" && requiresApplicationId;
+      if (legacyIdentityMismatch || (managedIdentityAuth && applicationId !== "")) {
         out.push({
-          kind: "Edge_missing_production_identity",
+          kind: "Edge_managed_identity_mismatch",
           targetKind: "edge",
           targetId: edge.id,
           scenarioIds: [],
-          title: "Edge is missing a production identity",
-          description: `Edge "${edgeTitle}" uses an identity-bearing authentication type and must declare the production identity used to issue the call (an Application ID + tenant, or a Managed Identity). Set the production identity in the edge's properties panel.`,
+          title: "Caller identity evidence conflicts with authentication",
+          description: managedIdentityAuth
+            ? `Edge "${edgeTitle}" uses Managed Identity authentication while also retaining Application ID evidence. Review the standalone caller Application ID and read-only legacy identity evidence; Managed Identity does not require an identity tag.`
+            : `Edge "${edgeTitle}" requires a caller Application ID but retains legacy Managed Identity evidence. Review the authentication choice and preserved evidence.`,
         });
-        continue;
       }
-      if (pi.kind === "AppId") {
-        if (edge.authenticationTypes?.some(id => authBehavior(id, catalog).managedIdentity)) {
-          out.push({
-            kind: "Edge_managed_identity_mismatch", targetKind: "edge", targetId: edge.id, scenarioIds: [],
-            title: "Managed identity profile conflicts with Application ID",
-            description: "The selected authentication profile requires Managed Identity. Existing identity data is retained; explicitly choose the matching identity or a different profile.",
-          });
-        }
-        const appId = pi.appId.trim();
-        if (appId === "") {
-          out.push({
-            kind: "Edge_missing_production_identity",
-            targetKind: "edge",
-            targetId: edge.id,
-            scenarioIds: [],
-            title: "Edge is missing a production identity",
-            description: `Edge "${edgeTitle}" specifies an Application ID production identity but no App ID is set. Provide the GUID of the calling application.`,
-          });
-        } else if (!isGuid(appId)) {
-          out.push({
-            kind: "Edge_invalid_production_identity",
-            targetKind: "edge",
-            targetId: edge.id,
-            scenarioIds: [],
-            title: "Edge's production identity App ID is not a valid GUID",
-            description: `Edge "${edgeTitle}" has an Application ID production identity, but "${pi.appId}" is not a valid GUID. Provide a GUID like 12345678-1234-1234-1234-123456789abc.`,
-          });
-        }
+      if (applicationId !== "" && !isGuid(applicationId)) {
+        out.push({
+          kind: "Edge_invalid_application_id", targetKind: "edge", targetId: edge.id, scenarioIds: [],
+          title: "Edge caller Application ID is not a valid GUID",
+          description: `Edge "${edgeTitle}" has a caller Application ID that is not a GUID. Provide the GUID of the calling application's client ID.`,
+        });
+      } else if (requiresApplicationId && applicationId === "") {
+        out.push({
+          kind: "Edge_missing_application_id", targetKind: "edge", targetId: edge.id, scenarioIds: [],
+          title: "Edge is missing a caller Application ID",
+          description: `Edge "${edgeTitle}" uses an authentication method that requires the calling application's client ID. Set the standalone Application ID in the edge's Communication section.`,
+        });
       }
-      // ManagedIdentity is a bare tag with no additional fields to validate.
+    }
+    return out;
+  }
+
+  private ruleEdgeProtocolGuidance(doc: PsDocument): ExpectedIssue[] {
+    const out: ExpectedIssue[] = [];
+    for (const edge of doc.edges) {
+      if (!edge.protocolId) continue;
+      const resolution = resolveProtocolReference(edge.protocolId, doc.protocolDefinitions, this.availableProtocolDefinitions);
+      if (resolution.status === "unresolved") {
+        out.push({
+          kind: "Edge_protocol_guidance_missing", targetKind: "edge", targetId: edge.id, scenarioIds: [],
+          title: "Communication profile guidance is missing",
+          description: `Edge "${edge.title?.trim() || edge.id}" references unresolved protocol "${edge.protocolId}". No profile semantics or AI guidance were inferred; restore or explicitly replace the profile.`,
+        });
+      } else if (resolution.status === "resolved" && resolution.conflict) {
+        out.push({
+          kind: "Edge_protocol_definition_conflict", targetKind: "edge", targetId: edge.id, scenarioIds: [],
+          title: "Saved communication profile differs from the active library",
+          description: `Edge "${edge.title?.trim() || edge.id}" uses saved-first protocol "${edge.protocolId}", whose portable diagram definition differs from the active profile library. Resolve the definition in the Communication section.`,
+        });
+      }
     }
     return out;
   }
@@ -616,7 +632,7 @@ export class IssueManager {
       if (!(issue.targetKind === "node" ? nodeIds : edgeIds).has(issue.targetId)) continue;
       const key = this.key(issue.kind, issue.targetKind, issue.targetId);
       const notEvaluatedReason = evaluatedKinds.get(issue.kind) !== issue.targetKind
-        ? "rule-unavailable"
+        ? RETIRED_IDENTITY_FINDING_KINDS.has(issue.kind) ? "rule-retired" : "rule-unavailable"
         : unavailablePolicies.has(key) ? "policy-unavailable" : undefined;
       if (notEvaluatedReason) {
         handledKeys.add(key);

@@ -60,7 +60,7 @@ test("public Power Platform: the exact requested architecture has neutral defaul
   const choices = new Set(context.catalog.nodeTypes.map(type => type.id));
   assert.deepEqual(requestedIds.filter(id => !choices.has(id)), [],
     `Missing public choices for "${question}"; Microsoft 365 Copilot must not be a required substitute.`);
-  assert.equal(core.nodes.length, 169);
+  assert.equal(core.nodes.length, 198);
   const labels = { Dataverse: "Microsoft Dataverse", "Dataverse Table": "Dataverse Table", "Dataverse Plugin": "Dataverse Plugin",
     CopilotStudio: "Microsoft Copilot Studio", PowerPlatformConnectors: "Power Platform connectors" };
   for (const [id, label] of Object.entries(labels)) {

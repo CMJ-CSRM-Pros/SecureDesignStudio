@@ -1,6 +1,7 @@
 export type NodeType = string; // free-form, but suggested values come from a list
 
 import type { AuthenticationType, AuthTypeDef } from "./authentication";
+import type { ProtocolId, ProtocolTypeDef } from "./protocols";
 import type { MetadataField } from "./libraries/contracts";
 import productionIdentityTenants from "./data/productionIdentityTenants.json";
 import deviationTypes from "./data/deviationTypes.json";
@@ -237,6 +238,7 @@ export function retentionDescription(id: Retention | string): string | undefined
 
 import nodeTypesData from "./data/nodeTypes.json";
 import microsoftCloudNodeTypesData from "./data/microsoftCloudNodeTypes.json";
+import genericNodeTypesData from "./data/genericNodeTypes.json";
 
 export type AllowedAuthMethodStatus = "Allowed" | "Deprecated";
 export type AllowedDataAction = "Allow" | "Deny";
@@ -353,9 +355,12 @@ const curatedNodeTypeDefs: NodeTypeDef[] = (
   nodeTypesData as readonly NodeTypeDef[]
 ).map((def) => ({ ...def }));
 const curatedNodeTypeIds = new Set(curatedNodeTypeDefs.map((def) => def.id));
-const microsoftCloudNodeTypeDefs: NodeTypeDef[] = (
-  microsoftCloudNodeTypesData as readonly MicrosoftCloudNodeTypeCatalogEntry[]
-)
+// Vendor-neutral Generic entries and Microsoft cloud entries share the same
+// neutral (policyStatus: Unspecified) shape.
+const microsoftCloudNodeTypeDefs: NodeTypeDef[] = [
+  ...(genericNodeTypesData as readonly MicrosoftCloudNodeTypeCatalogEntry[]),
+  ...(microsoftCloudNodeTypesData as readonly MicrosoftCloudNodeTypeCatalogEntry[]),
+]
   .filter((entry) => !curatedNodeTypeIds.has(entry.id))
   .map((entry) => ({
     ...entry,
@@ -857,6 +862,12 @@ export interface PsEdge {
   targetHandle?: string;
   title: string;
   description: string;
+  // One optional communication profile shared by every scenario using the edge.
+  // Missing means unspecified; it is not evidence of cleartext or encryption.
+  protocolId?: ProtocolId;
+  // Standalone caller application/client ID. Retained legacy identity data
+  // remains in productionIdentity and is never silently overwritten.
+  applicationId?: string;
   // Declared design intent, shared by every scenario using this edge.
   // Missing or blank is unspecified, not a claim that no rights are needed.
   requiredAccessRights?: string;
@@ -864,10 +875,9 @@ export interface PsEdge {
   // most one method. Older imports with multiple values remain recoverable
   // and are flagged until the user chooses the method the call actually uses.
   authenticationTypes?: AuthenticationType[];
-  // Production identity used to issue the call. Required when any of the
-  // selected authenticationTypes is in AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY
-  // (Entra-based or protected forwarded token). Preserved across auth-type edits so an in-flight
-  // value isn't lost if the user briefly toggles the requirement off.
+  // Read-only compatibility evidence from the retired Production identity
+  // editor. New caller IDs use applicationId; this evidence is never inferred
+  // as the identity of a rerouted caller.
   productionIdentity?: ProductionIdentity;
   audience?: string;
   constraints?: string;
@@ -999,6 +1009,7 @@ export type IssueStatus = "Active" | "Resolved";
 
 export const ISSUE_NOT_EVALUATED_LABELS = {
   "rule-unavailable": "Not re-evaluated: rule unavailable",
+  "rule-retired": "Not re-evaluated: analyzer rule retired",
   "policy-unavailable": "Not re-evaluated: required policy definition unavailable",
   unknown: "Not re-evaluated: unrecognized evaluation state",
 } as const;
@@ -1006,7 +1017,7 @@ export type IssueNotEvaluatedReason = keyof typeof ISSUE_NOT_EVALUATED_LABELS;
 
 export function normalizeIssueNotEvaluatedReason(value: unknown): IssueNotEvaluatedReason | undefined {
   if (value === undefined) return undefined;
-  if (value === "rule-unavailable" || value === "policy-unavailable") return value;
+  if (value === "rule-unavailable" || value === "rule-retired" || value === "policy-unavailable") return value;
   return "unknown";
 }
 
@@ -1017,6 +1028,16 @@ export function normalizeIssueNotEvaluatedReason(value: unknown): IssueNotEvalua
 // scenario (e.g. structural problems on the node/edge itself).
 export interface PsIssue {
   id: string;
+  // Provenance captured from the exact AI guidance context when a finding is
+  // accepted. It is reference metadata, not verified control evidence.
+  guidanceReferences?: Array<{
+    typeId: string;
+    protocolId?: string;
+    definitionSource: "saved" | "available" | "core";
+    revision: number;
+    updatedOn: string;
+    sources: string[];
+  }>;
   // Only explicit Add threat note authoring sets this; absence is not provenance.
   origin?: "authored-threat";
   justification?: string;
@@ -1125,6 +1146,8 @@ export interface PsDocument {
   version: 1;
   // Portable referenced definitions, not the user's profile library.
   authenticationDefinitions?: AuthTypeDef[];
+  // Portable saved definitions referenced by this document; never profile preferences.
+  protocolDefinitions?: ProtocolTypeDef[];
   // Data-only display definitions; never installed packages or authentication preferences.
   catalogDefinitions?: CatalogDefinitionSnapshot[];
   // User-extendable catalog of node types ({id, label}). Catalog-backed
@@ -1151,6 +1174,7 @@ export function emptyDocument(): PsDocument {
   return {
     version: 1,
     authenticationDefinitions: [],
+    protocolDefinitions: [],
     catalogDefinitions: [],
     nodeTypes: [...DEFAULT_NODE_TYPES],
     nodes: [],

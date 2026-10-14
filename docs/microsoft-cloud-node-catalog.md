@@ -2,14 +2,13 @@
 
 Inventory baseline: 2026-08-16; scoped product-boundary/guidance update: 2026-10-09.
 
-*Updated: 2026-10-09 - Added reviewed Azure guidance and reconciled owner-approved service boundaries.*
+*Updated: 2026-10-13 - Added the vendor-neutral Generic process, networking and storage catalog.*
 
-SecureDesignStudio provides **169 neutral core node types**, without requiring
-an optional library. The optional Custom package contributes 13 node
-definitions, including six private service identities; three explicitly
-overlay same-ID Dataverse bases, yielding **179 combined IDs** when selected.
-Private policy/identity definitions are not part of the neutral core. The Azure
-portion starts from the 214-resource Microsoft Cloud
+SecureDesignStudio provides **198 neutral core node types** (169 Microsoft
+product types plus 29 vendor-neutral Generic types), without requiring
+an optional library. Selected Custom Libraries can contribute additional node
+definitions or explicitly overlay a core definition. The Azure portion starts
+from the 214-resource Microsoft Cloud
 Adoption Framework inventory and collapses SKU/child-resource variants into
 93 architecturally meaningful data-flow node families.
 Use the [user guide](user-guide.md#4-advanced-features) for the modeling
@@ -27,23 +26,14 @@ families; the linked Microsoft sources remain authoritative.
 
 ## Reviewed AI design guidance
 
-166 of the 169 neutral core node types carry concise `aiDesignGuidance`:
+166 of the 169 Microsoft core node types carry concise `aiDesignGuidance`:
 Context, Dependencies, Risks and Uncertainty, with source URLs, authored
 revision and edit date. Guidance remains withheld for Virtual machine
-infrastructure, Network security and Route resources as directed by the
-catalog owner. The optional Custom package adds guidance to four additional
-IDs; three Dataverse component overlays retain the same core IDs and guidance.
-Dates are edit dates, not fresh verification of a deployment or every linked
-page.
-
-The optional Custom package also gives neutral public meanings to its stable
-legacy IDs `Connectors` and `Copilot Studio`, separate from the core IDs
-`PowerPlatformConnectors` and `CopilotStudio`. New library definitions no
-longer contain the former private Service Tree identities, environment API
-endpoint matchers, or organization-specific policy fields. Saved diagram
-definitions remain authoritative and are not rewritten by this catalog update.
-The private CAPI, BAP, EDS, PPMS, MDL Service and XStore entries remain without
-AI guidance.
+infrastructure, Network security and Route resources. Custom Libraries can
+supply guidance for additional types or explicit overlays. Dates are edit
+dates, not fresh verification of a deployment or every linked page. Saved
+diagram definitions remain authoritative and are not rewritten by catalog
+updates.
 
 New default choices:
 
@@ -55,14 +45,14 @@ New default choices:
 | `CopilotStudio` | Public agent/workflow authoring and management product, distinct from `m365_copilot` and `Agent365`. |
 | `PowerPlatformConnectors` | Connector family; identify the actual connector, connection identity, operation and backend. |
 
-Owner-approved Azure scopes preserve variant differences: WAF is Web
+Azure scopes preserve variant differences: WAF is Web
 Application Firewall at public application entry points; Delivery covers
 Azure Front Door and legacy Azure CDN; Azure Files covers both classic
 account-contained and standalone shares; Managed Redis stays scoped to
 `Microsoft.Cache/RedisEnterprise`; Azure Enclave is a managed deployment
 composite. These definitions do not imply every listed component or control is
-deployed. VM infrastructure, Network security, Route and six private service
-identities remain without guidance.
+deployed. VM infrastructure, Network security and Route remain without
+guidance.
 
 For the request “a Power Pages application backed by Copilot to summarize
 Dataverse data,” the public choices support `PowerPages` → `CopilotStudio` →
@@ -123,7 +113,7 @@ product snapshot.
 
 For a first model, select each node and review both inspector tabs:
 
-- **General / Security**: confirm the type, ServiceTree context, endpoint
+- **General / Security**: confirm the type, Inventory ID, endpoint
   pattern, and displayed authentication policy. Audience, constraints, and
   production identity are recorded on flows, not the node.
 - **Privacy**: confirm allowed data rules, scenario data and retention, default
@@ -155,17 +145,50 @@ Official SVGs are copied unmodified from Microsoft architecture icon packs. See 
 | Catalog source | Types |
 |---|---:|
 | Dynamics 365 | 16 |
+| Generic (vendor-neutral) | 29 |
 | Microsoft 365 | 40 |
 | Microsoft Azure | 93 |
 | Microsoft Fabric | 9 |
 | Power Platform | 11 |
-| **Neutral core total** | **169** |
+| **Neutral core total** | **198** |
 | Optional Custom entries | 13 |
 | Same-ID optional/core overlap | -3 |
-| **Combined with Custom** | **179** |
+| **Combined with Custom** | **208** |
 
 Catalog-source grouping preserves the original source attribution; category
 labels independently identify Agent 365 governance and shared gateway roles.
+
+## Generic (vendor-neutral)
+
+`src/data/genericNodeTypes.json` supplies 29 product-agnostic types for any
+platform (on-premises, any cloud or hybrid). IDs use the stable
+`generic.<area>.<kind>` form. Open **Model > Node Type Catalog** and choose
+**Generic** in the **Catalog** selector. **Microsoft** groups Azure, Microsoft
+365, Dynamics 365, Fabric and Power Platform; **All node types** includes
+everything. Future catalog choices are derived from `catalogSource` metadata,
+without additional Model commands. Search is scoped to the selected catalog.
+Unlike Microsoft product entries, each Generic
+type sets an intentional **default DFD role**: Process for compute and
+networking, External Interactor for clients and devices, Data Store for storage.
+Icons are original SDS artwork under `src/assets/node-icons/neutral/`.
+
+| Category | Types |
+|---|---|
+| Generic / Process | Host (server / VM), Container workload, Serverless function (FaaS), Web application, API service, Background worker / scheduled job |
+| Generic / Client and device | Desktop / mobile client app, Browser / single-page app client, IoT / edge device |
+| Generic / Networking | Router, Switch, Firewall, Web application firewall, Load balancer, Reverse proxy / API gateway, VPN gateway, NAT gateway, DNS service, Bastion / jump host |
+| Generic / Storage | Relational database, NoSQL database, Object storage, File share / NAS (SMB/NFS), Block storage / SAN / disk volume, Cache, Message queue / broker / event stream, Log / telemetry store, Secrets / key vault / HSM, Backup / archive |
+
+Every Generic type carries reviewed `aiDesignGuidance` (≤2,400 characters)
+with six sections — Context, Modeling, Dependencies, Risks, Controls to verify
+and Uncertainty — and 2–5 vendor-neutral sources (NIST, OWASP, CISA, CIS,
+MITRE, IETF and similar). Modeling explains when to use the type, how to split
+it into nodes/boundaries and which data flows to draw; Controls to verify lists
+checks the reviewer should confirm rather than assume. Like other core entries,
+Generic types assert no authentication, data or retention policy
+(`policyStatus: Unspecified`) and no endpoint classifier (`endpointRegex: "^$"`).
+Prefer a specific product type when one exists; use Generic when the product
+is unknown, self-hosted or from another vendor.
 
 ## Dynamics 365
 

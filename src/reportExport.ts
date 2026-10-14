@@ -15,6 +15,7 @@ import {
   formatProductionIdentity,
   nodeTypeLabel,
 } from "./types";
+import { resolveProtocolReference } from "./protocols";
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -231,19 +232,27 @@ export function buildReviewReportHtml(options: {
         (scenario.edgeNumbers[left.id] ?? 0) -
         (scenario.edgeNumbers[right.id] ?? 0),
     )
-    .map((edge) => [
+    .map((edge) => {
+      const protocol = resolveProtocolReference(edge.protocolId, doc.protocolDefinitions);
+      const protocolLabel = protocol.status === "resolved"
+        ? `${protocol.definition.label}${protocol.conflict ? " (saved conflict)" : ""}`
+        : protocol.status === "unresolved" ? `${edge.protocolId} (unresolved)` : "Not specified";
+      return [
       escapeHtml(scenario.edgeNumbers[edge.id] ?? "—"),
       escapeHtml(edge.title),
       escapeHtml(nodeById.get(edge.source)?.title ?? edge.source),
       escapeHtml(nodeById.get(edge.target)?.title ?? edge.target),
       escapeHtml(flowDfdSummary(edge, doc, scenario)),
+      escapeHtml(protocolLabel),
       escapeHtml((edge.authenticationTypes ?? []).map(id => authTypeLabel(id, authenticationCatalogFor(doc))).join(", ") || "Not specified"),
+      escapeHtml(edge.applicationId || "Not specified"),
       escapeHtml(edge.audience || "—"),
-      escapeHtml(edge.productionIdentity ? formatProductionIdentity(edge.productionIdentity, doc.catalogDefinitions) : "Unspecified"),
+      escapeHtml(edge.productionIdentity ? formatProductionIdentity(edge.productionIdentity, doc.catalogDefinitions) : "None retained"),
       `<span class="flow-rights">${escapeHtml(formatRequiredAccessRights(edge.requiredAccessRights) || "Unspecified")}</span>`,
       dataNames(scenario.edgeRequestData[edge.id]),
       dataNames(scenario.edgeResponseData[edge.id]),
-    ]);
+    ];
+    });
   const dataRows = data.map((item) => {
     const storedAt = nodes
       .filter((node) => scenario.nodeData[node.id]?.[item.id] !== undefined)
@@ -351,7 +360,7 @@ ${diagramDataUrl ? `<section><h2>Scenario diagram</h2><img class="diagram" src="
     escapeHtml(`${annotation.position.x}, ${annotation.position.y}`),
     escapeHtml(`${annotation.size.width}, ${annotation.size.height}`),
   ]))}</section>
-<section><h2>Data flow inventory</h2><p>Required access rights are declared design intent, not verified deployed grants or compliance. Blank means unspecified, not no permissions required.</p>${table(["#", "Flow", "Source", "Target", "Scope context", "Authentication", "Audience", "Production identity", "Required access rights", "Request data", "Response data"], edgeRows)}</section>
+<section><h2>Data flow inventory</h2><p>Communication profiles and authentication are declared design intent, not verified negotiated transport protection or deployed grants. Not specified is not proof of plaintext or encryption. Required access rights are not verified grants or compliance. Retained identity evidence is historical compatibility data.</p>${table(["#", "Flow", "Source", "Target", "Scope context", "Protocol", "Authentication", "Caller Application ID", "Audience", "Retained identity evidence", "Required access rights", "Request data", "Response data"], edgeRows)}</section>
 <section><h2>Data inventory and retention</h2>${table(["Data element", "Classification", "Sample", "Stored / processed at"], dataRows)}</section>
 ${metadataRows.length ? `<section><h2>Custom metadata</h2>${table(["Type", "Element", "Field", "Value"], metadataRows)}</section>` : ""}
 <section><h2>Security and privacy findings</h2><p>Active/Resolved is the review status, not an analysis result. Not re-evaluated findings may contain retained or partial evidence. No recorded limitation does not certify freshness or complete model coverage.</p>${table(["Status", "Source", "Evaluation", "Finding", "Affected element", "Details"], issueRows)}</section>

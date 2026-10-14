@@ -243,11 +243,13 @@ assumptions, not service policy recommendations.
    API, then from Support API to Case store. Select each arrow and set its
    **Title** to `Submit case` or `Store case`. Direction follows the arrow,
    not the nodes' left-to-right positions.
-4. **Describe authentication.** In the flow's **General / Security** tab,
-   select **Entra user** for Submit case and **Entra app** for Store case,
-   under the example's assumptions. Read the Description below the selector.
-   Record required Audience and Production identity from evidence, not
-   invented production IDs; flag unknowns for review.
+4. **Describe communication and authentication.** In the flow's **Properties**
+   tab, choose a **Protocol profile** only when supported by design evidence;
+   **Not specified** does not establish plaintext or encryption. Then select
+   one authentication method separately. Enter a caller **Application ID**
+   only when the selected method requires it and the GUID is known. Record
+   audience and access constraints from evidence; do not invent production
+   identities or infer deployed controls from a protocol label.
 5. **Define and attach data.** Choose **Model > Data Elements > Add data item**.
    Name it `Case text`, classify it as **Customer Content**, and leave Sample
    blank or synthetic. On each flow's **Privacy** tab, attach it under
@@ -267,11 +269,11 @@ assumptions, not service policy recommendations.
    Use **File > Open** to reopen that saved file and check the scenario.
 
 Core provides an optional **Inventory ID**, accepting ordinary text such as
-`ASSET-123`. The compatible JSON field remains `serviceTreeId`. Custom library
-can label the same field **ServiceTreeId** and add GUID validation and a
+`ASSET-123`. The compatible JSON field remains `serviceTreeId`. A selected
+Custom Library can provide an alternate field label, validation and a
 required-value check. Existing values remain editable without that library.
-Private curated policies still require the selected Custom library or a saved
-document definition. Neutral public Dataverse, Dataverse Table, Dataverse
+Curated policies require a selected Custom Library or a saved document
+definition. Neutral public Dataverse, Dataverse Table, Dataverse
 Plugin, Microsoft Copilot Studio and Power Platform connectors are available
 without it. `CopilotStudio` is the public agent product; the optional spaced
 `Copilot Studio` identity is not its alias. See the [catalog guide](microsoft-cloud-node-catalog.md)
@@ -372,7 +374,15 @@ nodes/flows can be deleted, while shared objects remain.
 
 **Model > Node Type Catalog** supports search, document-local definitions,
 shipped overrides/reset, and JSON import/export. Changes travel with `.tma`,
-not to other diagrams or repository source. See the
+not to other diagrams or repository source. Use the dialog's **Catalog**
+selector to choose **All node types**, **Generic** (29 vendor-neutral types),
+or **Microsoft** (Azure, Microsoft 365, Dynamics 365, Fabric and Power Platform).
+Other catalog choices appear automatically from installed type `catalogSource`
+metadata; adding a future vendor catalog needs no menu change. Document-local
+types appear under **Document**.
+Finish or cancel an edit before switching catalogs. Search applies within the
+selected catalog; saved overrides remain in their original built-in catalog.
+See the
 [cloud catalog](microsoft-cloud-node-catalog.md) for services, icons, sources,
 and Unspecified-policy limitations.
 
@@ -407,8 +417,8 @@ and node-type policies. It contains 17 modern profiles plus the ambiguous
 legacy certificate entry. It also distinguishes **Internal process call** from
 anonymous access: use it only for calls that stay inside one process boundary
 and require no particular authentication mechanism. The flow inspector hides
-Production identity controls for this method while retaining any existing
-identity evidence for later method changes. JSON import/export moves it between
+caller Application ID controls for this method while retaining any existing
+legacy identity evidence for later review. JSON import/export moves it between
 profiles without editing shipped source JSON.
 
 Library presence is not target acceptance. **Not specified** means no selection;
@@ -418,12 +428,24 @@ explicitly. Never infer direct mTLS from legacy certificate authentication.
 The [library contract](authentication-library.md) covers stable IDs,
 safe deletion, Undo/Redo, and compatibility.
 
+**Model > Communication Library** edits the source-backed protocol profiles
+available to new edge selections. A diagram carries portable definitions for
+profiles it uses, so its saved definition wins when the browser library has a
+same-ID conflict; resolve that conflict explicitly. Profile authentication
+suggestions are advisory and never change the separate one-method selector.
+Protocol names and protection descriptions express design intent, not
+negotiated encryption, anonymity, or deployed controls. AI guidance and source
+URLs are untrusted reference context; URLs are not fetched. Older clients may
+discard protocol profiles or caller Application IDs when saving shared
+diagrams, so update clients and keep an editable `.tma` backup.
+
 ### Document required flow access rights
 
 Select a flow and open **Properties > General / Security > Required access
 rights** to record an Azure RBAC role or rights such as read/write/execute.
 This is optional declared intent, not verification of deployed grants or
-compliance. Authentication and production identity remain independent.
+compliance. Authentication, the standalone caller Application ID, and required
+access rights remain separate design inputs.
 The same flow shares its text across all scenarios; parallel flows have
 separate values. Blank means unspecified, not no rights required. The limit
 is 4,000 UTF-16 code units; some characters count as two. Invalid edits are
@@ -521,9 +543,8 @@ default to IFrame. A subtype describes intended separation, not proof that
 isolation is enforced; the Process boundary subtype is distinct from a node's
 DFD role.
 
-Organization compliance/deployment perimeters and the ESTS
-evidence-kind label are available for new selections only when their library
-is installed. Saved values retain their labels/descriptions or appear as
+Optional library definitions can add boundary subtypes and evidence labels for
+new selections. Saved values retain their labels/descriptions or appear as
 unresolved IDs; they are not silently replaced with generic choices. A saved
 definition does not install a library. Saved definitions take precedence over
 same-ID installed definitions; **Saved catalog definitions** reports conflicting
@@ -623,9 +644,12 @@ Current built-in content remains present in this checkpoint. See
 **Review > Analyze** runs local rules across the **whole document**, not only
 the visible scenario. It propagates request data to targets and response data
 to sources in every scenario, then opens Issues. Rules cover missing data,
-retention information, authentication compatibility,
-receiver data policy, deferred instance values, and production identity.
-The ServiceTree required-value check is supplied only by the selected Custom
+retention information, authentication compatibility, required caller
+Application IDs, communication profile guidance, receiver data policy and
+deferred instance values. Legacy Production identity findings remain visible
+as retired historical evidence; they are not silently converted into active
+caller IDs.
+Any required inventory-value check is supplied only by the selected Custom
 library; core does not require an Inventory ID.
 
 Open a finding to locate its target, correct the model, and Analyze again.

@@ -1566,9 +1566,25 @@ body.ps-resizing-h * {
   color: #92400e;
 }
 .ps-edge-auth-missing {
-  border-color: #b91c1c;
-  background: #fee2e2;
-  color: #991b1b;
+  border-color: #64748b;
+  background: #f1f5f9;
+  color: #475569;
+}
+.ps-edge-protocol-badge {
+  border: 1px solid #64748b;
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.ps-edge-protocol-review {
+  border-color: #b45309;
+  background: #fef3c7;
+  color: #92400e;
 }
 .ps-auth-selection-warning {
   margin: -2px 0 8px;
@@ -1903,15 +1919,17 @@ body.ps-resizing-h * {
 }
 .ps-catalog-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--ps-border);
 }
 .ps-catalog-toolbar input {
-  min-width: 240px;
+  min-width: min(240px, 100%);
   flex: 1;
 }
 .ps-catalog-toolbar input,
+.ps-catalog-toolbar select,
 .ps-catalog-toolbar button,
 .ps-catalog-editor input,
 .ps-catalog-editor textarea,
@@ -1926,6 +1944,9 @@ body.ps-resizing-h * {
 .ps-catalog-toolbar button,
 .ps-catalog-editor button {
   cursor: pointer;
+}
+.ps-catalog-toolbar select {
+  max-width: 100%;
 }
 .ps-catalog-toolbar button:hover:not(:disabled),
 .ps-catalog-editor button:hover:not(:disabled) {
@@ -4129,6 +4150,7 @@ select {
 .ps-modal-body input,
 .ps-modal-body textarea,
 .ps-catalog-toolbar input,
+.ps-catalog-toolbar select,
 .ps-catalog-toolbar button,
 .ps-catalog-editor input,
 .ps-catalog-editor textarea,
@@ -6104,6 +6126,141 @@ select {
 .ps-classification-library select {
   max-width: 100%;
   min-width: 0;
+}
+
+.ps-protocol-library-toolbar,
+.ps-protocol-library .ps-modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ps-protocol-library-content {
+  display: grid;
+  grid-template-columns: minmax(150px, 26%) minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.ps-protocol-library-content nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(62vh, 42rem);
+  overflow: auto;
+}
+
+.ps-protocol-library-content nav button {
+  text-align: left;
+}
+
+.ps-protocol-library-content nav button[aria-current="true"] {
+  border-color: var(--ps-fluent-brand);
+  background: var(--ps-subtle-accent);
+}
+
+.ps-protocol-library-content section {
+  min-width: 0;
+  max-height: min(62vh, 42rem);
+  overflow: auto;
+}
+
+.ps-protocol-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.ps-protocol-field select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  background: var(--ps-bg-elev);
+  color: inherit;
+}
+
+.ps-protocol-library-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ps-protocol-import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ps-border);
+}
+
+.ps-protocol-import-preview fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.ps-protocol-import-preview label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ps-protocol-import-preview input[type="radio"] {
+  width: auto;
+}
+
+.ps-communication {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+}
+
+.ps-communication-compatibility {
+  margin: 0;
+  border-left: 3px solid #b45309;
+  padding: 6px 8px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 11px;
+}
+
+.ps-communication-profile {
+  min-width: 0;
+}
+
+.ps-communication-profile select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  background: var(--ps-bg-elev);
+  color: inherit;
+}
+
+@media (max-width: 640px) {
+  .ps-protocol-library-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ps-protocol-library-content nav {
+    max-height: 9rem;
+  }
+  .ps-protocol-library-content section {
+    max-height: none;
+  }
+  .ps-protocol-library-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .ps-issue-evaluation {
   margin: 6px 0;

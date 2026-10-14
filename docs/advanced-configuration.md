@@ -25,7 +25,9 @@ Local Vite rejects `VITE_COLLAB_TOKEN_ENDPOINT` and
 `VITE_DESIGN_ASSISTANT_ENDPOINT` overrides. Do not use overrides to bypass the
 local-mode boundary. For AI opt-in it uses the fixed
 `http://localhost:5173/api/design-assistant` endpoint for Claude/Codex. Azure
-uses the Functions endpoint at `http://localhost:7071/api/design-assistant`.
+uses the same browser endpoint on 5173, which Vite proxies only to the local
+Functions endpoint at `http://localhost:7071/api/design-assistant`. Azure
+settings and Entra authentication are loaded by Functions, not the CLI bridge.
 
 Production builds have **no built-in service destinations**, including no
 implicit `/api/design-assistant` endpoint. Service selection is explicit and
@@ -207,6 +209,30 @@ including values unrelated to current flow attachments, remains intact.
 Both flow attachments and their node entries are persisted inside the one
 AI-response history transition; no Analyze pass or extra Undo entry is required.
 
+When a proposed boundary would enclose unrelated components, the designer tries
+one alternate placement of **new** components next to the existing members;
+it never moves existing components merely to fit an addition. If geometry still
+conflicts, it preserves the existing model and adds only the identifiable new
+components, disconnected, plus a scenario-scoped canvas text annotation.
+The annotation explains the conflict, deferred flows/boundaries/deletions and
+the owner decisions needed. The dialog explicitly reports a partial design
+instead of repeating the model's claim that all edits succeeded.
+
+The optional `design.humanReviewNotes` array supports the same fallback for
+unresolved requirements (at most 16 nonblank notes of 1,000 characters each).
+Structured-output providers return an empty array for fully specified designs;
+older responses may omit it. AI is instructed to use disconnected components
+and specific notes rather than guess consequential routing, authentication or
+boundary decisions. All original operations still undergo catalog, reference,
+scope and order validation before any fallback; malformed or unauthorized
+output remains an atomic error. Neither fallback nor annotations certify the
+design. Components and annotation share one Undo/Redo step and persist through
+native save/open, autosave and collaboration using the existing annotation
+format, without a document schema version change.
+Scenario annotations are included as explicitly untrusted author notes in the
+next design context, so the owner can resolve a decision and request a connected
+refinement. Notes do not authorize deferred changes or become flow endpoints.
+
 New scenarios require a nonblank name (at most 160 characters) and description
 (at most 4,000 characters). For existing scenarios, responses send a
 `scenario: {}` patch or only the fields explicitly being edited. Omitted fields
@@ -220,10 +246,13 @@ Assumptions are appended without repeating already-saved text or duplicates
 within the response. Saved content is never truncated to fit a refinement.
 
 Selected-scenario authoring context includes names/descriptions, roles, flows,
-membership, numbering, directional data/retention and available choices. It does
-not project production identity objects, node inventory metadata, data samples,
-comments or review records. Authored text is still untrusted and may contain
-sensitive information; review what you send. The designer's chat and draft
+membership, numbering, directional data/retention, protocol profiles, and
+active caller IDs plus preserved historical identity evidence for existing
+flows. Historical identity is never a source for a new caller ID; the model
+may only echo an active GUID on the same unchanged caller edge. Node inventory
+metadata, data samples, comments and review records are not projected.
+Authored text is still untrusted and may contain sensitive information; review
+what you send. The designer's chat and draft
 remain in memory across closing/reopening for the current scenario. A scenario
 switch, New/Open/imported model replacement, or page reload clears them. Dialog
 position is also session-local; neither it nor chat becomes a document field
@@ -390,7 +419,7 @@ the model. Chat and unaccepted findings are transient panel state, not
 durable review records. The deterministic **Review > Analyze** needs none of
 this service setup and remains a separate operation.
 
-## Collaboration and headless CLI
+## Collaboration
 
 In a collaboration-enabled build, use the status menu to **Start
 collaboration**, copy the room link, or **Leave collaboration**. Joining a
@@ -414,12 +443,6 @@ A standalone file's copied collaboration link opens the configured public
 app, not the sender's local path. Browser restrictions on `file://` network
 access can prevent hosting; use the approved hosted app rather than disabling
 browser protections. Local file editing does not require a room.
-
-Optional agent participants are separately supplied companion integrations,
-not application build/runtime prerequisites. Follow their owner's setup and
-authorization guidance. Sharing model context with an AI or other participant
-is subject to your data policy; ordinary browser collaboration does not require
-an agent integration.
 
 ## Browser recovery
 

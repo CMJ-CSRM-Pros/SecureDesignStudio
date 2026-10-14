@@ -59,14 +59,15 @@ for authoring defaults and available choices. Its profile settings never
 silently reclassify a model or change native normalization. Existing out-of-list
 values are retained even when they cannot be selected for new data.
 
-The built-in catalogs are still installed. Analyze still runs the current
-ServiceTree rule and still reconciles typed issues by its existing rules;
+The built-in catalogs are still installed. Analyze still runs current
+rules and reconciles typed issues by their existing definitions;
 preservation of findings from unavailable rules is separate work. Opening a
 model still merges the installed node-type catalog into its node-type list.
 
-Use version 0.1.25 or later for every browser peer editing unfamiliar references,
-and 0.1.26 or later when saved catalog-definition snapshots are present.
-Older readers can still coerce or discard them; this build cannot prevent an
-older client from writing a lossy update. No new schema version or persistence
-namespace makes an older client safe. Keep a backup before using older tools
-or live rooms; local synthetic peer checks are not a live-service guarantee.
+Use a current SecureDesignStudio build for every browser peer editing a diagram
+with authentication or communication profile references. Older readers can
+coerce or discard saved catalog definitions, communication profiles, and caller
+Application IDs; this build cannot prevent an older client from writing a lossy
+update. No new schema version or persistence namespace makes an older client
+safe. Keep an editable `.tma` backup before using older tools or live rooms;
+local synthetic peer checks are not a live-service guarantee.

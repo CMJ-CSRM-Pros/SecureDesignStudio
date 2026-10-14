@@ -120,18 +120,28 @@ for (const [kind, field, id] of [
   });
 }
 
-for (const kind of ["Edge_missing_production_identity", "Edge_invalid_production_identity", "Edge_managed_identity_mismatch"]) {
-  test(`${kind} survives unavailable or unverified authentication semantics`, () => {
+for (const kind of ["Edge_missing_production_identity", "Edge_invalid_production_identity"]) {
+  test(`${kind} is retained as retired legacy evidence`, () => {
     for (const id of ["MissingAuth", "CustomAuthentication", "CertificateAuthentication"]) {
       const input = withFlow([id]);
       input.issues = [finding(kind)];
-      const retained = expectRetained(input, "policy-unavailable");
+      const reason = kind === "Edge_managed_identity_mismatch" ? "policy-unavailable" : "rule-retired";
+      const retained = expectRetained(input, reason);
       assert.ok(retained.issues.some(issue => issue.kind === "Edge_authentication_definition_review"));
       retained.edges[0].authenticationTypes = ["AnonymousAccess"];
-      assert.equal(saved(analyze(retained)), undefined);
+      assert.deepEqual(saved(analyze(retained)), { ...input.issues[0], notEvaluatedReason: reason });
     }
   });
 }
+
+test("managed identity mismatch finding remains evaluable and clears when its conflict is resolved", () => {
+  const input = withFlow(["EntraManagedIdentity"]);
+  input.edges[0].productionIdentity = { kind: "AppId", appId: "12345678-1234-1234-1234-123456789abc" };
+  const finding = analyze(input).issues.find(issue => issue.kind === "Edge_managed_identity_mismatch");
+  assert.ok(finding);
+  input.edges[0].productionIdentity = undefined;
+  assert.equal(analyze(input).issues.some(issue => issue.kind === "Edge_managed_identity_mismatch"), false);
+});
 
 test("manual findings stay untouched, orphan cleanup and rule target identity stay precise", () => {
   const manual = finding(undefined, { kind: undefined });

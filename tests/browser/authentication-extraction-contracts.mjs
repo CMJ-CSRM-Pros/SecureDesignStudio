@@ -20,11 +20,8 @@ export function registerAuthenticationExtractionContracts({ getHarness, exportMo
         assert.equal(await selector(page).locator(`option[value="${id}"]`).count(), configured ? 1 : 0);
       }
       await selector(page).selectOption("EntraApplicationOnlyAccess");
-      await page.getByRole("textbox", { name: "App ID (GUID)", exact: true }).fill(guid);
-      const tenant = page.getByRole("combobox", { name: "Tenant", exact: true });
-      for (const id of ["ME", "FirstParty"]) {
-        assert.equal(await tenant.locator(`option[value="${id}"]`).count(), configured ? 1 : 0);
-      }
+      const callerApplicationId = page.getByRole("textbox", { name: "Application ID (GUID)", exact: true });
+      await callerApplicationId.fill(guid);
       const preferences = await page.evaluate(async history => {
         const { AUTH_TYPE_DEFS, exportAuthenticationCatalog, AUTHENTICATION_STORAGE_KEY } = await import("/src/authentication.ts");
         const methods = [...AUTH_TYPE_DEFS, ...history].map(method =>
@@ -60,14 +57,17 @@ export function registerAuthenticationExtractionContracts({ getHarness, exportMo
       await selectFlow(page);
       assert.equal(await selector(page).inputValue(), methodId);
       assert.equal(await selector(page).locator(`option[value="${methodId}"]`).evaluate(option => option.disabled), !configured);
-      assert.equal(await tenant.inputValue(), "ME");
-      assert.equal(await tenant.locator('option[value="ME"]').evaluate(option => option.disabled), !configured);
+      assert.equal(await page.getByRole("combobox", { name: "Tenant", exact: true }).count(), 0);
       assert.equal(await page.getByRole("textbox", { name: "Audience", exact: true }).inputValue(), "Retained audience");
       assert.equal(await page.getByRole("textbox", { name: "Constraints (CDT)", exact: true }).inputValue(), "Retained constraints");
       if (!configured) await page.locator(".ps-auth-selection-warning").filter({ hasText: "Required authentication library is unavailable" }).waitFor();
-      await page.getByRole("textbox", { name: "App ID (GUID)", exact: true }).fill("22222222-2222-4222-8222-222222222222");
+      const identityEvidence = page.locator("details").filter({ hasText: "Retained identity evidence" });
+      await identityEvidence.locator("summary").click();
+      await identityEvidence.getByText(/Saved tenant label/).waitFor();
+      await page.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).fill("22222222-2222-4222-8222-222222222222");
       const saved = await exportModel(page);
       assert.equal(saved.doc.edges[0].productionIdentity.tenant, "ME");
+      assert.equal(saved.doc.edges[0].applicationId, "22222222-2222-4222-8222-222222222222");
       assert.equal(saved.doc.edges[0].audience, "Retained audience");
       assert.equal(saved.doc.edges[0].constraints, "Retained constraints");
       assert.deepEqual(saved.doc.authenticationDefinitions, input.doc.authenticationDefinitions);
@@ -88,16 +88,14 @@ export function registerAuthenticationExtractionContracts({ getHarness, exportMo
       await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
       const analyzed = await exportModel(page);
       const finding = analyzed.doc.issues.find(issue => issue.id === "i_private_identity");
-      if (configured) assert.equal(finding, undefined, "Available contract can clear the obsolete identity finding");
-      else {
-        assert.equal(finding.notEvaluatedReason, "policy-unavailable");
-        assert.equal(finding.status, "Resolved");
-      }
+      assert.equal(finding.notEvaluatedReason, "rule-retired");
+      assert.equal(finding.status, "Resolved");
       await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) ?? "null")?.doc.edges
         ?.some(edge => edge.id === "e_request" && edge.productionIdentity?.tenant === "ME"), autosaveKey);
       await page.reload();
       await selectFlow(page);
-      assert.equal(await tenant.inputValue(), "ME");
+      assert.equal(await page.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).inputValue(),
+        "22222222-2222-4222-8222-222222222222");
       await selectFlow(page, "Parallel flow");
       for (const id of PACKAGE_METHOD_IDS) assert.equal(await selector(page).locator(`option[value="${id}"]`).count(), configured ? 1 : 0);
     });

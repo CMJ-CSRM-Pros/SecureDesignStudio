@@ -528,6 +528,13 @@ export function diffDocuments(
       );
     } else {
       const pe = prevEdges.get(id)!;
+      if ((pe.protocolId ?? "") !== (e.protocolId ?? "")) {
+        changes.push(tagEdge({
+          category: "edge",
+          description: `Changed communication protocol on edge ${edgePath(e, currNodes, currNodes)} from ${pe.protocolId || "Not specified"} to ${e.protocolId || "Not specified"}`,
+          target: { kind: "edge", id },
+        }, id));
+      }
       const pAuth = pe.authenticationTypes ?? [];
       const cAuth = e.authenticationTypes ?? [];
       if (!sameSet(pAuth, cAuth)) {
@@ -589,6 +596,18 @@ export function diffDocuments(
             id,
           ),
         );
+      }
+      if ((pe.applicationId ?? "").trim().toLowerCase() !== (e.applicationId ?? "").trim().toLowerCase()) {
+        const ePath = edgePath(e, currNodes, currNodes);
+        const before = (pe.applicationId ?? "").trim();
+        const after = (e.applicationId ?? "").trim();
+        changes.push(tagEdge({
+          category: "edge",
+          description: !before ? `Set caller Application ID on edge ${ePath}`
+            : !after ? `Cleared caller Application ID on edge ${ePath}`
+            : `Changed caller Application ID on edge ${ePath}`,
+          target: { kind: "edge", id },
+        }, id));
       }
       if (formatRequiredAccessRights(pe.requiredAccessRights) !== formatRequiredAccessRights(e.requiredAccessRights)) {
         changes.push(tagEdge({

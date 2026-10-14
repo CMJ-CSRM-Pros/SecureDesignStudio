@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
+import { resolveProtocolReference } from "../protocols";
 import { useBreachSimulation } from "../breachSimulation";
 import { nodeTypeIconUrl } from "../nodeTypeIcons";
 import { DFD_ROLE_LABELS, DFD_SCOPE_LABELS, nodeDfdSummary, resolveNodeReviewScope } from "../dfdSemantics";
@@ -114,6 +115,7 @@ function InnerDiagram() {
   const {
     doc,
     authenticationCatalog,
+    protocolLibrary,
     classificationLibrary,
     classificationDefinitions,
     visibleNodes,
@@ -532,6 +534,17 @@ function InnerDiagram() {
         (selection?.kind === "edge" && selection.id === e.id) ||
         (selection?.kind === "waypoint" && selection.edgeId === e.id);
       const classificationVisual = edgeClassificationVisuals.get(e.id);
+      const protocolResolution = resolveProtocolReference(e.protocolId, doc.protocolDefinitions, protocolLibrary);
+      const protocolLabel = protocolResolution.status === "resolved"
+        ? `${protocolResolution.definition.label}${protocolResolution.conflict ? " (conflict)" : ""}`
+        : protocolResolution.status === "unresolved"
+          ? `${e.protocolId} (unresolved)`
+          : undefined;
+      const protocolShortLabel = protocolResolution.status === "resolved"
+        ? protocolResolution.conflict ? "Conflict" : protocolResolution.definition.shortLabel
+        : protocolResolution.status === "unresolved"
+          ? "Unresolved"
+          : undefined;
       const edgeColor = e.problem
         ? "#dc2626"
         : activeReferenceKeys.has(`edge:${e.id}`)
@@ -557,6 +570,14 @@ function InnerDiagram() {
           number: edgeNumberFor(e.id),
           waypoints: e.waypoints,
           problem: e.problem === true,
+          protocolLabel,
+          protocolShortLabel,
+          protocolDescription: protocolResolution.status === "resolved" ? protocolResolution.definition.description : undefined,
+          protocolSemanticsDescription: protocolResolution.status === "resolved"
+            ? protocolResolution.definition.semantics.description : undefined,
+          protocolReviewRequired: protocolResolution.status === "unresolved"
+            || (protocolResolution.status === "resolved" && !!protocolResolution.conflict),
+          applicationId: e.applicationId,
           authenticationLabels: (e.authenticationTypes ?? []).map(id => authTypeLabel(id, authenticationCatalog)),
           authenticationShortLabel:
             e.authenticationTypes?.length === 1
@@ -594,6 +615,8 @@ function InnerDiagram() {
     issueCounts,
     edgeClassificationVisuals,
     authenticationCatalog,
+    protocolLibrary,
+    doc.protocolDefinitions,
     activeReferenceKeys,
     currentReferenceKey,
   ]);

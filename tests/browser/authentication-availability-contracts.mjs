@@ -32,14 +32,14 @@ export function registerAuthenticationAvailabilityContracts({ getHarness, export
       await page.locator('button[aria-controls="ps-command-menu-review"]').click();
       await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
       const finding = page.locator(".ps-allissues-row").filter({ hasText: "Original identity finding" }).filter({ visible: true });
-      await finding.getByText("Not re-evaluated: required policy definition unavailable", { exact: true }).waitFor();
+      await finding.getByText("Not re-evaluated: analyzer rule retired", { exact: true }).waitFor();
       const preserved = await exportModel(page);
       assert.equal(preserved.doc.authenticationDefinitions.find(method => method.id === id).behavior.productionIdentity, "optional");
       assert.equal(JSON.stringify(preserved.doc).includes("unavailableReason"), false);
       assert.equal(preserved.doc.edges[0].audience, "saved audience");
       assert.equal(preserved.doc.edges[0].constraints, "saved constraints");
       await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) ?? "null")?.doc.issues
-        ?.some(issue => issue.id === "i_contract" && issue.notEvaluatedReason === "policy-unavailable"), autosaveKey);
+        ?.some(issue => issue.id === "i_contract" && issue.notEvaluatedReason === "rule-retired"), autosaveKey);
       await page.reload();
       await page.locator('button[aria-controls="ps-command-menu-model"]').click();
       await page.getByRole("menuitem", { name: "Customize authentication", exact: true }).click();
@@ -58,7 +58,7 @@ export function registerAuthenticationAvailabilityContracts({ getHarness, export
       await page.locator('button[aria-controls="ps-command-menu-review"]').click();
       await page.getByRole("menuitem", { name: "Analyze", exact: true }).click();
       const updated = (await exportModel(page)).doc.issues.find(issue => issue.id === "i_contract");
-      assert.equal(updated.notEvaluatedReason, undefined);
+      assert.equal(updated.notEvaluatedReason, "rule-retired");
       assert.equal(updated.status, "Resolved");
       assert.deepEqual(updated.replies, input.doc.issues[0].replies);
     });

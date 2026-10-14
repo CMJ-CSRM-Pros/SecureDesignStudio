@@ -1,13 +1,13 @@
 {
   "name": "secure-design-studio",
   "private": true,
-  "version": "1.0.31",
+  "version": "1.0.35",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "setup:ai": "node scripts/configure-local-ai.mjs",
-    "dev:ai:local": "vite --mode ai",
     "dev:ai": "npm run setup:ai && npm --prefix api run build && concurrently --kill-others --names web,api-build,api \"vite --mode ai\" \"npm --prefix api run watch\" \"npm --prefix api run start\"",
+    "dev:ai:local": "vite --mode ai",
     "build": "tsc -b && vite build && cross-env BUILD_SINGLE_FILE=1 vite build",
     "build:multi": "tsc -b && vite build",
     "build:single": "tsc -b && cross-env BUILD_SINGLE_FILE=1 vite build",
@@ -19,9 +19,9 @@
     "test:libraries:browser": "node --test tests/browser/libraries-configured.test.mjs",
     "test:libraries:production": "node --test tests/browser/libraries-production.test.mjs",
     "test:runtime": "node --test tests/authentication/*.test.mjs",
+    "test:ai:local": "node --test tests/browser/ai-provider-local.test.mjs",
     "test:authentication:production": "node --test tests/browser/authentication-production.test.mjs",
     "test:assistant:production": "node --test tests/browser/assistant-production.test.mjs",
-    "test:ai:local": "node --test tests/browser/ai-provider-local.test.mjs",
     "test:authentication": "npm run test:runtime"
   },
   "dependencies": {

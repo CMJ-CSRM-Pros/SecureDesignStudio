@@ -31,6 +31,7 @@ import {
 } from "../types";
 import { normalizeDoc } from "../store";
 import { catalogDefinitionKey, validateCatalogDefinitions, withCatalogDefinitions } from "../catalogDefinitions";
+import type { ProtocolTypeDef } from "../protocols";
 import { AUTHENTICATION_DEFINITIONS_VERSION, CATALOG_DEFINITIONS_VERSION, LOCAL_ORIGIN, type YShape } from "./yDoc";
 
 // Deep-equality good enough for our shapes: all leaves are primitives,
@@ -187,6 +188,11 @@ export function reconcileLocalToY(
         y.meta.set("authenticationDefinitionsVersion", AUTHENTICATION_DEFINITIONS_VERSION);
       }
     }
+    // This is portable per-document data, not a profile library or a client
+    // version gate. Older peers may omit it; absence is not deletion.
+    if (doc.protocolDefinitions !== undefined) {
+      syncCollection(y.protocolDefinitions, doc.protocolDefinitions);
+    }
     if (definitions !== undefined) {
       // Whole snapshot values prevent concurrent kind/ID/library fields from
       // being combined into a definition that neither peer authored.
@@ -270,6 +276,9 @@ export function buildDocFromY(y: YShape): PsDocument {
     authenticationDefinitions: collect<AuthTypeDef>(y.authenticationDefinitions).sort((a, b) =>
       a.id.localeCompare(b.id)
     ),
+    ...(y.protocolDefinitions.size ? {
+      protocolDefinitions: collect<ProtocolTypeDef>(y.protocolDefinitions).sort((a, b) => a.id.localeCompare(b.id)),
+    } : {}),
     ...(catalogDefinitions.length || y.meta.has("catalogDefinitionsVersion")
       ? { catalogDefinitions: catalogDefinitions.sort((a, b) => catalogDefinitionKey(a).localeCompare(catalogDefinitionKey(b))) }
       : {}),

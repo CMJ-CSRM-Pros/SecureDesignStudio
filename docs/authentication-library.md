@@ -22,6 +22,15 @@ per profile and application origin. It survives reload and New/Open. It is
 not a hosted registry; separate origins, profiles and standalone file origins
 have separate browser storage. Export/import is the portable workflow.
 Opening a diagram never silently replaces this library.
+Authentication is independent of the communication protocol: absent, unresolved
+or disabled protocol profiles do not hide or clear an existing method. Supported
+legacy authentication IDs and labels remain visible, with review diagnostics
+when their definitions are unavailable. A saved null protocol is unspecified.
+AI design responses require an explicit authentication selection (or null when
+unknown). On an existing unchanged route, null or an omitted legacy field
+preserves authentication; changing only protocol never clears it. New or
+redirected flows with null remain unspecified, not anonymous. HTTPS alone does
+not establish a caller authentication mechanism.
 An already-open tab reloads to pick up another tab's library edits. A stale
 tab cannot overwrite newer preferences through a library edit or Undo/Redo;
 it reports the conflict and asks for a reload.
@@ -123,51 +132,39 @@ automatically become reusable library entries.
 ### Core defaults and optional definitions
 
 Core supplies **14 definitions** (13 modern choices and the legacy certificate)
-and **Customer/Other** tenant choices. App + user context, CDT, PFAT and PoP + PFT,
-plus the ME/FirstParty tenant choices, are optional package contributions.
-The configured companion library restores the original 18-definition/four-tenant
-set without changing their descriptions, aliases or behavior profiles.
+and **Customer/Other** tenant choices. A selected library can contribute
+additional definitions and tenant choices without changing core defaults.
 
 Installed availability is passed explicitly by the runtime, separately from
-profile preferences and saved diagram definitions. For the protected
-owner-specific identities, cached preferences and saved snapshots cannot
-make a missing library available for new selections. A saved contract that
-differs from the installed behavior is retained for review, not silently
-rewritten or trusted for analysis. The flow remains readable, but its method
-is unavailable for new calls until the required library is present and the
-definition is explicitly reconciled.
+profile preferences and saved diagram definitions. Cached preferences and
+saved snapshots cannot make an unavailable library definition available for
+new selections. A saved contract that differs from the installed behavior is
+retained for review, not silently rewritten or trusted for analysis. The flow
+remains readable, but its method is unavailable for new calls until the
+definition is available and explicitly reconciled.
 
 Portable diagram validation and authoring validation are distinct.
 `validatePortableAuthenticationDefinitions` preserves structurally valid
-historical owner-specific snapshots, including conflicting behavior evidence.
-Schema checks, reserved IDs/names, and compatibility-alias ownership remain
-enforced. Ordinary catalog imports and profile writes retain strict protected
-contract checks. `authenticationCompatibility.json` is an import-only identity
-map: it contains no authoring defaults, descriptions or behavior profiles and
-does not confer installed authority.
+historical snapshots, including conflicting behavior evidence. Schema checks,
+reserved IDs/names and compatibility-alias ownership remain enforced. Library
+imports and profile writes retain strict contract checks. Compatibility aliases
+are import mappings only; they do not confer installed authority.
 
 Unavailable/conflicting contracts use unknown effective behavior and cannot
-clear existing production-identity findings. Analyze retains those findings
-as not re-evaluated while preserving status/discussion. The
-`unavailableReason` catalog diagnostic is runtime-only, never a saved
+create new identity requirements. Historical findings about the retired
+Production identity field remain visible as retired evidence with their status
+and discussion intact. The current edge editor has one standalone caller
+Application ID field, required only by authentication methods whose installed
+contract requires it; Managed Identity does not require a redundant caller ID.
+Legacy Production identity and tenant data remain read-only evidence and are
+never copied into the active caller ID. Conflicts between that evidence and
+the current method are reported without rewriting either value.
+
+`unavailableReason` remains a runtime-only catalog diagnostic, never a saved
 definition or synchronized installation state. Explicit definition adoption
-remains a diagram-only, undoable operation.
-
-Tenant authoring choices likewise come from the installed catalog. An
-out-of-list saved tenant and its label remain visible as retained evidence;
-editing the App ID does not require replacing that tenant. New tenant
-selections require an available definition. The core tenant source is `productionIdentityTenants.json`; saved out-of-list
-values are never coerced into Customer/Other.
-
-The headless compatibility helpers accept an explicit runtime-owned context
-for the same checks; operation fields and room data cannot supply it.
-The CLI loads explicitly selected `SDS_LIBRARY_PATHS` packages before exposing
-its tools. It shares the full browser validator, not an authentication-only
-subset. Missing/invalid selections leave core available and expose diagnostics.
-Set the variable before launching the CLI/extension and restart to change it.
-Node 24 and the declared development dependencies are required for selected
-package validation; package JSON never loads executable code. Browser-profile
-preferences and room data cannot change the CLI's installed context.
+remains a diagram-only, undoable operation. Historical tenant values remain
+available for import and display; they do not automatically become writable
+choices in the edge editor.
 
 A normal library edit updates a referenced definition in the current diagram
 only when it matched the previous library definition; saved conflicts remain
@@ -193,33 +190,19 @@ uncurated node policies are not proof of acceptance.
 
 ## Stable semantics and compatibility limits
 
-The 11 historical IDs are unchanged, including distinct PFAT and PoP + PFT
-IDs, generic Entra app, Shared key, SAS and Custom method. Legacy multiple-auth
-arrays remain until an explicit single selection replaces them.
+Historical IDs remain stable. Legacy multiple-auth arrays remain until an
+explicit single selection replaces them.
 **Not specified** remains empty and is not Custom method.
 
-Across core and the companion, the 17 modern profiles include OBO, Managed identity, Federated workload identity,
-OAuth token, direct mTLS, API key, and Internal process call. Internal process
-call explicitly models communication that remains inside one process boundary
-and therefore requires no particular authentication mechanism; it is distinct
-from anonymous access across a boundary. Its flow inspector hides Production
-identity controls while that method is selected, but retains existing identity
-evidence so it returns if the method changes. One extra compatibility entry,
-`CertificateAuthentication`, preserves the unspecified role of old certificate
-references. It is never silently relabeled mTLS or certificate-based Entra
-token acquisition. Generic Entra app remains generic. Existing production
-identity is retained on imports and method changes; clearing it requires an
-explicit edit. Conflicting Managed identity/App ID evidence is flagged.
-
-SAS remains a family; legacy references are not inferred to be user-delegation.
-CDT, PFAT and PoP + PFT follow owner-specific contracts; their labels do not
-establish Kerberos semantics, universal equivalence, or universal distinction.
-Descriptions and naming never change target-node acceptance.
+An internal process call is distinct from anonymous access across a boundary.
+Existing identity evidence is retained on imports and method changes; it is not
+silently promoted into an active caller identity. Definitions and labels do not
+establish protocol behavior or target-node acceptance.
 
 | Surface | Support and loss boundary |
 |---|---|
 | `.tma`, autosave, embedded standalone HTML | Stable IDs and saved definitions retained. Document/wrapper versions remain 1/2; `.tma` is unchanged. Embedded model takes precedence over autosave. |
-| Browser collaboration / headless CLI | Saved definitions synchronize; local library preferences do not. CLI supports compatible single-method edge writes, not library administration. Test with synthetic peers; no claim of live-service validation. |
+| Browser collaboration | Saved definitions synchronize; local library preferences do not. Test with synthetic peers; this is not live-service validation. |
 | Older readers / mixed-version rooms | Builds older than a referenced method's compatibility floor may discard its ID or definition. Do not use them to edit these models or join their rooms. New-reader/old-file compatibility does not imply old-reader/new-file safety; older peers cannot be reliably detected or prevented. |
 | TM7 | Human-readable auth names and an `Auth IDs` label line preserve identifiers emitted by this build. Legacy shipped labels are accepted. Definitions/behavior are not a native TM7 concept and are not restored; custom IDs reopen unresolved and need explicit resolution. |
 | Scenario/DFD JSON, PMEXP, endpoint imports | These formats do not supply this Authentication Library schema. Do not infer authentication semantics from unrelated text. |
@@ -264,10 +247,7 @@ build when editing or collaborating, and save an editable backup as `.tma`.
 
 `npm run test:runtime` exercises the strict catalog, current-source
 normalization/policy/analyzer/diff and synthetic browser-model Yjs contracts.
-It has no agent or private-extension dependency. Companion CLI parity tests
-run separately in their owning repository; its legacy `test:authentication`
-command may combine both suites. The public package aliases that command to
-the shared runtime suite.
+`npm run test:authentication` runs this shared runtime suite.
 Use Node 24 LTS for its current-TypeScript source loader.
 `npm run test:browser` includes flow/library authoring and keyboard/focus
 contracts plus local synthetic browser Yjs peers in the existing isolated

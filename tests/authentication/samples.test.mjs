@@ -99,9 +99,6 @@ for (const file of sampleFiles) {
       assert.ok(definition && !definition.legacy, `${edge.id}: a current, unambiguous built-in method`);
       if (definition.behavior.audience) assert.ok(edge.audience?.trim());
       assert.deepEqual(edge.authenticationTypes, [expected.authentication[edge.id]]);
-      if (definition.behavior.productionIdentity === "required") {
-        assert.ok(edge.productionIdentity, `${edge.id}: caller identity`);
-      }
       if (edge.productionIdentity?.kind === "AppId") {
         assert.ok(PRODUCTION_IDENTITY_TENANT_DEFS.some(tenant => tenant.id === edge.productionIdentity.tenant));
         const digit = String(expected.clientIds[edge.id]);
@@ -109,6 +106,7 @@ for (const file of sampleFiles) {
           `${digit.repeat(8)}-${digit.repeat(4)}-4${digit.repeat(3)}-8${digit.repeat(3)}-${digit.repeat(12)}`,
           `${edge.id}: production identity belongs to the named calling application, not a blanket chain identity`);
         assert.match(edge.description, /not the human/);
+        assert.equal(edge.applicationId, undefined, `${edge.id}: historical identity evidence is not an active caller claim`);
       }
       assert.equal(edge.productionIdentity?.kind === "ManagedIdentity", definition.behavior.managedIdentity);
       for (const field of ["sourceHandle", "targetHandle"]) {
@@ -206,14 +204,19 @@ for (const file of sampleFiles) {
     assert.deepEqual(analyzed.issues.filter(isAuthoredThreatNote), normalized.issues,
       "Analyze cannot rewrite authored notes or convert them to generated findings");
     const actual = analyzed.issues.filter(issue => issue.kind).map(issue => [issue.kind, issue.targetId]).sort();
-    assert.deepEqual(actual, [], "Ideal examples have no known deterministic gaps; declared controls still require evidence");
+    assert.deepEqual(actual, [...expected.knownGaps].sort((left, right) => left[1].localeCompare(right[1])),
+      "Legacy identity evidence remains recoverable without being promoted into an active caller ID");
     for (const issue of analyzed.issues.filter(issue => issue.kind)) {
-      assert.deepEqual(issue.scenarioIds, issue.kind === "Edge_missing_production_identity" ? [] : ["s_risky"]);
+      assert.deepEqual(issue.scenarioIds, issue.kind === "Edge_missing_application_id" ? [] : ["s_risky"]);
       for (const baseline of doc.scenarios.filter(scenario => scenario.id !== "s_risky")) {
-        assert.ok(issue.scenarioIds.length
-          ? !issue.scenarioIds.includes(baseline.id)
-          : !(issue.targetKind === "edge" ? baseline.edgeIds : baseline.nodeIds).includes(issue.targetId),
-        "Reference scenarios must not inherit teaching findings");
+        if (issue.kind === "Edge_missing_application_id") {
+          assert.ok(doc.scenarios.some(scenario => scenario.edgeIds.includes(issue.targetId)),
+            "Missing caller IDs are reported for edges included in at least one scenario");
+        } else {
+          assert.ok(!issue.scenarioIds.includes(baseline.id)
+            && !(issue.targetKind === "edge" ? baseline.edgeIds : baseline.nodeIds).includes(issue.targetId),
+          "Reference scenarios must not inherit teaching findings");
+        }
       }
     }
     const again = new IssueManager().analyze(analyzed);

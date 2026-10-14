@@ -1,0 +1,648 @@
+[
+  {
+    "id": "generic.compute.host",
+    "label": "Host (server / VM)",
+    "category": "Generic / Process",
+    "catalogSource": "Generic",
+    "icon": "neutral/host.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-123.pdf",
+    "description": "Represents a physical or virtual machine running a general-purpose operating system that hosts one or more applications or services. Does not represent the applications running on it (model those separately) or a managed serverless/container runtime where the OS is abstracted away; use a more specific catalog type for a named cloud VM/compute service if one exists.",
+    "aiDesignGuidance": {
+      "content": "Context\nA host is any physical server or virtual machine with an addressable OS (Windows, Linux, etc.) that one or more workloads run on. Use this generic node only when no vendor-specific VM/compute catalog entry applies, or for on-prem/bare-metal hosts. If the host only ever runs one containerized or serverless workload, consider modeling that workload instead and keep this node for the underlying infrastructure layer.\n\nModeling\nModel as a Process inside the trust boundary that matches its network segment (e.g., management network vs. workload network, which are often separate boundaries). Draw inbound application flows, a separate admin/management-plane flow (SSH/RDP/console), outbound flows to patch/update sources, and telemetry/log flows to a log store. Add separate nodes for identity provider (login), secrets/key store, and backup target if used. The host itself typically does not persist business data unless local disk/volumes are in scope; note those as a DataStore if so.\n\nDependencies\nCommonly depends on an identity provider or local account store for admin authentication, a patch/update source, DNS, NTP/time sync, and centralized logging/monitoring. If domain-joined, depends on a directory service.\n\nRisks\nSpoofing of admin sessions via weak or shared credentials; tampering with OS binaries, configuration, or scheduled tasks; repudiation from missing or tamperable local logs; information disclosure through unpatched services, open management ports, or memory/disk exposure; denial of service from resource exhaustion or unpatched remote-exploit vulnerabilities; elevation of privilege via local privilege-escalation flaws or misconfigured service accounts.\n\nControls to verify\nConfirm admin access requires MFA and uses just-in-time/least-privilege accounts; review hardening baseline (disabled unused services/ports); confirm patching cadence and vulnerability scanning; confirm host firewall rules restrict inbound exposure; confirm logs are forwarded to a tamper-resistant store; confirm disk/volume encryption if sensitive data is stored locally.\n\nUncertainty\nThe diagram cannot show actual patch level, hardening state, running processes, or whether management ports are internet-exposed; confirm these from configuration/inventory evidence.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-123.pdf",
+        "https://www.cisecurity.org/controls",
+        "https://attack.mitre.org/matrices/enterprise/"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.compute.container",
+    "label": "Container workload",
+    "category": "Generic / Process",
+    "catalogSource": "Generic",
+    "icon": "neutral/container.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/190/final",
+    "description": "Represents one or more containers (e.g., a pod or container group) running an application image on any orchestrator or container runtime. Does not represent the orchestrator control plane itself or the underlying host/node (model those as separate nodes if in scope).",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers containerized workloads on Kubernetes, another orchestrator, or a standalone container runtime. Use a more specific catalog entry if a named managed container service exists; split into multiple nodes if the pod has sidecars or init containers with materially different trust levels (e.g., a service mesh proxy terminating mTLS).\n\nModeling\nModel as a Process within the cluster/namespace trust boundary, which is typically distinct from the orchestrator control-plane boundary and the host/node boundary. Draw inbound flows (often via a service or ingress), outbound flows to dependencies, a flow to a container registry for image pulls, a flow to a secrets store/vault, and telemetry to logging/monitoring. Add a separate node for the orchestrator API server if admin/control-plane access is in scope.\n\nDependencies\nCommonly depends on a container registry (image pulls), an identity/secrets mechanism (workload identity, mounted secrets, or a vault), DNS/service discovery, and the orchestrator's scheduling and network policy layer. If using a service mesh, depends on the mesh control plane for policy/mTLS.\n\nRisks\nSpoofing via compromised service account tokens or workload identity; tampering with container images (supply chain) or runtime filesystem; repudiation from missing per-container audit logs; information disclosure from overly broad volume mounts, shared namespaces, or secrets in environment variables; denial of service from missing resource limits (noisy neighbor); elevation of privilege via privileged containers, host path mounts, or container escape.\n\nControls to verify\nConfirm images come from a trusted, scanned registry with signing/provenance; confirm containers run as non-root with minimal capabilities and read-only filesystems where possible; confirm network policies restrict pod-to-pod traffic; confirm secrets are injected via a vault/secret store rather than baked into images; confirm resource requests/limits and namespace isolation are set; confirm admission control enforces these baselines.\n\nUncertainty\nThe diagram cannot establish actual pod security context, running image digest, network policy enforcement, or registry trust configuration; confirm from cluster configuration and admission policy evidence.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/190/final",
+        "https://kubernetes.io/docs/concepts/security/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.compute.serverless-function",
+    "label": "Serverless function (FaaS)",
+    "category": "Generic / Process",
+    "catalogSource": "Generic",
+    "icon": "neutral/function.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://owasp.org/projects/serverless-top-10",
+    "description": "Represents a single-purpose, event-triggered function running in a Function-as-a-Service platform, where the underlying host/runtime is fully managed by a provider. Does not represent a long-running service, a container, or the event source/trigger itself (model the trigger as a separate flow or node).",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers short-lived, event-driven functions (HTTP trigger, queue trigger, timer trigger, etc.) on any FaaS platform. Use a more specific catalog entry when a named managed function service exists. Split into multiple function nodes when functions have materially different triggers, permissions, or data sensitivity, since each function typically gets its own identity and permission set.\n\nModeling\nModel as a Process; the trust boundary is usually the platform/account boundary rather than a network segment, since the runtime is provider-managed. Draw the triggering event flow (HTTP, queue, timer, storage event), outbound flows to downstream dependencies, a flow to a secrets/configuration store, and a flow to centralized logging. Functions rarely persist data themselves; model any state in a separate DataStore node (database, queue, blob store).\n\nDependencies\nCommonly depends on an identity/role mechanism scoped to the function (managed identity or execution role), a secrets/configuration store, the event source/trigger service, and any downstream APIs or data stores it calls.\n\nRisks\nSpoofing via forged or replayed trigger events; tampering with function code or dependencies (supply-chain/dependency confusion); repudiation from insufficient per-invocation logging; information disclosure through overly broad execution-role permissions or secrets in environment variables; denial of service/economic exhaustion from unbounded concurrent invocations; elevation of privilege from an execution role granted more access than the function needs.\n\nControls to verify\nConfirm the function's execution identity/role follows least privilege scoped to only the resources it needs; confirm input validation on all trigger payloads (treat all triggers as untrusted input); confirm secrets are pulled from a managed secrets store, not hardcoded; confirm concurrency/rate limits or quotas are set; confirm dependencies are pinned and scanned; confirm invocation logs and errors are captured centrally.\n\nUncertainty\nThe diagram cannot establish the actual execution-role permissions, trigger authentication configuration, or dependency versions; confirm these from platform configuration and deployment manifests.",
+      "sources": [
+        "https://owasp.org/projects/serverless-top-10",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.compute.web-application",
+    "label": "Web application",
+    "category": "Generic / Process",
+    "catalogSource": "Generic",
+    "icon": "neutral/web-app.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://owasp.org/projects/asvs",
+    "description": "Represents a server-rendered web application or backend-for-frontend process that serves HTML/content and handles user requests, including session and view logic. Does not represent the browser client (model separately) or a pure API/data service with no server-rendered UI (use the API service type instead).",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers traditional server-rendered sites, MVC apps, and backend-for-frontend layers that compose data for a UI. If the app is purely a JSON/API backend with no rendered views, prefer the API service type; if it is a thin static-asset host for an SPA, model the browser client and backend APIs separately.\n\nModeling\nModel as a Process behind a reverse proxy/load balancer, inside an application trust boundary separate from the data tier. Draw inbound HTTPS flows from users, outbound flows to databases/APIs it depends on, a session/identity flow to an identity provider or session store, and flows to a secrets store and logging. Persisted data (sessions, uploads) should be modeled as separate DataStore nodes rather than assumed to live in the app process.\n\nDependencies\nCommonly depends on an identity provider or session store, a database or API backend, a secrets/configuration store, a CDN or reverse proxy, and a logging/monitoring sink.\n\nRisks\nSpoofing via session fixation or weak authentication; tampering through injection (SQL, command, template) or unvalidated redirects; repudiation from missing audit logs of security-relevant actions; information disclosure via verbose errors, missing output encoding (XSS), or exposed debug endpoints; denial of service from unthrottled expensive endpoints; elevation of privilege through broken access control (missing per-request authorization checks).\n\nControls to verify\nConfirm all state-changing requests enforce authentication and object-level authorization; confirm input validation and context-aware output encoding are applied consistently; confirm TLS is enforced with modern protocol versions; confirm session cookies are secure/HttpOnly/SameSite; confirm security headers (CSP, X-Frame-Options) are set; confirm rate limiting on sensitive endpoints; confirm centralized logging of authentication and authorization events.\n\nUncertainty\nThe diagram cannot confirm actual input validation coverage, session configuration, or dependency vulnerability status; verify these against source code, configuration, and a dynamic/static scan.",
+      "sources": [
+        "https://owasp.org/projects/asvs",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.compute.api-service",
+    "label": "API service",
+    "category": "Generic / Process",
+    "catalogSource": "Generic",
+    "icon": "neutral/api.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://owasp.org/API-Security/editions/2023/en/0x00-header/",
+    "description": "Represents a backend service exposing a REST, gRPC, or GraphQL API consumed by other services or clients, with no server-rendered UI of its own. Does not represent the API gateway in front of it (model that separately if present) or a server-rendered web application.",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers machine-to-machine or client-to-service APIs (REST, gRPC, GraphQL) regardless of hosting model. If requests pass through a distinct API gateway, model the gateway as its own node so authentication/rate-limiting enforcement at the edge is explicit. Split into multiple nodes if the service exposes both public and internal-only APIs with different trust levels.\n\nModeling\nModel as a Process inside the backend trust boundary. Draw inbound flows from each caller (gateway, other services, clients), outbound flows to data stores and downstream services it calls, a flow to an identity provider for token validation, and telemetry/log flows. For GraphQL, note the single endpoint may fan out to many resolvers/data sources that may need their own authorization checks.\n\nDependencies\nCommonly depends on an identity provider or token-introspection service, a database or downstream API, a secrets store, and optionally an API gateway for authentication, rate limiting, or schema validation.\n\nRisks\nSpoofing via stolen or forged API tokens/keys; tampering through injection or mass-assignment on write endpoints; repudiation from missing structured request logs; information disclosure via excessive data exposure (over-fetching) or verbose error responses; denial of service from missing rate limiting or unbounded/recursive queries (notably GraphQL); elevation of privilege via broken object-level or function-level authorization (BOLA/BFLA).\n\nControls to verify\nConfirm every endpoint validates authentication tokens and enforces object- and function-level authorization; confirm input schema validation on all requests; confirm rate limiting and query-complexity/depth limits (for GraphQL); confirm responses only return fields the caller is authorized to see; confirm TLS is enforced end to end; confirm structured, correlated logging of requests and authorization decisions.\n\nUncertainty\nThe diagram cannot establish actual authorization-check coverage per endpoint, rate-limit configuration, or schema validation strictness; confirm from API code, gateway policy, and test evidence.",
+      "sources": [
+        "https://owasp.org/API-Security/editions/2023/en/0x00-header/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/204/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.compute.background-worker",
+    "label": "Background worker / scheduled job",
+    "category": "Generic / Process",
+    "catalogSource": "Generic",
+    "icon": "neutral/worker.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+    "description": "Represents an asynchronous process that consumes a queue/topic, polls for work, or runs on a schedule without directly serving interactive user requests. Does not represent the queue/scheduler itself (model as a separate DataStore/node) or a synchronous request-handling service.",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers queue consumers, batch jobs, cron-style scheduled tasks, and ETL/processing workers that run independent of direct user requests. If the job is triggered by a single discrete event and short-lived, consider whether the serverless function type fits better; use this type for longer-running or continuously polling workers.\n\nModeling\nModel as a Process with no direct inbound user-facing flow; draw an inbound flow from the queue/scheduler/trigger source, outbound flows to data stores or downstream APIs it writes to, a flow to a secrets store for credentials, and a telemetry/log flow. If the job aggregates or retains data beyond the source systems, model that output as a separate DataStore. Clarify whether the worker runs with a broad service identity shared across jobs or a scoped one per job.\n\nDependencies\nCommonly depends on a queue/message broker or scheduler, a secrets/credential store, source and destination data stores, and a logging/monitoring sink. May depend on a dead-letter queue for failed message handling.\n\nRisks\nSpoofing via forged or replayed queue messages processed as trusted input; tampering with job configuration, schedule, or input data between pickup and processing; repudiation from missing per-job-run audit trails; information disclosure from overly broad data access granted for convenience; denial of service from unbounded retry loops or poison messages;       elevation of privilege from an overly broad service account used across unrelated jobs.\n\nControls to verify\nConfirm the worker's identity/credentials are scoped to least privilege for its specific task; confirm message/input validation before processing (do not trust queue payloads implicitly); confirm idempotency and retry/backoff limits with dead-letter handling for poison messages; confirm job run outcomes are logged with enough detail to reconstruct what happened; confirm secrets are retrieved from a managed store rather than embedded in job configuration.\n\nUncertainty\nThe diagram cannot establish actual retry/backoff behavior, identity scope, or whether queue messages are validated before use; confirm from job configuration, IAM policy, and code review.",
+      "sources": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/204/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.client.desktop-mobile",
+    "label": "Desktop / mobile client app",
+    "category": "Generic / Client and device",
+    "catalogSource": "Generic",
+    "icon": "neutral/client-device.svg",
+    "defaultDfdRole": "ExternalInteractor",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://mas.owasp.org/MASVS/",
+    "description": "Represents a native desktop or mobile application installed on an end-user or operator device that is outside the system's administrative control. Does not represent a browser-based client (use the browser type) or server-side components the app talks to (model those separately).",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers native Windows/macOS/Linux desktop apps and iOS/Android mobile apps running on devices the system operator does not fully control. Model it as an External Interactor unless the device is fully managed and enrolled under the system's own device management, in which case justify treating it as part of a trusted boundary. Split into separate nodes if the app has distinct privileged components (e.g., an elevated helper service).\n\nModeling\nAs an External Interactor it sits outside the system's trust boundary; draw its outbound flows to backend APIs/identity providers and any local flow to device-resident secure storage (keychain/keystore) for tokens. Do not model server-side logic inside this node. Note whether the app caches or persists sensitive data locally (tokens, offline data),       which should be called out even though it is outside the modeled system's direct control.\n\nDependencies\nCommonly depends on an identity provider for login (often via OAuth/OIDC with a system browser or embedded webview), a backend API, an app distribution/update mechanism, and platform-provided secure storage for credentials/tokens.\n\nRisks\nSpoofing via stolen long-lived tokens or credential stuffing against the login flow; tampering with the client binary (reverse engineering, repackaging) or local data at rest; repudiation is limited since client-side logs are not authoritative; information disclosure from tokens or sensitive data stored insecurely on the device; denial of service is typically out of scope for the client itself; elevation of privilege via local privilege escalation on a compromised device affecting app data.\n\nControls to verify\nConfirm tokens/credentials are stored in platform-provided secure storage, not plaintext files; confirm certificate/public-key pinning or equivalent transport trust validation where appropriate; confirm the app does not embed long-lived secrets (API keys) in the binary; confirm authentication uses a standard protocol (OAuth/OIDC) rather than custom credential handling; confirm update/distribution channel integrity (code signing).\n\nUncertainty\nThe diagram cannot establish device compromise status, actual local storage security, or whether the binary has been tampered with; confirm from mobile/desktop security testing (e.g., MASVS-aligned review) and distribution-channel evidence.",
+      "sources": [
+        "https://mas.owasp.org/MASVS/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/204/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.client.browser",
+    "label": "Browser / single-page app client",
+    "category": "Generic / Client and device",
+    "catalogSource": "Generic",
+    "icon": "neutral/browser.svg",
+    "defaultDfdRole": "ExternalInteractor",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy",
+    "description": "Represents a web browser running a single-page application or client-side script that calls backend APIs, on a device outside the system's administrative control. Does not represent the server that serves the SPA's static assets or any backend API it calls (model those separately).",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers any browser-executed client code (SPA frameworks, client-side scripts) regardless of framework. Model as an External Interactor since the browser and the end-user device are outside the system's control; the static asset host and backend APIs it calls are separate Process nodes. If server-side rendering happens, that logic belongs on the web application type instead.\n\nModeling\nDraw outbound flows from the browser to the asset host (initial load), to backend/API services it calls, and to an identity provider for login redirects. There is no inbound flow into the browser from the system's perspective other than serving content. Note any client-side storage (localStorage, cookies, IndexedDB) used to cache tokens or data, since that is attacker-reachable if the browser or device is compromised.\n\nDependencies\nCommonly depends on a static asset/CDN host, one or more backend APIs, and an identity provider (often via a redirect-based OAuth/OIDC flow).\n\nRisks\nSpoofing via stolen session tokens/cookies (e.g., through cross-site scripting); tampering with client-side code via a compromised CDN/dependency or man-in-the-middle without TLS; repudiation since client-side logs are not authoritative evidence; information disclosure through cross-site scripting, insecure cross-origin requests, or tokens stored in accessible browser storage; denial of service against the client itself is typically out of scope; elevation of privilege via cross-site request forgery causing actions under the user's session.\n\nControls to verify\nConfirm output encoding and a Content Security Policy mitigate injected script risk; confirm session/auth tokens use secure, HttpOnly, SameSite cookies or short-lived tokens rather than long-lived localStorage tokens; confirm CORS is scoped to known origins, not wildcard, on any API the client calls; confirm TLS is enforced for all requests; confirm third-party script/dependency sources are limited and integrity-checked (subresource integrity).\n\nUncertainty\nThe diagram cannot establish actual CSP strictness, token storage choice, or dependency integrity; confirm from client source, CSP headers, and a browser security review.",
+      "sources": [
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+        "https://owasp.org/projects/asvs"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.device.iot-edge",
+    "label": "IoT / edge device",
+    "category": "Generic / Client and device",
+    "catalogSource": "Generic",
+    "icon": "neutral/iot.svg",
+    "defaultDfdRole": "ExternalInteractor",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/213/final",
+    "description": "Represents a constrained or purpose-built device (sensor, actuator, gateway, embedded controller) operating at the network edge, often with limited compute, physical accessibility, and intermittent connectivity. Does not represent a general-purpose server or a cloud-hosted edge compute service; use the host type for those.",
+    "aiDesignGuidance": {
+      "content": "Context\nCovers sensors, actuators, gateways, and embedded controllers deployed outside a controlled datacenter, which may be physically accessible to untrusted parties. Model as an External Interactor when the device is operator-owned but outside strict system control (e.g., field-deployed); if the organization fully manages and attests the device as part of the system's own trust boundary, justify that choice explicitly. Split a gateway device from the sensors/actuators behind it into separate nodes if they have different trust levels.\n\nModeling\nDraw outbound telemetry flows to a cloud/edge ingestion endpoint, an inbound command/control flow if the device accepts remote commands, a provisioning/identity-bootstrap flow, and an update/firmware flow. Note any local data buffering during connectivity loss as a small local DataStore. Admin/local-access flows (physical console, local network) should be modeled separately from remote management flows.\n\nDependencies\nCommonly depends on a device identity/provisioning service, a firmware/update distribution source, a telemetry ingestion endpoint, and possibly a local gateway aggregating multiple devices.\n\nRisks\nSpoofing via cloned device identity or weak/default credentials; tampering with firmware or sensor readings, including physical tampering given field accessibility; repudiation from devices lacking reliable local audit logging; information disclosure from unencrypted telemetry or exposed debug/management interfaces; denial of service from resource-constrained devices being easily overwhelmed or jammed; elevation of privilege via insecure boot allowing arbitrary firmware execution.\n\nControls to verify\nConfirm each device has a unique, non-default identity/credential used for authentication; confirm firmware updates are signed and verified before installation; confirm telemetry and command channels use encryption and mutual authentication; confirm physical/debug interfaces are disabled or protected in production; confirm the device has a documented secure-boot or integrity-verification mechanism if available.\n\nUncertainty\nThe diagram cannot establish actual firmware integrity, physical security of the deployment site, or credential uniqueness across the fleet; confirm from device provisioning records and firmware/security testing evidence.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/213/final",
+        "https://csrc.nist.gov/pubs/ir/8259/final",
+        "https://attack.mitre.org/matrices/enterprise/"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.router",
+    "label": "Router",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/router.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-189.pdf",
+    "description": "A generic Layer 3 device that forwards packets between networks or subnets based on routing tables. It does not represent a firewall, load balancer, or any device that terminates TLS or inspects application-layer content; pick a specific catalog type if routing policy also performs stateful filtering or NAT.",
+    "aiDesignGuidance": {
+      "content": "Context\nA router forwards IP packets between networks using routing tables and, optionally, dynamic routing protocols such as BGP or OSPF. Use this generic type for on-prem, branch, or cloud virtual routers whose main function is path selection, not security enforcement. If the device also performs stateful filtering, pick generic.network.firewall instead, or add a separate firewall node; if it does NAT, consider also modeling generic.network.nat-gateway.\n\nModeling\nDraw as a Process node on the data-plane path between the network segments it connects. Represent the management/admin interface as a separate flow (often out-of-band or via a jump host) rather than merging it with transit traffic. Draw a flow for routing-protocol exchanges (e.g. BGP/OSPF peering) if dynamic routing is in use, and a flow to a logging/monitoring target if telemetry (NetFlow/syslog) is exported. Model an identity provider only if the admin plane uses centralized authentication.\n\nDependencies\nCommonly depends on an NTP/time source for log correlation, a logging or NetFlow collector, an AAA/identity source for admin authentication, and, if dynamic routing is used, route-origin or prefix-filtering policy data (e.g. IRR/RPKI) from upstream providers.\n\nRisks\nThreats include route table manipulation or BGP hijacking/route leaks, spoofed routing-protocol peers, unauthenticated or weakly authenticated management access, firmware/OS tampering, and denial of service via resource exhaustion on the control plane. Misconfigured ACLs on the router can also create unintended bypass paths around other controls.\n\nControls to verify\nConfirm management-plane access is restricted to an isolated network and requires MFA, routing-protocol authentication (e.g. MD5/TCP-AO) is enabled where applicable, firmware is on a supported patch cadence, control-plane policing/rate limiting is configured, and route filtering or RPKI validation is applied if BGP is used. Confirm logs are shipped to a central store.\n\nUncertainty\nThe diagram cannot show whether routing-protocol authentication, control-plane ACLs, or firmware patch levels are actually configured; confirm against device configuration and change-management records.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-189.pdf",
+        "https://attack.mitre.org/techniques/T1584/002/",
+        "https://www.cisecurity.org/controls"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.switch",
+    "label": "Switch",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/switch.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://www.cisecurity.org/controls",
+    "description": "A generic Layer 2 (or L2/L3 hybrid) device that forwards frames within a broadcast domain and enforces VLAN segmentation. It does not represent a firewall or a router performing inter-subnet policy enforcement; model those as separate nodes if present.",
+    "aiDesignGuidance": {
+      "content": "Context\nA switch forwards Ethernet frames within a LAN segment and, for L2/L3 switches, performs VLAN tagging and inter-VLAN routing. Use this generic type for access, distribution, or core switches providing network segmentation. It is NOT a security boundary by itself: VLANs reduce broadcast domains but do not substitute for a firewall between trust zones, and the switch does not authenticate users unless 802.1X is explicitly configured.\n\nModeling\nModel as a Process node representing the segment boundary where VLANs are enforced; consider drawing a trust-boundary line at points where VLANs separate differently trusted zones (e.g. user LAN vs. server VLAN). Draw the management/admin plane (SSH/HTTPS to the switch OS) as a separate flow from user data-plane traffic. If 802.1X/NAC is in use, show a flow to the identity/RADIUS server. Show a flow to a logging target if port-security or NetFlow events are exported.\n\nDependencies\nCommonly depends on a RADIUS/AAA or identity provider if 802.1X port authentication is used, an NTP source, a logging/SNMP collector, and a spanning-tree or loop-prevention configuration shared across the segment.\n\nRisks\nThreats include VLAN hopping (e.g. double-tagging or trunk misconfiguration), MAC flooding/CAM table overflow forcing fail-open flooding, rogue DHCP or ARP spoofing within the segment, unauthorized device access via unused or misconfigured ports, and management-interface exposure on the same VLAN as user traffic.\n\nControls to verify\nConfirm unused switch ports are disabled or placed in a quarantine VLAN, trunk ports restrict allowed VLANs explicitly, DHCP snooping and dynamic ARP inspection are enabled where supported, 802.1X or port security limits MAC addresses per port, management access uses a dedicated out-of-band VLAN with MFA, and firmware is patched on a defined cadence.\n\nUncertainty\nThe diagram cannot confirm actual VLAN assignments, trunk allow-lists, port-security settings, or firmware patch status; verify these against switch configuration exports and network change records.",
+      "sources": [
+        "https://www.cisecurity.org/controls",
+        "https://attack.mitre.org/techniques/T1557/",
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.firewall",
+    "label": "Firewall",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/firewall.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-41r1.pdf",
+    "description": "A generic network or next-generation firewall that enforces stateful packet-filtering or application-aware policy between network segments. It is not a web application firewall (which inspects HTTP payloads for app-layer attacks) and does not by itself authenticate end users; pick a more specific type if the device is a cloud-native managed firewall service.",
+    "aiDesignGuidance": {
+      "content": "Context\nA firewall enforces an allow/deny policy on traffic crossing a network boundary, based on IP/port/protocol state (stateful) or, for next-gen firewalls, application and user identity signatures. Use this generic type for perimeter, segmentation, or host-adjacent firewalls. If the primary function is inspecting HTTP/HTTPS requests for injection or OWASP Top 10 style attacks, use generic.network.waf instead, or model both if layered.\n\nModeling\nModel as a Process node at the trust-boundary crossing between two zones; the node itself typically sits on the trust-boundary line. Draw separate flows for: the data plane (traffic being filtered), the management/admin plane (policy pushes, console access), and logging (to a SIEM or log store). If the firewall does TLS inspection/decryption, show a distinct flow and note that it exposes plaintext to the firewall; model the certificate/key store used for inspection as a separate dependency.\n\nDependencies\nCommonly depends on a policy/rule management system or console, a certificate authority or secret store if TLS inspection is enabled, an identity provider for admin authentication, a logging/SIEM target, and threat-intelligence or signature-update feeds for next-gen firewalls.\n\nRisks\nThreats include overly permissive or \"any-any\" rules, rule-set drift and shadowed/conflicting rules, bypass paths via unmanaged interfaces or misrouted traffic, management-plane exposure to untrusted networks, TLS-inspection private keys being compromised, and tampering/disabling of firewall services by an adversary with elevated access.\n\nControls to verify\nConfirm a default-deny posture with explicit allow rules, a documented rule-review cadence, management access isolated to a dedicated network with MFA, firmware/signatures kept current, logging of allowed and denied traffic to a central store, and TLS-inspection keys protected in a hardware or managed key store if decryption is performed.\n\nUncertainty\nThe diagram cannot verify the actual rule set, whether default-deny is enforced, or whether TLS inspection is active; confirm against the firewall's policy export and recent configuration audit.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-41r1.pdf",
+        "https://attack.mitre.org/techniques/T1686/",
+        "https://www.cisecurity.org/controls"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.waf",
+    "label": "Web application firewall",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/waf.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://api-security.owasp.org/editions/2023/en/0x00-header/",
+    "description": "A generic web application firewall that inspects HTTP/HTTPS requests and responses for application-layer attacks such as injection or cross-site scripting. It is not a network firewall and does not provide network segmentation; it also does not replace input validation inside the application.",
+    "aiDesignGuidance": {
+      "content": "Context\nA WAF sits in front of a web application or API, inspecting HTTP(S) traffic against signatures, anomaly rules, or managed rule sets to block application-layer attacks. Use this generic type whether the WAF is a dedicated appliance, a reverse-proxy module, or a managed cloud service; if the device's primary role is load distribution rather than inspection, use generic.network.load-balancer or generic.network.reverse-proxy and add a WAF node alongside it if both exist.\n\nModeling\nModel as a Process node on the inbound path before the application, typically at or just inside the external trust boundary. Show the TLS termination point explicitly: if the WAF terminates TLS to inspect payloads, draw a flow showing plaintext between the WAF and the backend (re-encrypted or not) so reviewers can see where encryption is lost. Draw a separate flow for rule/policy management and for log export to a SIEM. Model the backend origin as a distinct node so bypass-of-WAF paths (direct origin access) can be reasoned about.\n\nDependencies\nCommonly depends on a rule-set/signature update feed or managed rule provider, a certificate/key store for TLS termination, a logging/SIEM target, and, if used for bot/credential-stuffing defense, a reputation or threat-intelligence feed.\n\nRisks\nThreats include rule bypass via encoding or obfuscation, false negatives from outdated signatures, direct access to the origin bypassing the WAF if the origin is not restricted to WAF IPs, exposure of plaintext at the TLS-termination point, and denial of service against the WAF itself. Overly strict rules can also cause availability issues (false positives blocking legitimate traffic).\n\nControls to verify\nConfirm the origin only accepts traffic from the WAF (e.g. via allow-listed IPs, mutual TLS, or a private network path), managed rule sets are kept current, logging of blocked/allowed requests feeds a SIEM, TLS versions and ciphers meet current guidance, and rate limiting or bot-management rules are applied to sensitive endpoints such as login and password reset.\n\nUncertainty\nThe diagram cannot confirm whether the origin truly rejects direct traffic, whether rules are current, or whether TLS inspection re-encrypts traffic to the backend; verify against WAF configuration, origin firewall rules, and rule-update logs.",
+      "sources": [
+        "https://api-security.owasp.org/editions/2023/en/0x00-header/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.load-balancer",
+    "label": "Load balancer",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/load-balancer.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://datatracker.ietf.org/doc/html/rfc7239",
+    "description": "A generic Layer 4 or Layer 7 load balancer that distributes traffic across multiple backend instances for availability and scale. It does not authenticate end users, does not represent a WAF, and does not by itself enforce authorization; model those separately if present.",
+    "aiDesignGuidance": {
+      "content": "Context\nA load balancer distributes incoming connections or requests across a pool of backend instances based on health checks and a distribution algorithm, at either the transport layer (L4) or application layer (L7, HTTP-aware). Use this generic type for any such device or managed service. If the component's primary role is security inspection rather than distribution, model a separate WAF or firewall node alongside it.\n\nModeling\nModel as a Process node on the inbound path, typically at the trust-boundary crossing into the backend tier. Clearly show the TLS termination point: if TLS terminates at the load balancer, draw the backend flow as plaintext or re-encrypted TLS, since this affects where sensitive data is exposed. Draw separate flows for health-check traffic, management/API access to reconfigure pools, and log/metrics export. Model the backend pool as one or more distinct process nodes rather than folding them into the load balancer.\n\nDependencies\nCommonly depends on a certificate/key store if it terminates TLS, a health-check mechanism against backend instances, a logging/metrics target, and a configuration/control-plane API or console used to manage listener and pool settings.\n\nRisks\nThreats include client-IP or header spoofing (e.g. forged X-Forwarded-For or Forwarded headers used for access decisions downstream), session/connection hijacking if sticky-session tokens are predictable, exposure of plaintext between the load balancer and backends after TLS termination, backend health-check abuse to trigger denial of service, and unauthorized changes to pool membership redirecting traffic to a rogue backend.\n\nControls to verify\nConfirm backends validate or strip client-supplied forwarding headers rather than trusting them blindly, TLS is re-established or the backend segment is otherwise protected after termination, management/API access requires strong authentication, health-check and data-plane traffic are on appropriately isolated networks, and TLS versions/ciphers at the listener meet current guidance.\n\nUncertainty\nThe diagram cannot confirm whether forwarded-for headers are trusted downstream, whether backend traffic is re-encrypted, or whether pool membership changes are authenticated and logged; verify against load-balancer and backend application configuration.",
+      "sources": [
+        "https://datatracker.ietf.org/doc/html/rfc7239",
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.reverse-proxy",
+    "label": "Reverse proxy / API gateway",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/proxy.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+    "description": "A generic reverse proxy or API gateway that sits in front of one or more backend services, handling request routing and commonly also TLS termination, authentication enforcement, or rate limiting. It does not represent the backend services themselves and is not automatically a WAF unless application-layer inspection is explicitly configured.",
+    "aiDesignGuidance": {
+      "content": "Context\nA reverse proxy or API gateway accepts inbound requests on behalf of one or more backend services and forwards them based on path, host, or API contract, often adding cross-cutting functions such as TLS termination, authentication/token validation, or rate limiting. Use this generic type for any such component; if its sole function is traffic distribution without routing logic or policy, generic.network.load-balancer may fit better, and the two are often modeled together.\n\nModeling\nModel as a Process node at the trust-boundary crossing into the backend/API tier. Show the TLS termination point and whether traffic to backends is re-encrypted or plaintext. If the gateway validates tokens (e.g. OAuth/OIDC bearer tokens or API keys) before forwarding, draw a flow to the identity provider or token-introspection endpoint, and treat the gateway as an enforcement point for authentication/authorization in the diagram. Draw separate flows for admin/config-plane changes and for logs/metrics.\n\nDependencies\nCommonly depends on an identity provider or token-issuer for authentication/authorization enforcement, a certificate/key store for TLS, a routing/configuration store (often backed by a config API or control plane), a rate-limiting/quota store, and a logging target.\n\nRisks\nThreats include SSRF if the gateway can be induced to fetch attacker-controlled upstream URLs, auth bypass if routing allows direct backend access or token validation is misconfigured, request smuggling between proxy and backend, verbose errors exposing internal topology, and denial of service if rate limiting is absent.\n\nControls to verify\nConfirm backends are reachable only through the gateway (network-enforced, not just routing convention), token/API-key validation happens before requests reach backends, SSRF protections restrict reachable outbound destinations, rate limiting/quotas apply per client/API, and TLS versions/ciphers meet current guidance at both hops.\n\nUncertainty\nThe diagram cannot confirm whether backends truly reject non-gateway traffic, whether validation is enforced on every route, or whether SSRF protections exist; verify against gateway routing rules, backend network policy, and middleware configuration.",
+      "sources": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+        "https://api-security.owasp.org/editions/2023/en/0x00-header/",
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.vpn-gateway",
+    "label": "VPN gateway",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/vpn.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-77r1.pdf",
+    "description": "A generic VPN gateway terminating site-to-site tunnels (e.g. IPsec) or remote-access connections for individual users. It represents the tunnel endpoint only, not the identity provider used to authenticate remote users or the networks the tunnel connects.",
+    "aiDesignGuidance": {
+      "content": "Context\nA VPN gateway terminates encrypted tunnels, either site-to-site between two networks or remote-access for individual client devices, commonly using IPsec or TLS-based protocols. Use this generic type for either case, and consider two nodes if both site-to-site and remote-access terminate on physically or logically distinct gateways. It does NOT represent the identity provider used for user authentication; model that as a separate dependency or node.\n\nModeling\nModel as a Process node at the trust-boundary crossing between the external network and the internal network it grants access to. Draw the encrypted tunnel as a flow crossing the trust boundary, and a separate internal flow from the gateway into the internal network representing decrypted traffic, since this is where plaintext first appears inside the perimeter. Show a distinct flow to the identity provider/MFA service for remote-access authentication, and a flow for certificate or pre-shared-key management if used for site-to-site tunnels.\n\nDependencies\nCommonly depends on an identity provider and MFA service for remote-access user authentication, a certificate authority or pre-shared-key store for tunnel establishment, a logging target for connection events, and, for split-tunnel configurations, policy defining which destinations are routed through the tunnel.\n\nRisks\nThreats include credential theft or replay enabling unauthorized remote access, weak or legacy IPsec/IKE parameters allowing downgrade, split-tunneling misconfiguration exposing the internal network to a compromised client's local network, lack of segmentation after the tunnel terminates allowing lateral movement, and exposure of the gateway's management interface to the internet.\n\nControls to verify\nConfirm remote-access connections require MFA, IPsec/IKE uses current-recommended algorithms and key lifetimes, split-tunneling is restricted or disabled where not required, post-connection access is segmented (not flat internal access), device posture checks apply before granting access, and firmware is patched on a defined cadence.\n\nUncertainty\nThe diagram cannot confirm actual cryptographic parameters, whether MFA is enforced, or the scope of access granted post-connection; verify against VPN gateway configuration, IKE/IPsec policy, and access-control lists applied after tunnel termination.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-77r1.pdf",
+        "https://attack.mitre.org/techniques/T1133/",
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.nat-gateway",
+    "label": "NAT gateway",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/nat.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-41r1.pdf",
+    "description": "A generic network address translation gateway that rewrites source addresses for outbound (egress) traffic, typically to allow private-addressed resources to reach the internet. NAT is not a security control and does not provide inbound protection, filtering, or authentication by itself.",
+    "aiDesignGuidance": {
+      "content": "Context\nA NAT gateway translates private source addresses to one or more public addresses for outbound connections, commonly used so internal resources can reach external services without being individually internet-routable. Use this generic type for any outbound-only NAT device or managed service. It is distinct from a firewall: NAT can incidentally obscure internal addressing, but it does not enforce allow/deny policy, inspect content, or authenticate traffic, and should not be relied on as the sole control for egress restriction.\n\nModeling\nModel as a Process node on the egress path at the boundary between the internal network and the external network (commonly the internet). Draw the flow direction as outbound-initiated; if the environment also allows inbound connections via static or dynamic port mapping, represent that as a distinct inbound flow since it changes the trust implications significantly. Show a separate flow to a logging target if connection/flow logs are exported, since NAT logs are often the only record linking an internal host to external destinations.\n\nDependencies\nCommonly depends on a pool of public IP addresses or a shared NAT IP, a logging/flow-log target for traceability, and, if egress filtering is layered on top, a firewall or proxy policy governing which external destinations are reachable.\n\nRisks\nThreats include unrestricted egress enabling data exfiltration or command-and-control callbacks blending in with legitimate traffic, shared public IPs making per-host attribution difficult without logs, port/connection exhaustion causing denial of service, and assuming NAT alone prevents inbound compromise when corresponding firewall rules must be checked separately.\n\nControls to verify\nConfirm outbound traffic is restricted by an explicit egress policy (not \"allow all\") on an adjacent firewall or proxy, NAT/flow logs are retained and linked to internal host identity, port/connection limits are sized to avoid exhaustion, and any inbound port mappings are documented and minimized as exceptions to outbound-only design.\n\nUncertainty\nThe diagram cannot confirm whether egress is filtered, whether logs are retained long enough for incident response, or whether any inbound mappings exist; verify against NAT and adjacent firewall configuration and log-retention policy.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-41r1.pdf",
+        "https://attack.mitre.org/techniques/T1584/002/",
+        "https://www.cisecurity.org/controls"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.dns",
+    "label": "DNS service",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/dns.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-81-2.pdf",
+    "description": "A generic DNS service acting as a recursive resolver, forwarder, or authoritative name server. It does not represent a certificate authority or a WAF, and resolving a name does not imply any authentication or integrity guarantee unless DNSSEC and validated transport are explicitly in place.",
+    "aiDesignGuidance": {
+      "content": "Context\nA DNS service answers name-resolution queries, either recursively (resolver/forwarder, used by clients to look up external or internal names) or authoritatively (serving records for a zone it owns). Use this generic type for either role, and model two nodes if the same diagram includes both an internal resolver and an authoritative server for a owned domain, since their trust assumptions differ. It is not a certificate authority, though certificate issuance (e.g. domain validation) often depends on DNS integrity.\n\nModeling\nModel as a Process node on the query path between clients and the DNS infrastructure. Draw the query/response flow, and if DNS-over-TLS/HTTPS or DNSSEC validation is used, note it on the flow rather than assuming plain UDP/53. For an authoritative server, draw a separate flow for zone transfers/updates from the zone's management system. For a resolver, draw a flow to upstream/forwarder DNS servers if queries are forwarded externally. Show a flow to a logging target if query logging is enabled.\n\nDependencies\nCommonly depends on an upstream recursive resolver or root/TLD infrastructure if acting as a forwarder, a zone-management or DNS-provider control plane for authoritative records, a DNSSEC key-signing/zone-signing key store if DNSSEC is enabled, and a logging target for query and change auditing.\n\nRisks\nThreats include cache poisoning or spoofed responses redirecting clients to attacker-controlled destinations, unauthorized zone modification (e.g. compromised registrar or DNS-provider credentials) enabling domain hijacking, amplification abuse of an open resolver for denial-of-service against third parties, data exfiltration via DNS tunneling, and disclosure through zone transfers to unauthorized hosts.\n\nControls to verify\nConfirm resolvers are not open to arbitrary external clients, DNSSEC validation/signing applied where supported, zone-transfer (AXFR) access restricted to authorized secondaries, registrar/DNS-provider accounts use MFA and transfer locks, query logging enabled, and response-rate limiting mitigates amplification abuse.\n\nUncertainty\nThe diagram cannot confirm whether DNSSEC is validated end-to-end, whether the resolver is open or restricted, or whether registrar-level protections (transfer lock, MFA) are in place; verify against DNS provider configuration and registrar account settings.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-81-2.pdf",
+        "https://attack.mitre.org/techniques/T1584/002/",
+        "https://www.cisecurity.org/controls"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.network.bastion",
+    "label": "Bastion / jump host",
+    "category": "Generic / Networking",
+    "catalogSource": "Generic",
+    "icon": "neutral/bastion.svg",
+    "defaultDfdRole": "Process",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf",
+    "description": "A generic bastion or jump host that mediates privileged administrative access into a trust boundary, typically from an untrusted or less-trusted network. It is not a general-purpose VPN gateway or firewall and should not be used to model routine user traffic, only administrative/operational access paths.",
+    "aiDesignGuidance": {
+      "content": "Context\nA bastion or jump host is a hardened intermediary that administrators connect through (e.g. via SSH/RDP) before reaching internal management interfaces, reducing direct exposure of those interfaces to the originating network. Use this generic type specifically for privileged-access paths; if the same device also serves as a general VPN termination point for ordinary user traffic, model that aspect as a separate generic.network.vpn-gateway node.\n\nModeling\nModel as a Process node on the admin/management-plane path, placed at the trust boundary between the administrator's network and the privileged internal segment. Draw the inbound admin-connection flow and a distinct outbound flow from the bastion to each class of target system it can reach, since the bastion's blast radius is defined by what it is permitted to reach. Show a flow to the identity provider/MFA service for authentication, and a flow to a session-recording or logging store if session capture is used.\n\nDependencies\nCommonly depends on an identity provider and MFA service for authenticating administrators, a session-recording/audit-log store, a privileged-access-management or credential-vaulting system if it brokers short-lived credentials, and a patch/hardening baseline maintained for the host itself.\n\nRisks\nThreats include the bastion becoming a single high-value target whose compromise grants broad internal access, credential theft or session hijacking of an administrator's connection, privilege escalation if the host is not hardened or is co-located with lower-trust workloads, insufficient logging preventing detection of misuse, and overly broad reachability from the bastion beyond what a given admin role requires.\n\nControls to verify\nConfirm access requires MFA and is scoped per role (least privilege), sessions are logged and ideally recorded, the host is hardened and patched on a tighter cadence than ordinary hosts, credentials used from it are short-lived or vaulted rather than static, and it has no direct internet-facing services beyond the admin-access listener.\n\nUncertainty\nThe diagram cannot confirm the actual scope of systems reachable from the bastion, whether session recording is enabled, or whether credentials are vaulted versus static; verify against bastion access-control lists, PAM/vault configuration, and session-logging settings.",
+      "sources": [
+        "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-207.pdf",
+        "https://attack.mitre.org/techniques/T1133/",
+        "https://www.cisecurity.org/controls"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.relational-database",
+    "label": "Relational database",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/database.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/209/final",
+    "description": "A generic SQL/relational database engine (tables, schemas, transactions, joins) used by one or more applications for structured persistent data. Pick a specific catalog type instead when the diagram targets a named managed database service with its own IAM and network model; split into multiple nodes when tenants or data classifications require separate schemas or instances.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents any relational engine (self-hosted or managed) holding structured, queryable application data in tables with transactional guarantees. Covers single-instance, clustered, and managed-service deployments. Use a more specific catalog type when the vendor-specific service has distinct controls worth modeling; split into separate nodes when one engine hosts multiple tenants, environments, or mixed data classifications that need different access or retention rules.\n\nModeling\nModel as a DataStore inside a data trust boundary separate from application and internet-facing boundaries. Draw application read/write flows, an admin/management-plane flow (DBA, migrations), replication flows to standbys or read replicas, a backup flow to a backup store, and a key-retrieval flow if encryption keys come from an external vault. Typically holds personal data or customer content with persistent (>=48h) retention; confirm the actual classification and retention tier with the data owner.\n\nDependencies\nCommonly depends on a key management service for encryption keys, an identity provider for administrative and application authentication, a network path or private endpoint restricting reachability, and a backup target; if geographically replicated, a replication peer in another region is common.\n\nRisks\nSQL injection and privilege escalation via application queries, over-privileged service accounts or shared admin credentials, unencrypted backups or replicas, public or overly broad network exposure of the database port, ransomware or destructive admin actions, and logs capturing personal data or secrets.\n\nControls to verify\nParameterized queries and least-privilege database roles, encryption at rest with customer- or organization-controlled keys, TLS for client and replication connections, network isolation from the public internet, audit logging of administrative actions, defined retention and deletion processes supporting data-subject requests, and tested backup restores.\n\nUncertainty\nThe diagram cannot confirm actual encryption configuration, key ownership, network reachability, patch level, or whether production data is copied into lower environments; verify against deployment configuration and access logs.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Database_Security_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final",
+        "https://csrc.nist.gov/pubs/sp/800/34/r1/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.nosql-database",
+    "label": "NoSQL database",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/nosql.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/209/final",
+    "description": "A generic non-relational data store (document, key-value, wide-column, or graph) used for flexible-schema or high-scale application data. Pick a specific catalog type when a named managed service has distinct IAM, network, or encryption behavior worth modeling separately; split into separate nodes per tenant or data classification when a single cluster mixes sensitivity levels.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents any non-relational database engine, including document, key-value, wide-column, and graph stores, whether self-hosted or managed. Covers clusters that scale horizontally across nodes or regions. Choose a more specific catalog type for a named managed service when its controls differ materially; split into multiple nodes when one cluster serves multiple tenants or mixes data classifications that need distinct access or retention policies.\n\nModeling\nModel as a DataStore in a dedicated data trust boundary. Draw application read/write flows, an admin/management-plane flow for cluster operators, inter-node replication flows, a backup/snapshot flow, and a key-retrieval flow when transparent data encryption uses an external key manager. Frequently holds personal data, session state, or customer content with retention ranging from short-lived caches to long-term (>=48h) storage; confirm the actual bucket per collection or namespace.\n\nDependencies\nCommonly depends on a key management service, an identity or token-based auth provider, a network path restricting cluster access, a backup target, and, for multi-region deployments, replication peers in other regions or availability zones.\n\nRisks\nNoSQL injection through unsanitized query objects, exposed management interfaces or default-open ports, weak or absent authentication between nodes, unencrypted inter-node or replica traffic, over-broad API keys granting cluster-wide access, and ransomware or mass-deletion of collections.\n\nControls to verify\nIdentity-based authentication rather than shared static keys, encryption at rest and in transit with documented key ownership, network isolation or private endpoints, least-privilege role scoping per collection or namespace, retention and deletion workflows supporting data-subject requests, and periodically tested backup restores.\n\nUncertainty\nThe diagram cannot establish actual authentication mode, encryption status, cross-region replication targets, or whether multiple tenants share a cluster; confirm against the service configuration and access control lists.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Security_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final",
+        "https://csrc.nist.gov/pubs/sp/800/34/r1/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.object-storage",
+    "label": "Object storage",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/object-storage.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/209/final",
+    "description": "A generic object/blob storage service holding files, exports, media, or backups addressed by key rather than a file-system path. Pick a specific catalog type when modeling a named managed bucket service with distinct public-access and lifecycle controls; split into separate buckets/nodes per data classification or tenant.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents bucket- or container-based object storage used for files, exports, static assets, logs, or backups, accessed over HTTP(S) APIs rather than a mounted file system. Applies to self-hosted and managed object stores alike. Use a more specific catalog type when a named service's public-access defaults or lifecycle features matter; split into separate buckets when personal data, customer content, and public assets would otherwise share one container.\n\nModeling\nModel as a DataStore in a data trust boundary distinct from any public-facing web tier. Draw application upload/download flows, a separate admin/management-plane flow for bucket configuration, a replication flow for cross-region copies, a lifecycle/backup flow to an archive tier, and an access-key or token issuance flow if presigned URLs are used. Commonly stores personal data or customer content; retention varies widely from processing-only to long-term archival, so confirm per bucket or prefix.\n\nDependencies\nCommonly depends on an identity provider or access-key system for request signing, a key management service if server-side encryption uses customer-managed keys, a network path or private endpoint when public access is disabled, and a replication peer for cross-region copies.\n\nRisks\nPublicly readable or writable buckets, overly broad bucket policies or long-lived access keys, unencrypted or unauthenticated replica copies, accidental exposure of personal data through shared links, missing versioning allowing silent overwrite or deletion, and ransomware-style mass encryption or deletion of objects.\n\nControls to verify\nBlock-public-access settings and explicit least-privilege bucket policies, encryption at rest with known key ownership, TLS-only access enforcement, object versioning or immutability for tamper evidence, logging of access and configuration changes, defined retention/lifecycle rules and deletion workflows for data-subject requests, and confirmed geo residency of any replicated copies.\n\nUncertainty\nThe diagram cannot confirm actual bucket visibility, policy scope, encryption key ownership, or replication destinations; verify directly against the storage account or bucket configuration and access logs.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Database_Security_Cheat_Sheet.html",
+        "https://attack.mitre.org/techniques/T1530/",
+        "https://csrc.nist.gov/pubs/sp/800/111/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.file-share",
+    "label": "File share / NAS (SMB/NFS)",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/file-share.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/209/final",
+    "description": "A generic network file share or NAS volume mounted by applications or users over SMB or NFS, exposing a hierarchical file system rather than an object API. Pick a specific catalog type for a named managed file service with distinct access-control semantics; split into separate shares per sensitivity level or department when one NAS hosts mixed data.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents a network-attached file share or NAS volume presenting a traditional directory/file hierarchy over SMB or NFS, used for shared documents, application working data, or home directories. Applies to on-prem NAS and managed file-share services alike. Use a more specific catalog type when a named managed service has distinct permission models; split into multiple shares when personal data and non-sensitive working files would otherwise coexist under one set of permissions.\n\nModeling\nModel as a DataStore in a data trust boundary. Draw user/application read-write mount flows, an admin/management-plane flow for share and permission configuration, a backup flow, and a replication flow if the NAS is mirrored to a disaster-recovery site. Frequently holds personal data in documents or exports and unstructured customer content; retention is often ambiguous because files accumulate without lifecycle rules, so confirm the intended bucket.\n\nDependencies\nCommonly depends on a directory service for SMB/NFS authentication and permissions, a network path limiting which subnets can mount the share, a backup target, and a replication peer for DR.\n\nRisks\nOverly permissive share or NTFS/POSIX permissions granting broad read access, unauthenticated or guest SMB/NFS access, unencrypted protocol traffic exposing file contents on the network, stale personal data accumulating without retention limits, ransomware encrypting mounted shares, and sensitive files left in shares without an owner.\n\nControls to verify\nDirectory-integrated least-privilege share and file permissions, SMB/NFS encryption or IPsec in transit, encryption at rest, network segmentation restricting mountable subnets, periodic access reviews and audit logging, a retention/cleanup policy supporting deletion for data-subject requests, and tested backup and ransomware-recovery procedures.\n\nUncertainty\nThe diagram cannot establish actual share permissions, protocol versions in use, or whether sensitive files are mixed with general-purpose content; confirm against share ACLs, directory group membership, and file-level scans.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Database_Security_Cheat_Sheet.html",
+        "https://www.cisa.gov/stopransomware/ransomware-guide",
+        "https://csrc.nist.gov/pubs/sp/800/34/r1/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.block-storage",
+    "label": "Block storage / SAN / disk volume",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/block-storage.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/111/final",
+    "description": "A generic block-level storage volume (SAN LUN, managed disk, or virtual volume) attached to a compute host and formatted with a file system by the OS, not accessed directly by applications over a network protocol. Pick a specific catalog type for a named managed disk service with distinct encryption/snapshot controls; split into separate volumes per workload when sensitivity differs.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents a block storage volume (SAN LUN, managed virtual disk, or local disk) attached to a single compute instance and formatted by its operating system; it is not itself network-addressable the way file shares or object stores are. Covers boot volumes and attached data volumes alike. Use a more specific catalog type for a named managed disk service with distinct snapshot/encryption behavior; split volumes when one host mixes application data of different sensitivity across disks.\n\nModeling\nModel as a DataStore attached to its compute node, inside the same trust boundary as that host unless the storage fabric itself crosses a boundary. Draw the attach/detach and read-write flow from the host, a snapshot/backup flow, a key-retrieval flow for volume encryption, and a migration/replication flow if the volume is mirrored across availability zones. Typically contains whatever the attached application persists, including personal data and customer content; retention follows the owning application and should be confirmed per volume.\n\nDependencies\nCommonly depends on a key management service for volume-level encryption, the hypervisor or storage-fabric access controls governing attach operations, a backup/snapshot target, and a replication peer for multi-zone resilience.\n\nRisks\nUnencrypted volumes exposing data if detached and reattached elsewhere, snapshots retained indefinitely and escaping deletion obligations, overly broad permissions allowing a volume to be attached to an unauthorized host, residual data left on reused or decommissioned volumes, and ransomware encrypting mounted volumes.\n\nControls to verify\nEncryption at rest with known key ownership, access controls restricting which identities or hosts can attach or snapshot a volume, snapshot lifecycle and deletion policies aligned with retention requirements, media sanitization before volume reuse or disposal, and tested restore from snapshot or backup.\n\nUncertainty\nThe diagram cannot confirm encryption status, snapshot retention length, or whether decommissioned volumes are sanitized; verify against the storage platform's configuration and lifecycle policy.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/111/final",
+        "https://csrc.nist.gov/pubs/sp/800/88/r1/final",
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://csrc.nist.gov/pubs/sp/800/34/r1/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.cache",
+    "label": "Cache",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/cache.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/209/final",
+    "description": "A generic in-memory cache (key-value or similar) used to accelerate reads or hold ephemeral session/state data, typically backed by a durable store of record rather than being the system of record itself. Pick a specific catalog type for a named managed cache service with distinct persistence/clustering behavior; split into separate caches when session data and derived application data have different sensitivity.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents an in-memory data store used to reduce latency or load on a backing system of record, such as a key-value cache, session store, or materialized-view cache. May be configured with optional persistence or replication but is conceptually ephemeral. Use a more specific catalog type for a named managed cache with distinct clustering or eviction behavior; split into separate caches when session tokens and cached business data would otherwise share the same namespace and access policy.\n\nModeling\nModel as a DataStore in the application trust boundary or an adjacent data boundary, with a flow back to the authoritative data store it caches. Draw application read/write flows, a replication flow between cache nodes or shards, an admin/management-plane flow, and a key-retrieval flow if in-transit or at-rest encryption is configured. Often holds personal data indirectly through cached query results or session tokens; retention is expected to be processing-only or short-TTL, so confirm the configured eviction/TTL actually matches that intent.\n\nDependencies\nCommonly depends on the backing data store it accelerates, an identity provider for client authentication, a network path limiting reachability, and a key management service if encryption is enabled.\n\nRisks\nPersonal data or tokens retained beyond the intended TTL due to misconfigured eviction, unauthenticated or shared-password access to the cache cluster, unencrypted cache traffic exposing session tokens, cache poisoning or stale-data leakage across tenants in a shared cache, and sensitive data surviving in memory dumps or persistence snapshots.\n\nControls to verify\nConfigured TTL/eviction matching the intended retention, authentication and network isolation for cache access, encryption in transit and, where persistence is enabled, at rest, tenant isolation (separate keyspaces or clusters) for shared caches, and confirmation that any persistence snapshots are included in deletion workflows for data-subject requests.\n\nUncertainty\nThe diagram cannot confirm actual TTL settings, whether persistence/snapshotting is enabled, or whether the cache is multi-tenant; verify against the cache configuration and operational runbooks.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Security_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.message-queue",
+    "label": "Message queue / broker / event stream",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/queue.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/209/final",
+    "description": "A generic asynchronous messaging system (queue, topic, or event-log/stream) that decouples producers and consumers, sometimes persisting messages for a retention window. Treat as a DataStore when messages are durably retained for replay; treat primarily as a conduit when it only transiently relays in-flight messages. Pick a specific catalog type for a named managed broker with distinct access-control model; split per topic/queue when payload sensitivity differs.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents a message broker, queue, or event-streaming platform used to decouple producers and consumers, with durability ranging from fire-and-forget delivery to long-retained, replayable event logs. Use a more specific catalog type for a named managed broker with distinct ACL or partitioning behavior; split into separate topics/queues when payloads of different sensitivity or tenancy currently share one broker.\n\nModeling\nDefault role is DataStore because most brokers persist messages for at least a redelivery or retention window; if the design genuinely never persists beyond in-flight transit, document it as a conduit instead and note that nuance for reviewers. Draw producer-publish and consumer-subscribe flows, an admin/management-plane flow for topic/queue configuration, a replication flow across broker nodes or regions, and a dead-letter/poison-message handling flow.   Payloads often carry personal data or business events; retention is commonly short (processing-only to <48h) for transient queues but can be long for event-sourcing logs, so confirm per topic.\n\nDependencies\nCommonly depends on an identity provider or access-key system for producer/consumer authorization, a network path restricting broker access, a key management service for payload or at-rest encryption, and a dead-letter or archive target for unprocessed messages.\n\nRisks\nPoisoned or replayed messages causing downstream processing errors, over-broad producer/consumer permissions allowing unauthorized publish or subscribe, unencrypted message payloads exposing personal data in transit or in broker storage, unbounded retention causing messages to outlive stated purposes, and message injection or spoofing due to weak authentication.\n\nControls to verify\nPer-topic/queue least-privilege authorization rather than shared broker-wide credentials, TLS for producer and consumer connections, encryption at rest for persisted messages, explicit retention/TTL configuration matching the declared purpose, dead-letter handling with monitoring, and deletion procedures covering any long-retained event logs for data-subject requests.\n\nUncertainty\nThe diagram cannot confirm whether messages are actually persisted, the configured retention window, or whether payloads are encrypted; verify against the broker's topic/queue configuration and retention policy.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/209/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+        "https://attack.mitre.org/techniques/T1565/",
+        "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.log-store",
+    "label": "Log / telemetry store",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/log-store.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/92/final",
+    "description": "A generic store for application, infrastructure, or security logs, metrics, and traces, such as a SIEM or log-analytics backend, used for monitoring, auditing, and incident investigation rather than primary application state. Pick a specific catalog type for a named managed logging/SIEM service; split into separate stores or workspaces when security logs and general telemetry need different access restrictions.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents a centralized destination for logs, metrics, or traces collected from applications and infrastructure, including SIEM platforms and log-analytics workspaces. Primarily supports monitoring, auditing, and incident response rather than serving application requests. Use a more specific catalog type for a named managed SIEM/analytics service; split workspaces when highly sensitive security logs and routine operational telemetry should not share the same access policy.\n\nModeling\nModel as a DataStore in a data or security trust boundary, commonly separate from the application boundary that generates the logs. Draw ingestion flows from each logging source, a query/read flow for analysts and detection rules, an admin/management-plane flow, a retention/archival flow to cold storage, and an export flow for compliance or e-discovery. Logs frequently contain personal data (IP addresses, usernames, request payloads) unintentionally; retention is often long (>=48h, sometimes years) for compliance, so confirm per log category.\n\nDependencies\nCommonly depends on an identity provider restricting who can query logs, a network path from each source system, a key management service for encryption of stored logs, and an archive target for long-term retention.\n\nRisks\nSecrets or personal data inadvertently captured in log payloads, log injection allowing forged or tampered entries, overly broad analyst access exposing sensitive fields, logs retained far beyond their stated purpose, insufficient integrity protection letting an attacker erase evidence of intrusion, and the log store itself becoming an attractive single target for both confidentiality and availability attacks.\n\nControls to verify\nLog scrubbing/redaction of secrets and personal data before ingestion, access controls scoping who can query raw versus aggregated logs, encryption at rest and in transit, tamper-evidence or write-once retention for security-relevant logs, defined retention schedules with deletion or anonymization for data-subject requests, and monitoring of access to the log store itself.\n\nUncertainty\nThe diagram cannot confirm what fields are actually logged, whether redaction is applied before ingestion, or the configured retention per log category; verify against logging configuration, field-level schemas, and retention policy documents.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/92/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.secrets-vault",
+    "label": "Secrets / key vault / HSM",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/vault.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final",
+    "description": "A generic secrets manager, key vault, or hardware security module that stores and brokers access to credentials, certificates, and cryptographic keys for other components. Pick a specific catalog type for a named managed vault/HSM service with distinct access-policy or attestation model; split into separate vaults per environment or tenant when a single vault would otherwise hold secrets for unrelated systems.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents a secrets manager, key vault, or hardware/virtual HSM that stores credentials, API keys, certificates, or cryptographic keys and brokers short-lived access to them for other services, rather than storing general application data. Use a more specific catalog type for a named managed vault/HSM with distinct attestation or access-policy features; split vaults per environment (prod/non-prod) or tenant to avoid one compromised vault exposing unrelated systems.\n\nModeling\nModel as a DataStore in its own high-trust boundary, distinct from the application boundaries it serves. Draw secret/key retrieval flows from each consuming service, an admin/management-plane flow for secret rotation and policy changes, an audit-log export flow, and a backup/escrow flow for key material. Holds credentials and keys rather than typical personal data, but compromise exposes whatever those secrets protect; treat retention of secret versions and audit logs as long-term and subject to strict access control.\n\nDependencies\nCommonly depends on an identity provider for workload and operator authentication, a network path restricting which services can reach the vault, a hardware root of trust or HSM for key protection, and a backup/escrow process for disaster recovery of key material.\n\nRisks\nThe vault being a high-value single point of compromise for an attacker, over-broad access policies granting many services the same secret, long-lived static credentials stored instead of short-lived tokens, insufficient audit logging of secret access, secrets leaking through logs or error messages of consuming services, and key material being irrecoverably lost without an escrow/backup process.\n\nControls to verify\nFine-grained, per-identity access policies with short-lived leases rather than broadly shared secrets, hardware-backed key protection where required, mandatory audit logging of every access and rotation, automated secret rotation, network isolation limiting which workloads can reach the vault, and a tested key-escrow or backup/recovery process.\n\nUncertainty\nThe diagram cannot confirm actual access-policy granularity, rotation cadence, or whether consuming services cache secrets insecurely after retrieval; verify against vault access policies, audit logs, and consuming-service configuration.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+        "https://csrc.nist.gov/pubs/sp/800/209/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  },
+  {
+    "id": "generic.storage.backup-archive",
+    "label": "Backup / archive",
+    "category": "Generic / Storage",
+    "catalogSource": "Generic",
+    "icon": "neutral/backup.svg",
+    "defaultDfdRole": "DataStore",
+    "endpointRegex": "^$",
+    "templateHints": [],
+    "documentationUrl": "https://csrc.nist.gov/pubs/sp/800/34/r1/final",
+    "description": "A generic backup or long-term archive store holding copies of data from one or more primary stores for recovery, retention, or compliance purposes, distinct from the primary store it protects. Pick a specific catalog type for a named managed backup/archive service with distinct immutability or lifecycle features; split into separate backup sets per source system or data classification.",
+    "aiDesignGuidance": {
+      "content": "Context\nRepresents a destination for backups, snapshots, or long-term archives copied from one or more primary data stores, used for recovery and compliance rather than live application access. Covers on-prem backup appliances, tape/offline archives, and managed backup/archive services. Use a more specific catalog type for a named managed backup service with distinct immutability features; split backup sets when sources of different sensitivity or jurisdiction should not share one retention policy.\n\nModeling\nModel as a DataStore in its own trust boundary, connected to each source system by a backup/export flow and, for restores, a restore flow back to the source or a recovery environment. Draw an admin/management-plane flow for backup-job configuration, a replication flow if backups are copied to another region, and a key-retrieval flow for encrypted backups. Backups inherit the classification of their source, commonly including personal data and customer content; retention is explicitly long-term (>=48h, often months or years) and must be tracked separately from the source system's retention.\n\nDependencies\nCommonly depends on each source system it protects, a key management service for backup encryption, a network path to the backup target, and a replication peer if backups are geo-redundant.\n\nRisks\nBackups retained indefinitely and escaping deletion or data-subject-erasure obligations, unencrypted or weakly protected copies, ransomware encrypting or deleting backups alongside primary data, insufficient immutability letting an attacker with admin access destroy recovery points, and backups replicated to a jurisdiction inconsistent with required data residency.\n\nControls to verify\nEncryption at rest with key ownership ideally independent from the primary store, immutability or write-once retention for a minimum recovery window, retention schedules traceable to source-system deletion/export obligations, credential isolation separating backup infrastructure from production admin access, geo residency confirmation for replicated copies, and regularly tested restores.\n\nUncertainty\nThe diagram cannot confirm actual retention length, immutability configuration, restore-test cadence, or the geographic location of copies; verify against backup-job configuration, retention policy, and restore test records.",
+      "sources": [
+        "https://csrc.nist.gov/pubs/sp/800/34/r1/final",
+        "https://csrc.nist.gov/pubs/sp/800/88/r1/final",
+        "https://www.cisa.gov/stopransomware/ransomware-guide",
+        "https://csrc.nist.gov/pubs/sp/800/111/final"
+      ],
+      "revision": 1,
+      "updatedOn": "2026-10-13"
+    }
+  }
+]

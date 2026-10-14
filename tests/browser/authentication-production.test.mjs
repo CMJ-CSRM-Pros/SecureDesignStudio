@@ -114,6 +114,7 @@ test("production: standalone Authentication Library definition and version survi
     assert.equal(payload.doc.authenticationDefinitions.find(def => def.id === "auth_portable").description,
       input.doc.authenticationDefinitions[0].description);
     assert.deepEqual(payload.doc.edges[0].productionIdentity, { kind: "ManagedIdentity" });
+    assert.equal(payload.doc.edges[0].applicationId, undefined);
     assert.deepEqual(catalogReferenceSnapshot(payload.doc), catalogReferenceSnapshot(input.doc));
     for (const definition of input.doc.catalogDefinitions) {
       assert.deepEqual(payload.doc.catalogDefinitions.find(def => def.kind === definition.kind && def.id === definition.id), definition);
@@ -161,7 +162,8 @@ test("production: standalone Authentication Library definition and version survi
     await reopened.locator(".ps-auth-selection-warning").filter({ hasText: "Required authentication library is unavailable" }).waitFor();
     assert.equal(await reopened.getByRole("combobox", { name: /^Authentication method/ })
       .locator(`option[value="${retainedContract.id}"]`).evaluate(option => option.disabled), true);
-    assert.equal(await reopened.getByRole("combobox", { name: "Tenant", exact: true }).inputValue(), "ExampleTenant");
+    assert.equal(await reopened.getByRole("combobox", { name: "Tenant", exact: true }).count(), 0);
+    assert.equal(await reopened.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).inputValue(), "");
     await reopened.locator('button[aria-controls="ps-command-menu-review"]').click();
     await reopened.getByRole("menuitem", { name: /^Deviations/ }).click();
     await reopened.locator(".ps-deviations").getByText("Historical ests-relationship", { exact: true }).waitFor();

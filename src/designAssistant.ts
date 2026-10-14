@@ -1,7 +1,14 @@
 import { SERVICES } from "./services";
-import { designPlanChoices, parseDesignPlan, parseDesignResult, type DesignPlan, type DesignResult, type DesignTurn } from "../shared/designContract";
+import {
+  designCatalogChoices, designPlanChoices, designProtocolPlanChoices,
+  parseDesignPlan, parseDesignResult, validateDesignApplicationIds, validateDesignCatalog,
+  type DesignPlan, type DesignResult, type DesignTurn,
+} from "../shared/designContract";
 import type { DesignRequestSnapshot, buildDesignPlanContext } from "./threatModelDesigner";
-import { assertAiRequestBudget, validateAiGuidanceContext, type AiGuidanceReference } from "../shared/aiDesignGuidance";
+import {
+  assertAiRequestBudget, validateCombinedAiGuidanceContext, validateCommunicationGuidanceContext,
+  type AiGuidanceReference,
+} from "../shared/aiDesignGuidance";
 import { guidanceReferencesForFinding } from "./aiDesignGuidance";
 import type { AiProviderId } from "../shared/aiProviders";
 
@@ -97,7 +104,10 @@ export async function askThreatModelDesigner(
   request: { mode: "design"; question: string; context: DesignRequestSnapshot["context"]; history: DesignTurn[]; provider?: AiProviderId },
   signal?: AbortSignal,
 ): Promise<DesignResult> {
-  return parseDesignResult(await requestAssistant(request, signal), { existingScenario: request.context.scenario !== null });
+  const result = parseDesignResult(await requestAssistant(request, signal), { existingScenario: request.context.scenario !== null });
+  validateDesignCatalog(result, designCatalogChoices(request.context.catalog));
+  validateDesignApplicationIds(result, request.context);
+  return result;
 }
 
 // Planning step: the model sees only the compact type index and selects the
@@ -106,7 +116,8 @@ export async function planThreatModelDesign(
   request: { mode: "design-plan"; question: string; context: ReturnType<typeof buildDesignPlanContext>; history: DesignTurn[]; provider?: AiProviderId },
   signal?: AbortSignal,
 ): Promise<DesignPlan> {
-  return parseDesignPlan(await requestAssistant(request, signal), designPlanChoices(request.context));
+  return parseDesignPlan(await requestAssistant(request, signal), designPlanChoices(request.context),
+    designProtocolPlanChoices(request.context));
 }
 
 async function requestAssistant(
@@ -116,7 +127,18 @@ async function requestAssistant(
   if (!SERVICES.assistant.enabled) {
     throw new Error(SERVICES.assistant.message);
   }
-  validateAiGuidanceContext((request.context as { aiDesignGuidance?: unknown })?.aiDesignGuidance);
+  const context = request.context as {
+    aiDesignGuidance?: unknown; communicationGuidance?: unknown; edges?: unknown;
+    catalog?: { protocols?: unknown }; protocolIndex?: unknown;
+  };
+  const offeredProtocols = request.mode === "design" ? context.catalog?.protocols
+    : request.mode === "design-plan" ? context.protocolIndex : undefined;
+  validateCommunicationGuidanceContext(context.communicationGuidance, {
+    edges: context.edges, offeredProtocols,
+  });
+  validateCombinedAiGuidanceContext(context.aiDesignGuidance, context.communicationGuidance, {
+    edges: context.edges, offeredProtocols,
+  });
   assertAiRequestBudget(request);
 
   const response = await fetch(SERVICES.assistant.endpoint, {

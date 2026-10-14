@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import {
-  edgeRequiresProductionIdentity,
+  edgeRequiresApplicationId,
   isGuid,
   useStore,
 } from "../store";
@@ -10,18 +10,16 @@ import type {
   PsData,
   PsEdge,
   PsNode,
-  ProductionIdentity,
-  ProductionIdentityTenant,
 } from "../types";
 import {
   authTypeDescription,
+  authTypeLabel,
   authBehavior,
-  isKnownInstalledAuthentication,
   isAuthenticationType,
   dataClassificationDescription,
   dataClassificationLabel,
-  productionIdentityTenantLabel,
-  productionIdentityTenantChoices,
+  formatProductionIdentity,
+  isKnownInstalledAuthentication,
   REQUIRED_ACCESS_RIGHTS_MAX_LENGTH,
 } from "../types";
 import {
@@ -38,11 +36,14 @@ import { TargetIssuesSection } from "./TargetIssuesSection";
 import { LibraryMetadataFields } from "./LibraryMetadataFields";
 import { useRemoveFromScenarioWithConfirm } from "./useRemoveFromScenarioWithConfirm";
 import { useLibraries } from "../libraries/LibraryProvider";
+import { resolveProtocolReference } from "../protocols";
 
 export function EdgeDetails({ edge }: { edge: PsEdge }) {
   const rightsId = useId();
   const [rightsError, setRightsError] = useState<{ edgeId: string; message: string } | null>(null);
   const currentRightsError = rightsError?.edgeId === edge.id ? rightsError.message : null;
+  const [protocolError, setProtocolError] = useState<{ edgeId: string; message: string } | null>(null);
+  const currentProtocolError = protocolError?.edgeId === edge.id ? protocolError.message : null;
   const installed = useLibraries().authentication;
   const {
     updateEdge,
@@ -56,6 +57,8 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
     nodeTypeCatalog,
     authenticationCatalog,
     authenticationLibrary,
+    protocolLibrary,
+    useLibraryProtocolDefinition,
   } = useStore();
   const { removeEdgeOrDelete } = useRemoveFromScenarioWithConfirm();
 
@@ -66,6 +69,24 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
   const targetNode = doc.nodes.find((n) => n.id === edge.target);
   const targetPolicy = nodeTypeDefFor(targetNode, nodeTypeCatalog);
   const targetHasPolicy = !!targetPolicy && targetPolicy.policyStatus !== "Unspecified";
+  const protocolResolution = resolveProtocolReference(edge.protocolId, doc.protocolDefinitions, protocolLibrary);
+  const protocolNeedsAttention = protocolResolution.status === "unresolved"
+    || (protocolResolution.status === "resolved" && !!protocolResolution.conflict);
+  const protocolOptions = protocolLibrary.map(profile => ({
+    profile,
+    resolution: resolveProtocolReference(profile.id, doc.protocolDefinitions, protocolLibrary),
+  }));
+  const updateProtocol = (value: string) => updateEdge(edge.id, {
+    protocolId: value ? protocolLibrary.find(profile => profile.id === value)?.id : undefined,
+  });
+  const useCurrentProtocolDefinition = () => {
+    try {
+      if (edge.protocolId) useLibraryProtocolDefinition(edge.protocolId);
+      setProtocolError(null);
+    } catch (cause) {
+      setProtocolError({ edgeId: edge.id, message: cause instanceof Error ? cause.message : String(cause) });
+    }
+  };
 
   // Attached items are scenario-specific AND direction-specific. Request
   // payloads live in edgeRequestData and are validated against the target
@@ -86,8 +107,6 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
     const next = isAuthenticationType(value) ? value : "";
     updateEdge(edge.id, {
       authenticationTypes: next ? [next] : undefined,
-      ...(next && authBehavior(next, authenticationCatalog).managedIdentity && !edge.productionIdentity
-        ? { productionIdentity: { kind: "ManagedIdentity" as const } } : {}),
     });
   };
 
@@ -107,26 +126,18 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
 
   const [tab, setTab] = useDetailsTab();
 
-  // Production identity validity mirrors IssueManager's
-  // ruleEdgeMissingOrInvalidProductionIdentity.
-  const piRequired = edgeRequiresProductionIdentity(authTypes, authenticationCatalog);
-  const pi = edge.productionIdentity;
-  const piIncomplete = (() => {
-    if (!piRequired) return false;
-    if (!pi) return true;
-    if (managedIdentity && pi.kind !== "ManagedIdentity") return true;
-    if (pi.kind === "AppId") {
-      const appId = pi.appId.trim();
-      if (appId === "") return true;
-      if (!isGuid(appId)) return true;
-    } else if (pi.kind === "ManagedIdentity") {
-      return false;
-    }
-    return false;
-  })();
-
+  // Caller Application ID validity mirrors IssueManager's identity rules.
+  const applicationIdRequired = edgeRequiresApplicationId(authTypes, authenticationCatalog);
+  const applicationId = edge.applicationId ?? "";
+  const applicationIdInvalid = applicationId.trim() !== "" && !isGuid(applicationId);
+  const applicationIdMissing = applicationIdRequired && !isGuid(applicationId);
+  const legacyIdentityConflict = edge.productionIdentity?.kind === "AppId"
+    && applicationId.trim() !== ""
+    && edge.productionIdentity.appId.trim().toLowerCase() !== applicationId.trim().toLowerCase();
   const generalIncomplete =
-    edge.title.trim() === "" || authTypes.length !== 1 || piIncomplete;
+    edge.title.trim() === "" || authTypes.length !== 1 || applicationIdInvalid
+    || applicationIdMissing || legacyIdentityConflict || protocolNeedsAttention
+    || (managedIdentity && applicationId.trim() !== "");
 
   // Privacy = "Edge has no data attached in EITHER direction in the active
   // scenario" (mirrors Edge_must_have_data). Only flagged when the edge is
@@ -242,6 +253,59 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
             </p>
           )}
 
+          <fieldset className="ps-communication">
+            <legend>Communication</legend>
+            <p className="ps-communication-compatibility" role="status">
+              Communication profiles and caller Application IDs require an updated SecureDesignStudio client.
+              Older clients may discard these fields when editing a shared diagram. Use the latest version and keep a .tma backup.
+            </p>
+            <div className="ps-communication-profile">
+              <label>
+                Protocol profile
+                <select value={edge.protocolId ?? ""} onChange={event => updateProtocol(event.target.value)}>
+                  <option value="">Not specified</option>
+                  {edge.protocolId && !protocolLibrary.some(profile => profile.id === edge.protocolId) && (
+                    <option value={edge.protocolId} disabled>
+                      {protocolResolution.status === "unresolved" ? protocolResolution.label
+                        : protocolResolution.status === "resolved" ? protocolResolution.definition.label : edge.protocolId}
+                    </option>
+                  )}
+                  {protocolOptions.map(({ profile, resolution }) => (
+                    <option key={profile.id} value={profile.id} disabled={resolution.status !== "resolved" || !resolution.selectable}>
+                      {profile.label}{resolution.status === "resolved" && resolution.conflict ? " (saved conflict)" : profile.disabled ? " (disabled)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!edge.protocolId && <p className="ps-description-below">Not specified is not proof of plaintext or encryption.</p>}
+              {protocolResolution.status === "unresolved" && (
+                <p className="ps-auth-selection-warning" role="status">
+                  This imported protocol reference is unresolved. No profile or AI guidance was fabricated.
+                </p>
+              )}
+              {protocolResolution.status === "resolved" && <>
+                <p className="ps-description-below">{protocolResolution.definition.description}</p>
+                <p className="ps-description-below">
+                  {protocolResolution.definition.semantics.description}
+                  {" "}Declared design intent only; not evidence of negotiated protection.
+                </p>
+                {protocolResolution.conflict && (
+                  <div className="ps-auth-selection-warning" role="alert">
+                    The saved diagram definition differs from this browser's Communication Library. Saved definition wins for this diagram.
+                    <button type="button" onClick={useCurrentProtocolDefinition}>
+                      Use profile definition for this diagram
+                    </button>
+                  </div>
+                )}
+                <p className="ps-description-below">
+                  Authentication suggestions (advisory only): {protocolResolution.definition.authenticationSuggestions
+                    .map(id => authTypeLabel(id, authenticationCatalog)).join(", ") || "None"}.
+                  They do not select or change authentication.
+                </p>
+              </>}
+              {currentProtocolError && <p className="ps-auth-selection-warning" role="alert">{currentProtocolError}</p>}
+            </div>
+
           <label>
             Authentication method
             {targetNode
@@ -333,6 +397,54 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
             </p>
           )}
 
+          <fieldset className="ps-production-identity">
+            <legend>
+              Caller Application ID
+              {applicationIdRequired && <span className="ps-required-marker"> *</span>}
+            </legend>
+            <p className="ps-description-below">
+              GUID of the calling application's client ID. This is not the target service's audience or an object ID.
+              {applicationIdRequired ? " Required by the selected authentication method." : " Optional for this authentication method."}
+            </p>
+            <label>
+              Application ID (GUID)
+              <input
+                type="text"
+                value={applicationId}
+                onChange={(event) => updateEdge(edge.id, { applicationId: event.target.value })}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                aria-invalid={applicationIdInvalid || applicationIdMissing || undefined}
+                aria-describedby={(applicationIdInvalid || applicationIdMissing) ? `edge-appid-err-${edge.id}` : undefined}
+              />
+            </label>
+            {(applicationIdInvalid || applicationIdMissing) && (
+              <div id={`edge-appid-err-${edge.id}`} className="ps-nodetype-required" role="status">
+                {applicationIdInvalid
+                  ? "Enter a valid GUID or clear this optional field."
+                  : "Required because the selected authentication method uses a caller application ID."}
+              </div>
+            )}
+            {legacyIdentityConflict && (
+              <div className="ps-auth-selection-warning" role="alert">
+                The standalone Application ID differs from retained legacy identity evidence. Review and resolve the conflict explicitly; neither value was discarded.
+              </div>
+            )}
+            {managedIdentity && applicationId.trim() !== "" && (
+              <div className="ps-auth-selection-warning" role="status">
+                Managed Identity is selected, but a caller Application ID is also recorded. Confirm whether both apply to this flow.
+              </div>
+            )}
+          </fieldset>
+          {edge.productionIdentity && (
+            <details className="ps-production-identity">
+              <summary>Retained identity evidence</summary>
+              <p className="ps-description-below">
+                Read-only legacy evidence from an older model. It is preserved for review and is not a second editable Application ID field.
+              </p>
+              <p>{formatProductionIdentity(edge.productionIdentity, doc.catalogDefinitions)}</p>
+            </details>
+          )}
+
           {(entraAuth || edge.audience) && (
             <label>
               Audience
@@ -358,21 +470,8 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
               />
             </label>
           )}
+          </fieldset>
 
-          {selectedAuthType !== "InternalProcessCall" && (
-            <ProductionIdentityFieldset
-              edge={edge}
-              required={piRequired}
-              onChange={(pi) =>
-                updateEdge(edge.id, { productionIdentity: pi })
-              }
-            />
-          )}
-          {managedIdentity && pi && pi.kind !== "ManagedIdentity" && (
-            <p role="alert" className="ps-auth-selection-warning">
-              This profile requires Managed Identity. The existing Application ID is retained; explicitly select Managed Identity or a different method.
-            </p>
-          )}
         </>
       )}
 
@@ -569,137 +668,6 @@ function EdgeDataFieldset({
           </span>
         )}
       </div>
-    </fieldset>
-  );
-}
-
-// Existing evidence remains editable even when a method has unknown semantics.
-function ProductionIdentityFieldset({
-  edge,
-  required,
-  onChange,
-}: {
-  edge: PsEdge;
-  required: boolean;
-  onChange: (pi: ProductionIdentity | undefined) => void;
-}) {
-  const { doc, availableCatalogDefinitions } = useStore();
-  const tenants = productionIdentityTenantChoices(doc.catalogDefinitions, availableCatalogDefinitions);
-  const pi = edge.productionIdentity;
-  // Default kind for the radios — if no value yet, show AppId selected so
-  // the form is meaningful; the actual stored value is undefined until the
-  // user types something.
-  const kind: "AppId" | "ManagedIdentity" = pi?.kind ?? "AppId";
-
-  const setKind = (next: "AppId" | "ManagedIdentity") => {
-    if (next === kind && pi) return;
-    if (next === "AppId") {
-      onChange({ kind: "AppId", appId: "", tenant: "Customer" });
-    } else {
-      onChange({ kind: "ManagedIdentity" });
-    }
-  };
-
-  const setAppId = (appId: string) => {
-    if (kind !== "AppId") return;
-    const tenant: ProductionIdentityTenant =
-      (pi?.kind === "AppId" ? pi.tenant : "Customer");
-    onChange({ kind: "AppId", appId, tenant });
-  };
-
-  const setTenant = (tenant: ProductionIdentityTenant) => {
-    const appId = pi?.kind === "AppId" ? pi.appId : "";
-    onChange({ kind: "AppId", appId, tenant });
-  };
-
-  const appIdValue = pi?.kind === "AppId" ? pi.appId : "";
-  const appIdInvalid =
-    kind === "AppId" && appIdValue.trim().length > 0 && !isGuid(appIdValue);
-  const noValueYet =
-    !pi || (pi.kind === "AppId" && pi.appId.trim() === "");
-
-  return (
-    <fieldset className="ps-production-identity">
-      <legend>
-        Production identity
-        {required && <span className="ps-required-marker"> *</span>}
-      </legend>
-
-      <div className="ps-production-identity-kind">
-        <label className="ps-checkbox">
-          <input
-            type="radio"
-            name={`pi-kind-${edge.id}`}
-            checked={kind === "AppId"}
-            onChange={() => setKind("AppId")}
-          />
-          Application ID
-        </label>
-        <label className="ps-checkbox">
-          <input
-            type="radio"
-            name={`pi-kind-${edge.id}`}
-            checked={kind === "ManagedIdentity"}
-            onChange={() => setKind("ManagedIdentity")}
-          />
-          Managed Identity
-        </label>
-      </div>
-      {!required && <p>Optional retained evidence; method prose does not determine identity requirements.</p>}
-      {pi && <button type="button" onClick={() => onChange(undefined)}>Clear production identity</button>}
-
-      {kind === "AppId" && (
-        <>
-          <label>
-            App ID (GUID)
-            <input
-              type="text"
-              value={appIdValue}
-              onChange={(e) => setAppId(e.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              aria-invalid={appIdInvalid || undefined}
-              aria-describedby={
-                appIdInvalid ? `pi-appid-err-${edge.id}` : undefined
-              }
-            />
-          </label>
-          {appIdInvalid && (
-            <div
-              id={`pi-appid-err-${edge.id}`}
-              className="ps-nodetype-required"
-            >
-              Must be a GUID (e.g. 12345678-1234-1234-1234-123456789abc).
-            </div>
-          )}
-          <label>
-            Tenant
-            <select
-              value={pi?.kind === "AppId" ? pi.tenant : "Customer"}
-              onChange={(e) =>
-                setTenant(e.target.value as ProductionIdentityTenant)
-              }
-            >
-              {pi?.kind === "AppId" && !tenants.some((t) => t.id === pi.tenant) && (
-                <option value={pi.tenant} disabled>{productionIdentityTenantLabel(pi.tenant, doc.catalogDefinitions)}</option>
-              )}
-              {[...tenants]
-                .sort((a, b) => a.label.localeCompare(b.label))
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-            </select>
-          </label>
-        </>
-      )}
-
-      {required && noValueYet && (
-        <div className="ps-nodetype-required">
-          Required because the selected authentication type uses a
-          production identity.
-        </div>
-      )}
     </fieldset>
   );
 }

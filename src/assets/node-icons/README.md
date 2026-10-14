@@ -19,8 +19,17 @@ the icon; Entra additionally prohibits use in marketing communications.
 Microsoft reserves all other rights. The application's MIT license does not
 relicense these assets or grant trademark rights.
 
-Rechecked 2026-09-29: all 151 bundled SVGs match the official packs, either
+Rechecked 2026-09-29: all 151 bundled Microsoft SVGs match the official packs, either
 byte-for-byte or differing only in a UTF-8 BOM or CRLF/LF line endings.
 `azure/fabric_24_color.svg` comes from the Fabric pack; `m365/entra.svg` from
 Entra; `m365/intune.svg` and `power-platform/gateway.svg` from Azure. Folder names
 are application organization, not separate license grants.
+
+## Vendor-neutral icons (`neutral/`)
+
+The 29 SVGs in `neutral/` are original SecureDesignStudio artwork for the
+vendor-neutral Generic node types (2026-10-13). They are not derived from any
+vendor icon pack and are covered by the application's license. Because the
+Microsoft terms above forbid using product icons to represent other products,
+use these neutral icons, not Microsoft icons, for generic or non-Microsoft
+components.

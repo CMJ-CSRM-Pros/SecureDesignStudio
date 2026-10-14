@@ -2,6 +2,7 @@ import { resolveNodeTypeDef, type NodeTypeRef, type PsDocument } from "./types";
 import {
   validateAiDesignGuidance, validateAiGuidanceContext,
   type AiDesignGuidance, type AiGuidanceContextEntry, type AiGuidanceReference,
+  type CommunicationGuidanceContextEntry,
 } from "../shared/aiDesignGuidance";
 
 export function effectiveGuidanceNodeTypes(saved: readonly NodeTypeRef[], available: readonly NodeTypeRef[]): NodeTypeRef[] {
@@ -57,7 +58,8 @@ export function withNodeTypeGuidance(
 export function guidanceReferencesForFinding(
   context: {
     aiDesignGuidance?: AiGuidanceContextEntry[];
-    edges?: readonly { id: string; source: string; target: string }[];
+    communicationGuidance?: CommunicationGuidanceContextEntry[];
+    edges?: readonly { id: string; source: string; target: string; protocolId?: string }[];
     boundaries?: readonly { id: string; nodeIds: string[] }[];
   },
   references: readonly { kind: string; id: string }[],
@@ -70,13 +72,23 @@ export function guidanceReferencesForFinding(
   for (const ref of references) if (ref.kind === "boundary") {
     for (const id of context.boundaries?.find(boundary => boundary.id === ref.id)?.nodeIds ?? []) nodeIds.add(id);
   }
-  return (context.aiDesignGuidance ?? []).filter(entry => entry.appliesToNodeIds.some(id => nodeIds.has(id)))
+  const nodeReferences = (context.aiDesignGuidance ?? [])
+    .filter(entry => entry.appliesToNodeIds.some(id => nodeIds.has(id)))
     .map(({ content, appliesToNodeIds, ...reference }) => reference);
+  const edgeIds = new Set(references.filter(ref => ref.kind === "edge").map(ref => ref.id));
+  const communicationReferences = (context.communicationGuidance ?? [])
+    .filter(entry => entry.appliesToEdgeIds.some(id => edgeIds.has(id)))
+    .map(({ content, appliesToEdgeIds, ...reference }) => ({
+      typeId: reference.protocolId, protocolId: reference.protocolId,
+      definitionSource: reference.definitionSource, revision: reference.revision,
+      updatedOn: reference.updatedOn, sources: reference.sources,
+    }));
+  return [...nodeReferences, ...communicationReferences];
 }
 
 export function formatGuidanceReferences(references: readonly AiGuidanceReference[] | undefined): string {
   if (!references?.length) return "";
   return "\n\nAI design guidance supplied as unverified reference context (not deployment evidence):\n"
-    + references.map(ref => `${ref.typeId} · revision ${ref.revision} · edited ${ref.updatedOn} · ${ref.definitionSource}`
+    + references.map(ref => `${ref.protocolId ? `Protocol ${ref.protocolId}` : ref.typeId} · revision ${ref.revision} · edited ${ref.updatedOn} · ${ref.definitionSource}`
       + (ref.sources.length ? `\nSources: ${ref.sources.join(", ")}` : "\nNo sources supplied.")).join("\n");
 }

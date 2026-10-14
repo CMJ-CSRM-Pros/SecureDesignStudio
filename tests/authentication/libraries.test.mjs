@@ -19,9 +19,11 @@ const { readLibraryCandidates, libraryBuildBridge } = await import("../../script
 const example = JSON.parse(await readFile(new URL("../../examples/custom-libraries/example/library.json", import.meta.url), "utf8"));
 const candidate = (value = example, source = "Synthetic package") => ({ source, value: structuredClone(value) });
 
-test("libraries: empty configuration preserves public catalogs and twelve core finding kinds", () => {
+test("libraries: empty configuration preserves public catalogs and fourteen core finding kinds", () => {
   assert.deepEqual(resolveLibraries(), CORE_LIBRARIES);
-  assert.equal(CORE_LIBRARIES.coreRuleIds.length, 12);
+  assert.equal(CORE_LIBRARIES.coreRuleIds.length, 14);
+  assert.ok(CORE_LIBRARIES.coreRuleIds.includes("Edge_missing_application_id"));
+  assert.ok(CORE_LIBRARIES.coreRuleIds.includes("Edge_protocol_guidance_missing"));
   assert.equal(CORE_LIBRARIES.coreRuleIds.includes("Node_must_have_servicetree"), false);
   assert.equal(CORE_LIBRARIES.authentication.length, 14);
   assert.equal(CORE_LIBRARIES.classifications.defaultId, "EUII");

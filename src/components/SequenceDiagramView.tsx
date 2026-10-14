@@ -1,6 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { useStore } from "../store";
 import { authTypeLabel } from "../authentication";
+import { resolveProtocolReference } from "../protocols";
 import { nodeTypeIconUrl } from "../nodeTypeIcons";
 import { nodeTypeLabel, type PsNode, type PsEdge } from "../types";
 import { DFD_ROLE_LABELS, DFD_SCOPE_LABELS, nodeDfdSummary, resolveNodeReviewScope } from "../dfdSemantics";
@@ -28,6 +29,7 @@ export function SequenceDiagramView() {
   const {
     doc,
     authenticationCatalog,
+    protocolLibrary,
     activeScenario,
     visibleNodes,
     visibleEdges,
@@ -436,10 +438,17 @@ export function SequenceDiagramView() {
           const auths = ((edge?.authenticationTypes) ?? [])
             .map((id) => authTypeLabel(id, authenticationCatalog))
             .join(", ");
+          const protocolResolution = resolveProtocolReference(edge?.protocolId, doc.protocolDefinitions, protocolLibrary);
+          const protocol = protocolResolution.status === "resolved"
+            ? `${protocolResolution.definition.label}${protocolResolution.conflict ? " (saved conflict)" : ""}`
+            : protocolResolution.status === "unresolved"
+              ? `${edge?.protocolId} (unresolved)`
+              : "Not specified";
+          const applicationId = edge?.applicationId || "Not specified";
           const callLabel =
             (num != null ? `${num}. ` : "") +
             (edge?.title || "(untitled)") +
-            (auths ? `  [${auths}]` : "");
+            `  [${protocol}; Auth: ${auths || "Not specified"}]`;
           const returnLabel =
             (num != null ? `${num}. ` : "") + "return";
           const label = isReturn ? returnLabel : callLabel;
@@ -496,6 +505,7 @@ export function SequenceDiagramView() {
                   fill="#0f172a"
                 >
                   {truncate(callLabel, 80)}
+                  <title>{`Protocol: ${protocol}. Authentication: ${auths || "Not specified"}. Caller Application ID: ${applicationId}.`}</title>
                 </text>
                 <path
                   d={pathD}
@@ -539,6 +549,7 @@ export function SequenceDiagramView() {
                 fontStyle={isReturn ? "italic" : "normal"}
               >
                 {truncate(label, 80)}
+                {!isReturn && <title>{`Protocol: ${protocol}. Authentication: ${auths || "Not specified"}. Caller Application ID: ${applicationId}.`}</title>}
               </text>
               <line
                 x1={srcX}

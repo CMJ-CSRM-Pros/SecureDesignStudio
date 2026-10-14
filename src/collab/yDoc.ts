@@ -31,6 +31,7 @@ export interface YShape {
   workItems: Y.Map<Y.Map<unknown>>;
   nodeTypes: Y.Map<Y.Map<unknown>>;
   authenticationDefinitions: Y.Map<Y.Map<unknown>>;
+  protocolDefinitions: Y.Map<Y.Map<unknown>>;
   catalogDefinitions: Y.Map<unknown>;
   meta: Y.Map<unknown>;
 }
@@ -51,6 +52,7 @@ export function createYShape(ydoc?: Y.Doc): YShape {
     workItems: doc.getMap<Y.Map<unknown>>("workItems"),
     nodeTypes: doc.getMap<Y.Map<unknown>>("nodeTypes"),
     authenticationDefinitions: doc.getMap<Y.Map<unknown>>("authenticationDefinitions"),
+    protocolDefinitions: doc.getMap<Y.Map<unknown>>("protocolDefinitions"),
     catalogDefinitions: doc.getMap<unknown>("catalogDefinitions"),
     meta: doc.getMap<unknown>("meta"),
   };
@@ -69,6 +71,7 @@ export function isYShapeEmpty(shape: YShape): boolean {
     shape.deviations.size === 0 &&
     shape.workItems.size === 0 &&
     shape.authenticationDefinitions.size === 0 &&
+    shape.protocolDefinitions.size === 0 &&
     shape.ydoc.getMap("catalogDefinitions").size === 0 &&
     !Array.from(shape.nodeTypes.entries()).some(
       ([id, entry]) => NODE_TYPE_DEF_MAP[id] == null || entry.has("definition"),
