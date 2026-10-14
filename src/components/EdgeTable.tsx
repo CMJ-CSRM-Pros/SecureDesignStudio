@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { dataClassificationLabel } from "../types";
 import { useStore } from "../store";
+import { resolveProtocolReference } from "../protocols";
 import { flowDfdSummary } from "../dfdSemantics";
 import {
   authTypeDescription,
@@ -17,6 +18,7 @@ export function EdgeTable() {
     activeScenario,
     doc,
     authenticationCatalog,
+    protocolLibrary,
     classificationDefinitions,
     selection,
     setSelection,
@@ -159,7 +161,9 @@ export function EdgeTable() {
             <th>#</th>
             <th>Title</th>
             <th>Source → Target</th>
+            <th>Protocol</th>
             <th>Auth</th>
+            <th>Caller Application ID</th>
             <th>Request data</th>
             <th>Response data</th>
             <th></th>
@@ -172,6 +176,12 @@ export function EdgeTable() {
             const tgt = doc.nodes.find((n) => n.id === e.target);
             const isVisible = visibleSet.has(e.id);
             const num = edgeNumberFor(e.id);
+            const protocolResolution = resolveProtocolReference(e.protocolId, doc.protocolDefinitions, protocolLibrary);
+            const protocolLabel = protocolResolution.status === "resolved"
+              ? `${protocolResolution.definition.label}${protocolResolution.conflict ? " (saved conflict)" : ""}`
+              : protocolResolution.status === "unresolved"
+                ? `${e.protocolId} (unresolved)`
+                : "Not specified";
             const renderDataIds = (ids: string[]) =>
               ids
                 .map((id) => doc.data.find((x) => x.id === id))
@@ -226,16 +236,29 @@ export function EdgeTable() {
                   <div className="ps-description-below">{flowDfdSummary(e, doc, activeScenario)}</div>
                 </td>
                 <td>
-                  {(e.authenticationTypes ?? []).map((id, i, arr) => (
-                    <span key={id}>
-                      <LabelWithTooltip
-                        label={authTypeLabel(id, authenticationCatalog)}
-                        description={authTypeDescription(id, authenticationCatalog)}
-                      />
-                      {i < arr.length - 1 ? ", " : ""}
-                    </span>
-                  ))}
+                  <LabelWithTooltip
+                    label={protocolLabel}
+                    description={protocolResolution.status === "resolved"
+                      ? `${protocolResolution.definition.description} ${protocolResolution.definition.semantics.description} Declared design intent only; not evidence of negotiated protection.${protocolResolution.conflict ? " Saved diagram definition takes precedence over the active profile." : ""}`
+                      : protocolResolution.status === "unresolved"
+                        ? "Imported protocol reference is unresolved; no profile semantics or AI guidance were inferred."
+                          : "Not specified is not proof of plaintext or encryption."}
+                  />
                 </td>
+                <td>
+                  {(e.authenticationTypes ?? []).length > 0
+                    ? (e.authenticationTypes ?? []).map((id, i, arr) => (
+                        <span key={id}>
+                          <LabelWithTooltip
+                            label={authTypeLabel(id, authenticationCatalog)}
+                            description={authTypeDescription(id, authenticationCatalog)}
+                          />
+                          {i < arr.length - 1 ? ", " : ""}
+                        </span>
+                      ))
+                    : "Not specified"}
+                </td>
+                <td>{e.applicationId || "Not specified"}</td>
                 <td>{renderDataIds(activeScenario.edgeRequestData[e.id] ?? [])}</td>
                 <td>{renderDataIds(activeScenario.edgeResponseData[e.id] ?? [])}</td>
                 <td className="ps-row-actions" onClick={(ev) => ev.stopPropagation()}>

@@ -71,12 +71,12 @@ test("availability foundation: portable conflicting behavior is retained but can
   }];
   const result = analyze(doc, installed);
   assert.deepEqual(result.issues.find(issue => issue.id === "i_retained"),
-    { ...doc.issues[0], notEvaluatedReason: "policy-unavailable" });
+    { ...doc.issues[0], notEvaluatedReason: "rule-retired" });
   assert.deepEqual(result.authenticationDefinitions, [changed]);
   const unavailable = analyze({ ...doc, authenticationDefinitions: [canonical] }, withoutPackage);
-  assert.equal(unavailable.issues.find(issue => issue.id === "i_retained").notEvaluatedReason, "policy-unavailable");
+  assert.equal(unavailable.issues.find(issue => issue.id === "i_retained").notEvaluatedReason, "rule-retired");
   const restored = analyze({ ...doc, authenticationDefinitions: [canonical] }, installed);
-  assert.equal(restored.issues.find(issue => issue.id === "i_retained").notEvaluatedReason, undefined);
+  assert.equal(restored.issues.find(issue => issue.id === "i_retained").notEvaluatedReason, "rule-retired");
   assert.equal(restored.issues.find(issue => issue.id === "i_retained").status, "Resolved");
 });
 

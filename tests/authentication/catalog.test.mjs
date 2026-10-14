@@ -51,6 +51,18 @@ const reportFor = (doc) => report.buildReviewReportHtml({
 const installedHistory = [...auth.AUTH_TYPE_DEFS, ...historicalAuthenticationDefinitions()];
 
 describe("authentication catalog: immutable compatibility contracts", () => {
+  test("legacy files retain authentication when protocol is absent, null or unresolved", () => {
+    for (const protocolId of [undefined, null, "future-profile"]) {
+      const input = withFlow(["EntraDelegatedUserAccess"], { protocolId });
+      const normalized = store.normalizeDoc(input);
+      assert.deepEqual(normalized.edges[0].authenticationTypes, ["EntraDelegatedUserAccess"]);
+      assert.equal(normalized.edges[0].protocolId, protocolId ?? undefined);
+      assert.equal(auth.authTypeLabel(normalized.edges[0].authenticationTypes[0],
+        auth.authenticationCatalogFor(normalized)), "Entra user");
+      assert.match(reportFor(normalized), /Entra user/);
+    }
+  });
+
   test("core ships 14 stable IDs, with 13 modern choices and one legacy certificate", () => {
     assert.equal(auth.AUTH_TYPE_DEFS.length, 14);
     assert.deepEqual(sorted(auth.AUTH_TYPES), sorted(Object.keys(EXPECTED_PROFILES).filter(id => !PACKAGE_METHOD_IDS.includes(id))));
@@ -73,21 +85,23 @@ describe("authentication catalog: immutable compatibility contracts", () => {
       assert.equal(auth.authTypeLabel(id, catalog), entry.label);
       assert.equal(auth.authTypeShortLabel(id, catalog), entry.shortLabel);
       assert.equal(auth.authTypeDescription(id, catalog), entry.description);
-      assert.equal(auth.edgeRequiresProductionIdentity([id], catalog), productionIdentity === "required");
+      assert.equal(auth.edgeRequiresApplicationId([id], catalog),
+        productionIdentity === "required" && !managedIdentity);
       assert.equal(auth.normalizeAuthenticationValue(id), id);
     });
   }
 
-  test("the original eleven retain five identity contracts when their definitions are installed", () => {
+  test("caller Application ID requirements exclude Managed Identity", () => {
     const expected = [
       "EntraDelegatedUserAccess", "EntraApplicationOnlyAccess", "EntraApplicationOnlyWithCdt",
       "ProtectedForwardedAccessToken", "PopWithProtectedForwardedToken",
     ];
     assert.deepEqual(sorted(Object.keys(LEGACY_LABELS).filter(id => auth.edgeRequiresProductionIdentity([id], installedHistory))), sorted(expected));
     assert.deepEqual(sorted(auth.AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY), sorted([
-      "EntraDelegatedUserAccess", "EntraApplicationOnlyAccess", "EntraOnBehalfOf", "EntraManagedIdentity", "EntraFederatedWorkloadIdentity",
+      "EntraDelegatedUserAccess", "EntraApplicationOnlyAccess", "EntraOnBehalfOf", "EntraFederatedWorkloadIdentity",
     ]));
     assert.equal(auth.edgeRequiresProductionIdentity(["ApiKey", "EntraOnBehalfOf"]), true);
+    assert.equal(auth.edgeRequiresApplicationId(["EntraManagedIdentity"]), false);
     assert.equal(auth.edgeRequiresProductionIdentity([]), false);
     assert.equal(auth.edgeRequiresProductionIdentity(undefined), false);
   });
@@ -553,7 +567,7 @@ describe("authentication catalog: actual policy and analyzer behavior", () => {
     const doc = withPolicy([{ id: "ApiKey", status: "Allowed" }]);
     doc.authenticationDefinitions = [custom];
     const kinds = issueKinds(doc);
-    assert.ok(kinds.includes("Edge_missing_production_identity"));
+    assert.ok(kinds.includes("Edge_missing_application_id"));
     assert.ok(kinds.includes("Edge_authentication_definition_review"));
     assert.ok(kinds.includes("Edge_auth_not_accepted"));
     assert.equal(auth.authBehavior(custom.id, auth.authenticationCatalogFor(doc)).audience, true);
@@ -563,9 +577,9 @@ describe("authentication catalog: actual policy and analyzer behavior", () => {
     const entry = { ...clone(auth.builtInAuthentication("ApiKey")), label: "App identity", description: "This description claims Entra, managed identity and anonymous access." };
     const doc = withFlow(["ApiKey"]);
     doc.authenticationDefinitions = [entry];
-    assert.equal(auth.edgeRequiresProductionIdentity(["ApiKey"], auth.authenticationCatalogFor(doc)), false);
+    assert.equal(auth.edgeRequiresApplicationId(["ApiKey"], auth.authenticationCatalogFor(doc)), false);
     assert.equal(auth.authBehavior("ApiKey", auth.authenticationCatalogFor(doc)).anonymous, false);
-    assert.equal(issueKinds(doc).includes("Edge_missing_production_identity"), false);
+    assert.equal(issueKinds(doc).includes("Edge_missing_application_id"), false);
   });
 
   test("managed-identity/App-ID mismatch is diagnosed without erasing identity or associated fields", () => {
@@ -579,18 +593,22 @@ describe("authentication catalog: actual policy and analyzer behavior", () => {
     assert.equal(issueKinds(withFlow(["EntraManagedIdentity"], { productionIdentity: { kind: "ManagedIdentity" } })).includes("Edge_managed_identity_mismatch"), false);
   });
 
-  test("required identity findings distinguish absent, blank, malformed, and valid App IDs", () => {
-    for (const [pi, expected] of [
-      [undefined, "Edge_missing_production_identity"],
-      [{ kind: "AppId", appId: "  ", tenant: "Other" }, "Edge_missing_production_identity"],
-      [{ kind: "AppId", appId: "not-a-guid", tenant: "Other" }, "Edge_invalid_production_identity"],
-      [{ kind: "AppId", appId: IDS.app, tenant: "Customer" }, undefined],
-      [{ kind: "ManagedIdentity" }, undefined],
+  test("required caller Application ID findings distinguish absent, blank, malformed, and valid values", () => {
+    for (const [applicationId, expected] of [
+      [undefined, "Edge_missing_application_id"],
+      ["  ", "Edge_missing_application_id"],
+      ["not-a-guid", "Edge_invalid_application_id"],
+      [IDS.app, undefined],
     ]) {
-      const kinds = issueKinds(withFlow(["EntraApplicationOnlyAccess"], { productionIdentity: pi }))
-        .filter((kind) => kind === "Edge_missing_production_identity" || kind === "Edge_invalid_production_identity");
+      const kinds = issueKinds(withFlow(["EntraApplicationOnlyAccess"], { applicationId }))
+        .filter((kind) => kind === "Edge_missing_application_id" || kind === "Edge_invalid_application_id");
       assert.deepEqual(kinds, expected ? [expected] : []);
     }
+    assert.equal(issueKinds(withFlow(["EntraManagedIdentity"])).includes("Edge_missing_application_id"), false);
+    const retained = withFlow(["EntraApplicationOnlyAccess"], {
+      productionIdentity: { kind: "AppId", appId: IDS.app, tenant: "Customer" },
+    });
+    assert.ok(issueKinds(retained).includes("Edge_missing_application_id"), "Historical evidence is not promoted to the active caller field");
   });
 
   test("rerunning analysis preserves review status, replies and manual issues; resolution removes only obsolete typed findings", () => {

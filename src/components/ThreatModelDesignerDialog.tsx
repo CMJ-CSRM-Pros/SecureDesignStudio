@@ -137,8 +137,8 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
     try {
       const history = messages.slice(-12).map(({ role, text }) => ({ role, text }));
       const provider = __PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {};
-      // Small libraries go in one call; otherwise a planning call selects the
-      // component types so the design call carries only their entries and guidance.
+      // Small libraries go in one call; otherwise planning selects only the
+      // component types and communication profiles needed by the design.
       let expected: DesignRequestSnapshot | null = null;
       try {
         const full = prepareThreatModelDesign();
@@ -154,10 +154,11 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
           mode: "design-plan", question: prompt, context: planContext, history, ...provider,
         }, controller.signal);
         if (controller.signal.aborted || abortRef.current !== controller) return;
-        expected = prepareThreatModelDesign(plan.nodeTypeIds);
+        expected = prepareThreatModelDesign(plan.nodeTypeIds, plan.protocolIds);
         const offered = expected.context.catalogScope?.nodeTypeIds.length ?? 0;
-        scopeNote = ` Used ${offered} of ${planContext.nodeTypeIndex.length} component types.`;
-        setStatus(`Designing with ${offered} of ${planContext.nodeTypeIndex.length} component types…`);
+        const offeredProtocols = (expected.context.catalog.protocols as unknown[]).length;
+        scopeNote = ` Used ${offered} of ${planContext.nodeTypeIndex.length} component types and ${offeredProtocols} communication profiles.`;
+        setStatus(`Designing with ${offered} of ${planContext.nodeTypeIndex.length} component types and ${offeredProtocols} communication profiles…`);
       }
       const response = await askThreatModelDesigner({
         mode: "design", question: prompt, context: expected.context, history, ...provider,
@@ -167,10 +168,12 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
       scenarioRef.current = outcome.scenarioId;
       setMessages(current => [
         ...current, { role: "user", text: prompt },
-        { role: "assistant", text: response.answer, assumptions: response.assumptions },
+        { role: "assistant", text: outcome.partial ? outcome.warning ?? "Human interaction required; see the canvas annotation." : response.answer,
+          assumptions: outcome.partial ? [] : response.assumptions },
       ]);
       setQuestion("");
-      setStatus((outcome.changed ? `Design applied to the diagram. ${outcome.summary} Undo reverses this entire response.`
+      setStatus((outcome.changed ? `${outcome.partial ? "Partial design added for human review." : "Design applied to the diagram."} ${outcome.summary} Undo reverses this entire response.`
+        : outcome.partial ? "The design still requires human interaction. No additional changes were applied."
         : response.design ? "The requested design already matches the model. No changes were applied."
         : "No model changes were applied. The diagram has not changed.") + scopeNote +
         (outcome.warning ? ` Warning: ${outcome.warning}` : ""));

@@ -66,6 +66,88 @@ registerSampleContracts({ getHarness: () => harness, exportModel });
 registerDesignerContracts({ getHarness: () => harness });
 registerAiGuidanceContracts({ getHarness: () => harness, exportModel });
 
+test("regression: catalog selector groups Microsoft, scopes Generic and discovers future sources", async () => {
+  await harness.run("regression: catalog source routes", async ({ page }) => {
+    const input = modelFixture();
+    // Old documents must acquire newly shipped types without losing custom types.
+    input.doc.nodeTypes = input.doc.nodeTypes.filter(type => !type.id.startsWith("generic."));
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "old-catalog.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    const model = page.getByRole("button", { name: "Model", exact: true });
+    await model.click();
+    assert.equal(await page.getByRole("menuitem", { name: /^(Azure|Generic) Type Catalog/ }).count(), 0);
+    await page.getByRole("menuitem", { name: /^Node Type Catalog/ }).click();
+    const catalog = page.getByRole("dialog", { name: "Node type catalog", exact: true });
+    const selector = catalog.getByRole("combobox", { name: "Catalog", exact: true });
+    assert.equal(await selector.inputValue(), "all");
+    await selector.selectOption({ label: "Document" });
+    await catalog.getByRole("button", { name: /Browser test process/ }).waitFor();
+    await selector.selectOption({ label: "Generic" });
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 29);
+    await catalog.getByRole("searchbox").fill("firewall");
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 2);
+    await catalog.getByRole("searchbox").fill("Dataverse");
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 0);
+    await catalog.getByText("No node types match this catalog and search.", { exact: true }).waitFor();
+    await catalog.getByRole("searchbox").fill("Host (server / VM)");
+    await catalog.locator(".ps-catalog-row").click();
+    assert.equal(await catalog.getByRole("textbox", { name: "Stable ID", exact: true }).inputValue(), "generic.compute.host");
+    assert.match(await catalog.getByRole("textbox", { name: "Guidance content", exact: true }).inputValue(), /Controls to verify\n/);
+    assert.equal(await catalog.getByRole("combobox", { name: "Catalog", exact: true }).isDisabled(), true);
+    await catalog.getByRole("textbox", { name: "Label", exact: true }).fill("Saved generic host");
+    await catalog.getByRole("button", { name: "Save type", exact: true }).click();
+    await catalog.getByRole("button", { name: "Close", exact: true }).click();
+    await model.click();
+    await page.getByRole("menuitem", { name: /^Node Type Catalog/ }).click();
+    assert.equal(await selector.inputValue(), "all");
+    await selector.selectOption({ label: "Generic" });
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 29);
+    await catalog.getByRole("button", { name: /Saved generic host/ }).waitFor();
+    await selector.selectOption({ label: "Microsoft" });
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 169);
+    for (const id of ["Dataverse", "m365_copilot"]) {
+      await catalog.getByRole("searchbox").fill(id);
+      assert.ok(await catalog.locator(".ps-catalog-row").count() > 0, id);
+    }
+    await catalog.getByRole("searchbox").fill("");
+    await selector.selectOption("all");
+    await catalog.getByRole("searchbox").fill("Browser test process");
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 1);
+    await catalog.getByRole("button", { name: "Close", exact: true }).click();
+  });
+});
+
+test("usability: scoped catalogs support keyboard entry, focus return and narrow layout", async () => {
+  await harness.run("usability: scoped catalog navigation", async ({ page }) => {
+    const model = page.getByRole("button", { name: "Model", exact: true });
+    for (const label of ["Generic", "Microsoft"]) {
+      await model.focus();
+      await page.keyboard.press("ArrowDown");
+      await until(() => page.evaluate(() => document.activeElement?.getAttribute("role") === "menuitem"), "Model menu keyboard focus");
+      await page.keyboard.press("N");
+      await page.keyboard.press("Enter");
+      const catalog = page.getByRole("dialog", { name: "Node type catalog", exact: true });
+      await catalog.waitFor();
+      assert.equal(await catalog.getByRole("searchbox").evaluate(el => el === document.activeElement), true);
+      await catalog.getByRole("combobox", { name: "Catalog", exact: true }).selectOption({ label });
+      assert.equal(await catalog.locator(".ps-catalog-row").count(), label === "Generic" ? 29 : 169);
+      await page.keyboard.press("Escape");
+      await until(() => model.evaluate(el => el === document.activeElement), "catalog focus returns to Model");
+    }
+    await page.setViewportSize({ width: 320, height: 640 });
+    await model.click();
+    await page.getByRole("menuitem", { name: /^Node Type Catalog/ }).click();
+    const catalog = page.getByRole("dialog", { name: "Node type catalog", exact: true });
+    await catalog.getByRole("combobox", { name: "Catalog", exact: true }).selectOption({ label: "Generic" });
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 29);
+    await catalog.getByRole("combobox", { name: "Catalog", exact: true }).selectOption({ label: "Microsoft" });
+    assert.equal(await catalog.locator(".ps-catalog-row").count(), 169);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await catalog.getByRole("button", { name: "Close", exact: true }).click();
+  });
+});
+
 for (const { boundaryType, theme } of ["security", "privacy"].flatMap(boundaryType =>
   ["light", "dark"].map(theme => ({ boundaryType, theme })))) {
   test(`regression: ${boundaryType} boundary moves only from its perimeter, not its empty interior (${theme})`, async () => {
@@ -505,9 +587,14 @@ test("regression: unavailable catalog references survive controls, native save, 
     await page.getByRole("tab", { name: /^Edges/ }).click();
     await page.getByRole("row", { name: /^Request payload, sequence/ }).click();
     await page.getByRole("tab", { name: /^Properties/ }).click();
-    const tenant = page.getByRole("combobox", { name: "Tenant", exact: true });
-    assert.equal(await tenant.inputValue(), "ExampleTenant");
-    assert.match(await tenant.locator("option:checked").textContent(), /unresolved/);
+    assert.equal(await page.getByRole("combobox", { name: "Tenant", exact: true }).count(), 0,
+      "Historical tenant evidence is not exposed as an editable selector");
+    assert.equal(await page.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).inputValue(), "",
+      "Historical identity evidence is not promoted to the active caller ID");
+    const identityEvidence = page.locator("details").filter({ hasText: "Retained identity evidence" });
+    await identityEvidence.locator("summary").click();
+    await identityEvidence.getByText(/ExampleTenant/).waitFor();
+    await identityEvidence.locator("summary").click();
     await page.getByRole("tab", { name: /^Deviations/ }).click();
     assert.equal(await page.locator(".ps-deviation-kind").textContent(), "example-evidence (unresolved)");
 

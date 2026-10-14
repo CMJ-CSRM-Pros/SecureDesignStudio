@@ -536,8 +536,15 @@ export function authBehavior(id: string, catalog: readonly AuthTypeDef[] = AUTH_
   const definition = catalog.find(def => def.id === id);
   return definition && !definition.unavailableReason && !definition.unresolved ? definition.behavior : UNKNOWN_AUTH_BEHAVIOR;
 }
-export const AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY: ReadonlySet<string> =
-  new Set(AUTH_TYPE_DEFS.filter(def => def.behavior.productionIdentity === "required").map(def => def.id));
-export function edgeRequiresProductionIdentity(types: readonly string[] | undefined, catalog: readonly AuthTypeDef[] = AUTH_TYPE_DEFS): boolean {
-  return !!types?.some(id => authBehavior(id, catalog).productionIdentity === "required");
+export const AUTH_TYPES_REQUIRING_APPLICATION_ID: ReadonlySet<string> =
+  new Set(AUTH_TYPE_DEFS.filter(def =>
+    def.behavior.productionIdentity === "required" && !def.behavior.managedIdentity
+  ).map(def => def.id));
+export const AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY = AUTH_TYPES_REQUIRING_APPLICATION_ID;
+export function edgeRequiresApplicationId(types: readonly string[] | undefined, catalog: readonly AuthTypeDef[] = AUTH_TYPE_DEFS): boolean {
+  return !!types?.some(id => {
+    const behavior = authBehavior(id, catalog);
+    return behavior.productionIdentity === "required" && !behavior.managedIdentity;
+  });
 }
+export const edgeRequiresProductionIdentity = edgeRequiresApplicationId;

@@ -1,41 +1,23 @@
 # Custom Libraries
 
-Custom Libraries are explicitly selected deployment packages, not an
-internal/public mode, employee check, authentication provider or authorization
-grant. They add catalogs, metadata fields, declarative checks and help through
-one documented interface. **Model > Custom Libraries** lists loaded, rejected
-and unavailable packages, identities, versions, contributions and provenance.
-About and the status bar summarize the selected set.
+Custom Libraries are explicitly selected deployment packages, not
+authentication providers or authorization grants. They add catalogs, metadata
+fields, declarative checks and help through one documented interface.
+**Model > Custom Libraries** lists loaded, rejected and unavailable packages,
+identities, versions, contributions and provenance. About and the status bar
+summarize the selected set.
 
-Core defaults exclude four owner-specific authentication methods, two tenant
-choices and the private policy/identity definitions. The **169 neutral core
-entries** include Microsoft Dataverse (`Dataverse`), its table and plug-in
-components, Microsoft Copilot Studio (`CopilotStudio`) and Power Platform
-connectors (`PowerPlatformConnectors`). These public choices do not require
-an optional package. Inventory ID is an optional text field in core; a selected
-library can supply its ServiceTree label, GUID validation and required-value
-rule. The two compliance perimeters, four organization-specific deployment
-boundaries and ESTS evidence label also require an available library for new
-selections. Core retains Geo boundary, IFrame, CSP, Azure, User browser and
-User Tenant Trust, and adds VNet, Subnet, Container, Process and Machine security
-boundaries. Existing IDs/order and the IFrame creation default are unchanged.
-Both core-only and companion-library configurations inherit
-the same twelve Purview-aligned/supplemental classification definitions.
-Private guidance stays in optional help rather than duplicating the common
-dictionary. Service configuration is selected separately using `SDS_SERVICE_CONFIG`
-or explicit endpoint environment settings; no service destinations are inferred.
-This is not public-release certification.
-The default selection is empty even if an `internal` directory exists.
+The built-in catalog includes Microsoft and generic component types, boundary
+types and reusable policy definitions. Optional libraries can add supported
+catalog entries and metadata without changing the document format. Service
+configuration is selected separately using `SDS_SERVICE_CONFIG` or explicit
+endpoint environment settings; no service destinations are inferred. No
+optional package is selected by default.
 
-The optional Custom package contains 13 retained definitions. Its three
-same-ID Dataverse definitions explicitly override the neutral core bases when
-selected, producing 179 combined IDs, not duplicate products. Its spaced
-`Copilot Studio` and `Connectors` IDs retain their narrower private API meaning;
-they are **not aliases** for `CopilotStudio` and `PowerPlatformConnectors`.
-Existing saved definitions remain authoritative, including an absent guidance
-field. A pre-overlay package lacking the three explicit override declarations
-is rejected atomically rather than silently winning collisions; use a
-compatible updated package. No package is enabled by this catalog update.
+Libraries can declare compatible dependencies and explicit overrides for
+existing definitions. Unresolved collisions reject the affected package rather
+than choosing a winner based on discovery order. Existing saved definitions
+remain authoritative, including when an optional library is unavailable.
 
 ## Select local packages
 
@@ -55,12 +37,14 @@ Remove-Item Env:SDS_LIBRARY_PATHS -ErrorAction SilentlyContinue
 npm run build
 ```
 
-The example is synthetic and selected only explicitly. Keep confidential packages
-outside public source and artifacts. Never distribute artifacts built with
-confidential packages to an unauthorized audience.
+The example is synthetic and selected only explicitly. Keep confidential
+packages out of version control and deployment artifacts. Git ignore rules are
+not sanitization: never distribute an artifact built with confidential packages
+to an unauthorized audience.
 
-Selection changes require a restart/rebuild. Built browser applications cannot
-discover additional directories. No arbitrary JavaScript, TypeScript modules, `eval`, URL-installed
+Selection changes require a restart/rebuild. A browser cannot scan a sibling
+folder; a built standalone file cannot discover packages added after the build.
+No arbitrary JavaScript, TypeScript modules, `eval`, URL-installed
 packages, custom React components or external assets are supported in v1.
 
 ## Delivery and failure behavior
@@ -135,15 +119,17 @@ Generic instructions and Choose file remain usable. The dialog never executes
 the example, queries telemetry, signs in or contacts imported endpoint URLs.
 Clipboard denial selects the text and explains how to copy it manually.
 
-The synthetic example demonstrates these slots without confidential content.
-Public setup and tests must not depend on private companion packages.
+The synthetic example demonstrates these slots without organization-specific
+content. Public setup and tests must remain self-contained; an unconfigured
+build must not include organization-specific queries or confidential package
+content.
 
 ## Review guidance
 
 `analysis.deprecated-auth-guidance` optionally supplies a safe URL for findings
 about methods explicitly marked Deprecated by a target node policy. It is help,
 not rule or policy authority: the same finding is produced without it, with no
-organization-specific link. Pure "not accepted" findings do not use this slot.
+library-specific link. Pure "not accepted" findings do not use this slot.
 Only startup-selected library help is used; a model cannot install guidance.
 
 Supplemental retention instructions may use `retention.guidance`, readable
@@ -219,7 +205,7 @@ type need not already occur in the document before it can be matched.
 The public label **Inventory ID** is a presentation change, not a document
 migration: native files retain `serviceTreeId`. Ordinary identifiers such as
 `ASSET-123` are accepted in node instances and document-local type definitions.
-A selected field override can label it ServiceTreeId and validate GUIDs;
+A selected field override can supply a more specific label and validation;
 missing-library historical values stay editable under the generic field.
 Reports, comparisons and visual exports use the selected label. TM7 imports
 accept both the new Inventory ID label and historical `ST:` labels.
@@ -237,25 +223,23 @@ unresolved label. Malformed metadata rejects an import; corrupt recovery is
 paused without overwriting the stored backup.
 
 An unconfigured build is not a model-sanitization mode. Opened models and their
-exports can still contain saved organization-specific definitions, labels and
-identity evidence. Review that content separately before sharing it.
+exports can still contain saved custom definitions, labels and identity
+evidence. Review that content separately before sharing it.
 
 Saved field descriptions do not install rules. Without a package, its previous
 findings remain **Not re-evaluated**; restoring an evaluable rule refreshes or
 clears its findings while retaining review status/discussion. Use matching
-current readers for collaboration: older applications and older CLI writers
-are not guaranteed to preserve this optional metadata. TM7/VSDX and other
-external formats do not promise to preserve generic custom metadata.
+current readers for collaboration: older applications are not guaranteed to
+preserve this optional metadata. TM7/VSDX and other external formats do not
+promise to preserve generic custom metadata.
 
 Saved taxonomy definitions are not installed choices. Boundary subtypes,
 node-type default privacy boundaries and new deviation kinds are offered only
 from the available catalog. Existing unavailable selections remain visible with
 their saved labels (or unresolved IDs), and unrelated edits preserve them.
 Switching to an available choice or clearing a subtype is explicit and undoable.
-The CLI applies the same availability check to new/changed selections while
-retaining old values through unrelated updates. Reports and visual exports
-resolve saved definitions first and capture referenced available definitions,
-not entire optional catalogs.
+Reports and visual exports resolve saved definitions first and capture
+referenced available definitions, not entire optional catalogs.
 
 ## AI design guidance
 

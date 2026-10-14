@@ -42,6 +42,7 @@ import { withCatalogDefinitions } from "../catalogDefinitions";
 import { CatalogDefinitionsNotice } from "./CatalogDefinitionsNotice";
 import { AuthenticationLibraryModal } from "./AuthenticationLibraryModal";
 import { ClassificationLibraryModal } from "./ClassificationLibraryModal";
+import { ProtocolLibraryModal } from "./ProtocolLibraryModal";
 import secureDesignStudioLogo from "../assets/secure-design-studio-logo.svg?inline";
 
 type ToolbarMenu = "file" | "model" | "review" | "view";
@@ -103,6 +104,7 @@ type CommandId =
   | "model.annotation"
   | "model.authentication"
   | "model.classifications"
+  | "model.protocols"
   | "model.customLibraries"
   | "model.data"
   | "model.work"
@@ -225,6 +227,7 @@ export function Toolbar() {
   const [nodeTypeCatalogOpen, setNodeTypeCatalogOpen] = useState(false);
   const [authenticationLibraryOpen, setAuthenticationLibraryOpen] = useState(false);
   const [classificationLibraryOpen, setClassificationLibraryOpen] = useState(false);
+  const [protocolLibraryOpen, setProtocolLibraryOpen] = useState(false);
   const [customLibrariesOpen, setCustomLibrariesOpen] = useState(false);
   const [workItemsModalOpen, setWorkItemsModalOpen] = useState(false);
   const [newScenarioOpen, setNewScenarioOpen] = useState(false);
@@ -1722,6 +1725,10 @@ export function Toolbar() {
         restoreFocus = false;
         setClassificationLibraryOpen(true);
         break;
+      case "model.protocols":
+        restoreFocus = false;
+        setProtocolLibraryOpen(true);
+        break;
       case "model.customLibraries":
         restoreFocus = false;
         setCustomLibrariesOpen(true);
@@ -1996,6 +2003,10 @@ export function Toolbar() {
                 <button role="menuitem" aria-label="Customize classifications" onClick={() => executeCommand("model.classifications")}>
                   <span>Customize classifications</span>
                   <small>Classification Library for this browser profile</small>
+                </button>
+                <button role="menuitem" aria-label="Customize communication profiles" onClick={() => executeCommand("model.protocols")}>
+                  <span>Communication Library</span>
+                  <small>Protocol profiles and AI guidance for this browser profile</small>
                 </button>
                 <button role="menuitem" onClick={() => executeCommand("model.customLibraries")}>
                   Custom Libraries
@@ -2863,7 +2874,7 @@ export function Toolbar() {
       </button>
 
       <button
-        onClick={() => setNodeTypeCatalogOpen(true)}
+        onClick={() => executeCommand("model.catalog")}
         title="Create, edit, import, or export document node types"
       >
         Manage Node Types ({doc.nodeTypes.length})
@@ -2902,6 +2913,11 @@ export function Toolbar() {
               commandTriggerRef.current = modelTriggerRef.current;
               executeCommand("model.classifications");
             }}>Customize classifications</button>
+            <button role="menuitem" onClick={() => {
+              setOpenMenu(null);
+              commandTriggerRef.current = modelTriggerRef.current;
+              executeCommand("model.protocols");
+            }}>Communication Library</button>
             <button role="menuitem" onClick={() => {
               setOpenMenu(null);
               commandTriggerRef.current = modelTriggerRef.current;
@@ -3225,6 +3241,12 @@ export function Toolbar() {
     {classificationLibraryOpen && (
       <ClassificationLibraryModal onClose={() => {
         setClassificationLibraryOpen(false);
+        restoreCommandFocus("ps-command-menu-model");
+      }} />
+    )}
+    {protocolLibraryOpen && (
+      <ProtocolLibraryModal onClose={() => {
+        setProtocolLibraryOpen(false);
         restoreCommandFocus("ps-command-menu-model");
       }} />
     )}

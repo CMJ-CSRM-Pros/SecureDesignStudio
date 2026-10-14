@@ -34,6 +34,7 @@ test("AI providers: shared selection, readiness, request routing, persistence an
   let browser, context;
   const faults = [], posts = [];
   let readinessError = false;
+  let designResponse = { answer: "Synthetic clarification.", assumptions: [], design: null };
   let hold;
   try {
     await until(async () => {
@@ -56,9 +57,9 @@ test("AI providers: shared selection, readiness, request routing, persistence an
         if (hold) await hold;
         return route.fulfill({ status: 200, contentType: "application/json",
           body: JSON.stringify(payload.mode === "design-plan"
-            ? { nodeTypeIds: payload.context.nodeTypeIndex.slice(0, 1).map(type => type.id), rationale: "Synthetic plan." }
+            ? { nodeTypeIds: payload.context.nodeTypeIndex.slice(0, 1).map(type => type.id), protocolIds: [], rationale: "Synthetic plan." }
             : payload.mode === "design"
-            ? { answer: "Synthetic clarification.", assumptions: [], design: null }
+            ? designResponse
             : { answer: "Synthetic review.", references: [], findings: [] }) });
       }
       if (url.origin === origin && !url.pathname.startsWith("/api/")) return route.continue();
@@ -120,7 +121,10 @@ test("AI providers: shared selection, readiness, request routing, persistence an
     assert.equal(await selection.isDisabled(), true);
     release();
     hold = null;
-    await designer.getByText("Synthetic clarification.", { exact: true }).waitFor();
+    await until(async () => {
+      assert.deepEqual(await designer.getByRole("alert").allTextContents(), [], "Synthetic design must not report an error");
+      return designer.getByText("Synthetic clarification.", { exact: true }).isVisible();
+    }, "synthetic design clarification", 10_000);
     assert.equal(posts.length, 4);
     assert.equal(posts[3].provider, "claude");
     assert.equal(posts[3].mode, "design");
@@ -163,6 +167,49 @@ test("AI providers: shared selection, readiness, request routing, persistence an
     await page.getByRole("menuitem", { name: "Design Assistant", exact: true }).click();
     await until(async () => await selection.inputValue() === "claude", "corrupt preference diagnosed");
     await analysis.getByText(/saved AI preference could not be read/).waitFor();
+    designResponse = {
+      answer: "This full design was applied (synthetic claim that must not be shown).", assumptions: [],
+      design: {
+        scenario: {}, humanReviewNotes: ["The owner must confirm the gateway target and authentication."],
+        nodes: [{ id: "pending-gateway", type: "", title: "Pending gateway", description: "Proposed ingress.", dfdRole: "Process" }],
+        edges: [], boundaries: [], data: [],
+      },
+    };
+    const beforePartial = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey);
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Design with AI/ }).click();
+    await designer.getByLabel("What would you like to design or change?").fill("Add a gateway but leave its unknown decisions for me");
+    await designer.getByRole("button", { name: "Build design", exact: true }).click();
+    await designer.getByRole("status").filter({ hasText: "Partial design added for human review." }).waitFor();
+    assert.equal(await designer.getByText(designResponse.answer, { exact: true }).count(), 0);
+    await page.locator(".ps-text-annotation-content").filter({ hasText: "Human interaction required" }).waitFor();
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    const partial = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey);
+    assert.equal(partial.nodes.at(-1).title, "Pending gateway");
+    assert.deepEqual(partial.nodes.slice(0, -1), beforePartial.nodes);
+    assert.deepEqual(partial.edges, beforePartial.edges);
+    assert.equal(partial.textAnnotations.length, 1);
+    await designer.getByRole("button", { name: "Undo model change", exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey), beforePartial);
+    await designer.getByRole("button", { name: "Redo", exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey), partial);
+    await page.reload();
+    await page.locator(".ps-text-annotation-content").filter({ hasText: "Human interaction required" }).waitFor();
+    designResponse.design.nodes = [];
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Design with AI/ }).click();
+    await designer.getByLabel("What would you like to design or change?").fill("Record the remaining decision without adding components");
+    await designer.getByRole("button", { name: "Build design", exact: true }).click();
+    await designer.getByRole("status").filter({ hasText: "Partial design added for human review." }).waitFor();
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    const pending = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey);
+    await designer.getByLabel("What would you like to design or change?").fill("Record the same remaining decision");
+    await designer.getByRole("button", { name: "Build design", exact: true }).click();
+    await designer.getByRole("status").filter({ hasText: "The design still requires human interaction." }).waitFor();
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+    assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey), pending);
     await page.setViewportSize({ width: 320, height: 640 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     assert.deepEqual(faults, []);

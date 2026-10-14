@@ -2,64 +2,75 @@
 
 **Spend less time preparing diagrams and more time improving designs.**
 
-SecureDesignStudio is a **Windows application**, to
-make security and privacy reviews simpler. It runs locally in **Microsoft Edge
-or Google Chrome**, bringing clear diagrams, service context, analysis, and
-review decisions together in one browser workspace.
-For teams considering a move beyond Microsoft Threat Modeling Tool, it offers
-a modern replacement option with import and export support for existing
-`.tm7` diagrams.
+SecureDesignStudio is a **Windows application for simpler security and privacy
+reviews**, running locally in **Microsoft Edge or Google Chrome**. It brings
+diagrams, service context, analysis, and review decisions together so engineers,
+service owners, and security/privacy reviewers can work from the same design.
+For teams moving beyond Microsoft Threat Modeling Tool, existing **`.tm7`
+import and export** support provides a starting point without redrawing every
+model.
 
-**[Get started on Windows](#get-started-on-windows)** to install the tools and
-create your first model. No Azure account or AI service is needed for local
-modeling and analysis.
+It is a browser-based workspace, not a native desktop installer. In the supported,
+documented Windows setup, you start a local server and open the app in your browser.
+
+**[Get started on Windows](#get-started-on-windows)**
+
+No Azure account or AI service is needed for local modeling and analysis.
 
 ## From service context to a review-ready design
 
-- **Start with what you already know.** Import existing `.tm7` models,
-  documented scenario/DFD JSON, or local PMEXP inventory data instead of
-  re-entering it. JSON import replaces the model; PMEXP merges data and
-  retention into an existing scenario. See the import/export limits below.
-- **Create clean, easy-to-follow designs.** Use the Microsoft cloud node
-  catalog, show security and privacy boundaries, and organize a complex system
-  into focused scenarios. Switch between the diagram and sequence view to
-  explain both the architecture and the order of its calls.
-- **Keep security and privacy in the same conversation.** Capture
-  authentication, data classifications, and retention alongside each flow.
-  Record findings, comments, decisions, and follow-up work in the model.
-- **Analyze as you review.** Built-in local checks highlight missing
-  information and policy inconsistencies. An optional, bring-your-own-AI
-  Design Assistant helps explore the design and suggests findings for you to
-  assess, not automatically accept.
-- **See what changed over time.** Save review snapshots and compare the
-  current model with a previous version, so the next review can focus on what
-  changed rather than start from scratch.
-- **Share the output your review needs.** Export Visio diagrams, `.tm7` diagrams for Threat Modeling Tool, HTML review
-  reports, or PNG images. Keep the native `.tma` model for future edits and
-  reviews. Formats have different limits; Visio export is not an importer,
-  and TM7 does not preserve all native privacy and access-rights details.
-- **Start small, work together when needed.** Core modeling and analysis run
-  locally without an Azure account or AI service. Collaboration-enabled
-  builds let reviewers work on the same model together.
+- **Start with what you have.** Import existing TM7 models, JSON in the
+  documented scenario/DFD `scenarios` and `dfds` structure, or local PMEXP
+  inventory data. JSON import replaces the model; PMEXP merges data and
+  retention into mapped or created nodes and requires an existing scenario.
+- **Make complex flows easier to explain.** Use the cloud node catalog,
+  security/privacy boundaries, and shared components to build clear diagrams.
+  Group workflows into scenarios, then switch between Diagram and Sequence
+  views to walk through call order.
+- **Keep security and privacy together.** Describe authentication, identity
+  evidence, request/response data, classifications, and retention alongside
+  the architecture. Customize authentication and classification libraries
+  without editing source code.
+- **Focus review effort.** Local **Analyze** checks flag missing information
+  and inconsistencies across the document. Record findings, comments, and work
+  items with the model. An optional, separately configured AI assistant offers
+  suggestions for human review, not automatic approval.
+- **Keep review context across revisions.** Save named `.tma` review snapshots
+  and use **File > Compare to previous** and **Review > Changes** to compare
+  without replacing current work. Native models preserve referenced catalog
+  definitions and custom metadata.
+- **Share the right output.** Export Visio or TM7 diagrams, HTML review
+  reports, and PNG diagram images. Each format has limits; retain a native
+  **`.tma`** as the editable backup. Visio export is not a Visio importer.
+- **Work locally; connect only when configured.** Normal local mode needs no
+  application backend or cloud credentials. Modeling and analysis run in the
+  browser; after the first dependency installation and page load, editing,
+  analysis, autosave, and local file operations work offline. Collaboration
+  requires an explicitly configured deployed/standalone build and is not
+  enabled by the normal local launcher.
 
-
-**[Read the user guide](docs/user-guide.md)** for the complete journey from a
-first model to analysis, sequence view, and importing or exporting work.
-See [import/export limitations](docs/user-guide.md#7-import-and-export).
 The tool supports review decisions; it does not inspect live deployments or
-certify security, privacy or regulatory compliance.
+certify security or privacy compliance. Missing definitions and rules still
+need review: **Not re-evaluated** means a retained finding has not been refreshed,
+not that the design passed. External help links and optional network features
+require connectivity.
+
+See the [user guide](docs/user-guide.md) for the review workflow and
+[import/export limitations](docs/user-guide.md#7-import-and-export).
 
 ## Get started on Windows
 
 ### 1. Install Git and Node.js (includes npm)
 
-Open the Windows Start menu, type **PowerShell**, and open it. Windows
-PowerShell is included with Windows; a PowerShell tab in Windows Terminal
-also works.
+Use a current Windows 10/11 computer and Edge or Chrome. **Windows PowerShell
+is included with Windows**: open Start, type `PowerShell`, and open it.
+You can also use a PowerShell tab in Windows Terminal. You do not need a
+separate PowerShell installation to follow these steps.
 
-You need **Git** to download the app and **Node.js 24 LTS** to run it.
-**npm comes with Node.js**: it downloads the app's dependencies and runs the
-startup commands. Do not install npm separately.
+Install **Git** to download the repository and **Node.js 24 LTS** to run the
+local app toolchain. Node.js includes **npm**, the package manager that
+downloads the app's dependencies and runs its startup commands; you do not
+install npm separately.
 
 If Windows Package Manager (`winget`) is available, run:
 
@@ -68,13 +79,15 @@ winget install --id Git.Git --exact --source winget
 winget install --id OpenJS.NodeJS.LTS --exact --source winget
 ```
 
-Otherwise, download the official [Git for Windows installer](https://git-scm.com/install/windows)
-and [Node.js 24 LTS installer](https://nodejs.org/en/download). Keep npm
-selected and let the installers add the tools to PATH, so Windows can find
-their commands. Follow your organization's installation process if approval
-is required.
+If `winget` is unavailable or you prefer installers, use the official
+[Git for Windows installer](https://git-scm.com/install/windows) and
+[Node.js download page](https://nodejs.org/en/download). Choose **Node.js 24 LTS**
+for Windows, keep npm selected, and let the installers add the tools to PATH
+(the list of folders Windows searches for commands). Follow your organization's
+software-installation process if administrator approval is required.
 
-Close and reopen PowerShell after installation, then check:
+**Close and reopen PowerShell or Windows Terminal after installation**, then
+verify all three tools:
 
 ```powershell
 git --version
@@ -82,13 +95,17 @@ node --version
 npm.cmd --version
 ```
 
-Each command should print a version; Node should show `v24.x.x`. `npm.cmd`
-is the Windows npm command and avoids PowerShell's script wrapper.
+Each command should print a version; Node should report `v24.x.x`. `npm.cmd`
+is the Windows command for npm and avoids PowerShell's `npm.ps1` script wrapper.
+If a command is not found or Node is a different major version, resolve that
+before continuing; see [If setup gets stuck](#if-setup-gets-stuck).
 
 ### 2. Download and start the app
 
-Run these lines in order. Stop and read any error before continuing.
-The public repository can be cloned without a GitHub sign-in.
+Run these lines in order in PowerShell. They create a `source` folder in your
+user profile, clone the **public repository**, and start the root launcher.
+No GitHub sign-in is required to clone it. Stop and read any error before
+continuing to the next line.
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\source" | Out-Null
@@ -98,33 +115,43 @@ Set-Location .\SecureDesignStudio
 .\Start-SecureDesignStudio.ps1
 ```
 
-The launcher checks Node.js/npm and port 5173, installs dependencies on first
-run, and starts the local server. The first installation needs internet access
-and can take a few minutes.
+The launcher checks Node.js/npm and port 5173, installs dependencies with
+`npm ci` when `node_modules` is absent, and starts the local server. The first
+installation requires internet access and can take a few minutes. No Azure
+sign-in or AI setup is part of this path.
 
 ### 3. Open the app and create a model
 
-Open **<http://localhost:5173/>** in Edge or Chrome once startup completes.
-The launcher prints the address; it does not open the browser for you.
-Keep the terminal open while working. Press **Ctrl+C in that terminal** to
-stop the server.
+When startup completes, **open <http://localhost:5173/> yourself in Edge or
+Chrome**. The launcher prints the address; it does not open a browser for you.
+Keep the terminal open while using the app. Press **Ctrl+C in that terminal**
+to stop the server.
 
-1. Enter a name in **Create your first scenario** and choose **Create**.
-2. Right-click the canvas > **New Node** to add services. Drag between node
-   handles to connect them, then use the inspector to describe each flow.
-3. Choose **Review > Analyze** to find missing information and inconsistencies.
-4. Choose **File > Save as > SecureDesignStudio model (.tma)** to save an
-   editable model. **Autosave is recovery, not backup.**
+Try a small, synthetic **Submit a support case** workflow:
 
-Follow the [first-model walkthrough](docs/user-guide.md#3-simple-how-to) for
-a complete example, or open a [synthetic sample model](samples/README.md).
+1. In **Create your first scenario**, enter `Submit a support case` and choose
+   **Create**. Use **Model > New scenario** if a model is already open.
+2. Right-click blank canvas > **New Node** to add `Support web` and
+   `Support API`. In **Properties > General / Security**, choose **App Service app**
+   for each, then drag between node handles to connect them. Record known
+   authentication; do not invent evidence for unknown details.
+3. Use **Model > Data Elements > Add data item** to define `Case text` with
+   synthetic or blank Sample data. Attach it to the flow under
+   **Privacy > Data in request**. Choose **Review > Analyze**, review the
+   receiving node's **Privacy** retention settings, and inspect **Review > Issues**.
+4. Save through **File > Save as > SecureDesignStudio model (.tma)**.
+   Use **File > Open** to reopen the file, and **View > Sequence** to walk
+   through calls in order.
 
-This mode needs no Azure account, application credentials, API, MCP server,
-or deployment. Collaboration and Design Assistant stay disabled. After the
-initial install and page load, editing, analysis, autosave, and local file
-operations work offline; external help links still need a connection.
+For a ready-made starting point, open a [synthetic sample model](samples/README.md)
+with **File > Open**. The [user guide](docs/user-guide.md#3-simple-how-to)
+extends this example with boundaries, retention, comments, and follow-up.
 
-Next time, open PowerShell and run:
+**Autosave is recovery, not backup.** Save `.tma` files regularly and before
+replacing, importing, or sharing a model. Keep real personal information and
+secrets out of practice models, and review model contents before sharing.
+
+For later sessions, open PowerShell and run:
 
 ```powershell
 Set-Location "$HOME\source\SecureDesignStudio"
@@ -135,14 +162,16 @@ Set-Location "$HOME\source\SecureDesignStudio"
 
 | Problem | What to do |
 |---|---|
-| Git, Node, or npm is not recognized | Reopen the terminal after installation. Check that the installers added the tools to PATH and that npm was included with Node.js. |
-| PowerShell blocks the launcher or `npm.ps1` | Use the `npm.cmd` commands below; do not weaken execution policy. |
-| Port 5173 is busy | Stop your own previous server with Ctrl+C in its terminal. Otherwise coordinate with the process owner; do not kill an unfamiliar process. The app will not silently use another port. |
-| The browser cannot connect | Check the terminal for startup errors, leave it open, and use exactly `http://localhost:5173/`. |
-| Dependency installation fails | Check the reported error and your organization's approved internet/proxy access. Do not bypass certificate or network controls. |
+| `git`, `node`, or `npm` is not recognized | Reopen the terminal after installation. Check the installers' PATH options; reinstall Node.js with npm if npm is missing. Use `Get-Command git,node,npm.cmd` to see which commands Windows finds. |
+| Node is too old or the wrong major version | Install Node.js 24 LTS, reopen the terminal, and check `node --version`. If you already use a Node version manager, select 24 through that manager rather than mixing installations. |
+| `npm.ps1` cannot be loaded, or running scripts is disabled | Use the manual `npm.cmd` steps below instead of weakening PowerShell execution policy. These also avoid running the `.ps1` launcher. |
+| Port 5173 is already in use | The app requires this exact port and will not silently choose another. If it is your own previous server, use that terminal's Ctrl+C. Otherwise inspect `Get-NetTCPConnection -LocalPort 5173 -State Listen` and coordinate with its owner; do not kill an unfamiliar process. |
+| The browser cannot connect | Keep the startup terminal open, check it for errors, and use exactly `http://localhost:5173/`. Startup must finish successfully before the page can load. |
+| Dependency installation fails | Check internet/proxy access and the error in the terminal. Use your organization's approved package access; do not bypass certificate or network controls. After resolving the cause, retry `npm.cmd ci` from the repository folder. |
 
-If PowerShell blocks scripts, install and start directly from the downloaded
-repository instead of using the launcher:
+If PowerShell blocks the launcher or npm's script wrapper, run these commands
+from your downloaded repository instead. They perform the install and startup
+directly, without the launcher's prerequisite checks:
 
 ```powershell
 Set-Location "$HOME\source\SecureDesignStudio"
@@ -150,124 +179,74 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-Run the last line only after installation succeeds. This leaves execution
-policy unchanged but skips the launcher's prerequisite checks. If your
-organization blocks Node/npm themselves, ask your IT administrator.
+Only run the final command after installation succeeds. Open the same local URL
+manually and keep the terminal open. This does not change execution policy;
+if organizational application controls block Node/npm themselves, ask your IT
+administrator rather than bypassing them.
 
-After an update that changes `package-lock.json`, stop your own server and
-run `npm.cmd ci` before restarting. The launcher installs dependencies only
-when `node_modules` is absent. See the
-[safe update and standalone HTML guidance](docs/user-guide.md#2-how-to-install-and-run).
+After an update that changes `package-lock.json`, stop your own server and run
+`npm.cmd ci` before restarting. The launcher skips dependency installation when
+`node_modules` already exists. See the
+[safe update guidance](docs/user-guide.md#update-an-existing-clone-safely).
 
 ## Start with AI (optional)
 
-The AI Design Assistant is **bring your own AI**: no model service ships with
-this app, and none is provided for you. Use an authorized Azure deployment,
-Claude Code with your Claude subscription, or Codex CLI with your ChatGPT
-subscription. Claude and Codex use a local Vite bridge and need no Azure
-Functions installation; Azure uses Azure Functions Core Tools plus an Azure
-identity and deployment.
+**Skip this section for normal local use.** The Design Assistant's Chat and AI
+Analysis are separate from local **Analyze**. No AI model service, subscription,
+or shared deployment is bundled with SecureDesignStudio.
 
-```powershell
-.\Start-SecureDesignStudio-WithAI.ps1                 # interactive provider menu
-.\Start-SecureDesignStudio-WithAI.ps1 -Provider Claude
-.\Start-SecureDesignStudio-WithAI.ps1 -Provider Codex
-```
+To opt in, choose **Azure**, **Claude**, or **Codex** with
+`.\Start-SecureDesignStudio-WithAI.ps1 -Provider <Azure|Claude|Codex>`.
+Azure requires your authorized OpenAI/Foundry deployment, Azure CLI sign-in,
+and Azure Functions Core Tools. Claude and Codex use their official CLI with
+an eligible subscription; they use a local Vite bridge and do not require
+Azure credentials or Functions. You or your organization must arrange provider
+access and cover any applicable costs. Follow [bring your own AI](docs/bring-your-own-ai.md)
+and [advanced configuration](docs/advanced-configuration.md) before enabling
+it. AI requests send active-scenario context to the selected provider; review
+the documented data handling first and assess suggestions before turning them
+into review decisions.
 
-Install and sign into the official CLI first: `claude auth login` for Claude,
-or `codex login` with ChatGPT for Codex. Subscription access is not general API
-access. API-key billing and another provider are never substituted. Startup
-checks sign-in without inference. Missing tools/sign-in produce setup guidance.
-The **AI provider** selector in both AI surfaces is shared; **Refresh providers**
-rechecks availability after setup. Switching starts a new conversation without
-changing the diagram. A remembered UI choice is reused with the same launcher
-default; choosing a different launcher default resets it.
-
-For Azure, configure your own deployment and sign in:
-
-```powershell
-$env:AZURE_OPENAI_ENDPOINT = "https://<your-resource>.openai.azure.com"
-$env:MODEL_DEPLOYMENT_NAME = "<your-model-deployment-name>"
-az login
-.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure
-```
-
-To check your AI connection before starting, use this command instead:
-
-```powershell
-.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure -VerifyEndpoint
-```
-
-Look for **`Endpoint reachable.`** in the terminal: the configured deployment
-accepted a small test request using your Azure CLI sign-in. If the probe fails,
-the launcher warns about the connection problem but still starts the app;
-startup alone does not mean AI is connected. A passing probe confirms endpoint
-access, not full compatibility with every Design Assistant feature. See
-[Verify and troubleshoot](docs/bring-your-own-ai.md#7-verify-and-troubleshoot)
-if the probe or assistant fails.
-
-**[Bring your own AI](docs/bring-your-own-ai.md)** walks through creating that
-Azure OpenAI instance and securing it properly — disabling key authentication
-with `disableLocalAuth`, restricting network access, and assigning the
-data-plane role the app needs.
-AI requests send active-scenario context to the configured service; review the
-[data handling guidance](docs/advanced-configuration.md) before using it.
-
-| Script | What you need |
-|---|---|
-| `.\Start-SecureDesignStudio.ps1` | Git and Node.js. No cloud account. |
-| `.\Start-SecureDesignStudio-WithAI.ps1` | The above plus your selected provider. Claude/Codex need an installed, subscription-authenticated CLI. Azure additionally needs Azure Functions Core Tools, Azure CLI, and an authorized deployment. |
+**Collaboration and the Design Assistant are off by default.** Normal local
+mode keeps both disabled; the separate local AI workflow enables only the
+Assistant. **About** shows the effective service configuration.
+Custom Libraries can add catalogs, metadata, checks, and help, but **do not
+enable services or grant access**.
 
 ## References
 
-- [Authentication Library](docs/authentication-library.md): shared profile
-  library, portable definitions, JSON contract, and older-file compatibility.
-- [Classification Library](docs/classification-library.md): customize data
-  categories and move them between browser profiles.
-- [Custom Libraries](docs/custom-libraries.md): optional catalogs, metadata,
-  checks, and help. Selecting a library does not enable services or grant access.
-- [Microsoft cloud node catalog](docs/microsoft-cloud-node-catalog.md):
-  service types, policy limitations, official sources, and icons.
-- [Bring your own AI](docs/bring-your-own-ai.md): create and secure the Azure
-  OpenAI instance the optional Design Assistant needs.
-- [Advanced configuration](docs/advanced-configuration.md): optional AI,
-  collaboration, browser recovery, and the implementation map.
+- [User guide](docs/user-guide.md) and [sample models](samples/README.md)
+- [Authentication Library](docs/authentication-library.md) and
+  [Classification Library](docs/classification-library.md)
+- [Custom Libraries](docs/custom-libraries.md) and
+  [cloud node catalog](docs/microsoft-cloud-node-catalog.md)
+- [Saved-model compatibility](docs/model-compatibility.md) and
+  [portable catalog definitions](docs/catalog-snapshots.md)
+- [Bring your own AI](docs/bring-your-own-ai.md) and
+  [advanced configuration](docs/advanced-configuration.md)
 
 ## Contributing
 
-This is an open-source project, and contributions are welcome: improve a workflow, add a service
-type, sharpen a review rule, fix a bug, or make the docs easier to follow.
-Share what would make your next review simpler, or open a pull request.
+Contributions to code, documentation, and synthetic examples are welcome.
+Start with [contributing and validation](docs/contributing.md) and the
+[browser test guide](tests/browser/README.md). **Builds and tests are contributor
+tasks, not first-run requirements.** Preserve stable IDs, imports/exports, and
+Undo, and keep real data out of test fixtures. Report vulnerabilities according
+to [the security policy](https://github.com/microsoft/SecureDesignStudio/security/policy).
 
-Use the [contributor guide](docs/contributing.md) for local validation and
-[SECURITY policy](SECURITY.md) for reporting vulnerabilities. Public
-first-party source is licensed under [MIT](LICENSE), copyright Microsoft
-Corporation. [Third-party components, Microsoft icons and the Visio template](docs/third-party-notices.md)
-retain their separate terms; the project license grants no trademark rights.
-
+Project-authored public source is licensed under [MIT](LICENSE), copyright
+Microsoft Corporation. Third-party code and Microsoft product icons retain
+their own licenses and terms; see [third-party notices](docs/third-party-notices.md).
+The project license does not relicense those components or grant trademark rights.
 
 ## Recent changes
 
-- Version 1.0.31 scopes Design with AI requests with two-phase component planning, so large libraries no longer exceed Azure token-per-minute limits.
-- Designer recovers valid edits when a model returns an empty flow order, and -DebugAI reports request sizing.
-- The local Azure proxy reports a clear diagnostic while the Functions API is still starting.
-
-- Version 1.0.27 adds shared Azure/Claude/Codex selection through the local AI launcher.
-- AI design authoring, refinement, deletion/rerouting and flow ordering apply as complete undoable edits.
-- Editable node-type AI guidance and restored Power Platform catalog types support both AI surfaces.
-- Boundary dragging is perimeter-only, and custom metadata follows issues in Properties.
-
-- Version 1.0.15 refreshes five fictional reference models and all 11 scenarios
-  with concrete services, operation-scoped authorization and classified data.
-- DFD roles distinguish Processes, Data Stores and External Interactors,
-  including Azure SQL's Data Store default and scenario-scoped review reasons.
-- Authored review concerns, flow access-rights fields and network-boundary
-  intent retain the distinction between requirements and verified controls.
-- Windows launchers check prerequisites and provide a separate optional AI path.
-- Custom Libraries add catalogs, metadata, checks, and help without granting access.
-- Authentication and Classification Library editors make model vocabulary reusable.
-- Saved node metadata is preserved; applying type defaults is explicit and undoable.
-- Native models carry saved catalog definitions and custom metadata into later reviews.
-- Scenario/DFD JSON and PMEXP inventory imports make existing work easier to reuse.
-- Compare to previous highlights changes without replacing the current model.
-- Collaboration and AI remain off unless explicitly configured.
+- Windows root launchers provide prerequisite checks and a separate opt-in AI path.
+- Custom Libraries add optional catalogs, metadata, checks, and help without granting access.
+- Authentication and Classification Library editors support reusable, customizable vocabularies.
+- Inventory ID accepts ordinary text; stored node metadata is preserved unless explicitly changed.
+- Saved catalog definitions and custom metadata travel with native models and appear in comparisons.
+- Scenario/DFD JSON and local PMEXP imports expand model reuse.
+- Compare to previous supports review of saved model snapshots without replacing current work.
+- Unavailable rules retain findings as **Not re-evaluated** rather than implying a clean review.
+- Collaboration and AI services require explicit configuration and remain off by default.

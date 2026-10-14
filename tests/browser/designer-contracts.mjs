@@ -5,6 +5,97 @@ import { until } from "./harness.mjs";
 import { publicPowerPlatformPrompt, publicPowerPlatformDesignFixture } from "./fixture.mjs";
 
 export function registerDesignerContracts({ getHarness }) {
+  test("regression: unresolved AI designs preserve existing models and persist disconnected components and annotations in one history step", async () => {
+    await getHarness().run("regression: AI design human-review fallback", async ({ page }) => {
+      await withAtomicStore(page, async () => {
+        const before = await readAtomicStore(page);
+        const applied = await commitAtomicStore(page, () => {
+          const store = window.atomicStore;
+          window.partialDesignOutcome = store.applyThreatModelDesign({
+            answer: "This unverified response must not be reported as a complete design.", assumptions: [],
+            design: {
+              scenario: { name: "Deferred rename" },
+              humanReviewNotes: ["The owner must decide the gateway's target, authentication and boundary membership."],
+              nodes: [{ id: "gateway", title: "Unconnected gateway", type: "", description: "Proposed ingress.", dfdRole: "Process" }],
+              edges: [], boundaries: [], data: [],
+              remove: { nodeIds: [], edgeIds: ["e_request"], boundaryIds: [] },
+            },
+          }, store.prepareThreatModelDesign());
+        });
+        const outcome = await page.evaluate(() => window.partialDesignOutcome);
+        assert.equal(outcome.partial, true);
+        assert.match(outcome.warning, /Human interaction required/);
+        assert.match(outcome.summary, /2 added, 0 updated, 0 deleted/);
+        assert.deepEqual(applied.doc.nodes.slice(0, before.doc.nodes.length), before.doc.nodes);
+        assert.equal(applied.doc.nodes.at(-1).title, "Unconnected gateway");
+        for (const key of ["edges", "boundaries", "data", "comments", "issues"]) assert.deepEqual(applied.doc[key], before.doc[key]);
+        assert.deepEqual(applied.doc.scenarios.find(item => item.id === "s_archive"), before.doc.scenarios.find(item => item.id === "s_archive"));
+        assert.equal(applied.doc.scenarios.find(item => item.id === "s_primary").name, "Primary");
+        const note = applied.doc.textAnnotations.at(-1);
+        assert.match(note.text, /owner must decide/);
+        assert.deepEqual(applied.doc.scenarios.find(item => item.id === "s_primary").textAnnotationIds, [note.id]);
+        assert.equal(applied.saved.past.length, before.saved.past.length + 1);
+        assert.deepEqual(applied.saved.doc, applied.doc);
+        assert.deepEqual((await commitAtomicStore(page, () => window.atomicStore.undo())).doc, before.doc);
+        assert.deepEqual((await commitAtomicStore(page, () => window.atomicStore.redo())).doc, applied.doc);
+        const exported = await page.evaluate(() => window.atomicStore.exportJson());
+        await commitAtomicStore(page, () => window.atomicStore.newDocument());
+        assert.deepEqual((await commitAtomicStore(page, json => window.atomicStore.importJson(JSON.parse(json)), exported)).doc, applied.doc);
+      });
+    });
+  });
+
+  test("regression: AI communication flows offer and apply authentication and preserve it on protocol-only edits", async () => {
+    await getHarness().run("regression: AI protocol and authentication pairing", async ({ page }) => {
+      await withAtomicStore(page, async () => {
+        const before = await readAtomicStore(page);
+        const created = await commitAtomicStore(page, () => {
+          const store = window.atomicStore;
+          const snapshot = store.prepareThreatModelDesign();
+          window.authContext = snapshot.context;
+          store.applyThreatModelDesign({
+            answer: "Synthetic requested delegated user and managed identity access.", assumptions: [],
+            design: { scenario: {}, nodes: [{ id: "new-store", type: "nt_browser",
+              title: "Document store", description: "Synthetic proposed storage.", dfdRole: "DataStore" }],
+              boundaries: [], data: [], edges: [
+              { id: "new-user-flow", source: "n_client", target: "n_api", title: "User requests document",
+                description: "Proposed delegated user access.", authenticationType: "EntraDelegatedUserAccess",
+                protocolId: "https", requestDataIds: [], responseDataIds: [], dataMode: "merge" },
+              { id: "new-storage-flow", source: "n_api", target: "new-store", title: "Web app retrieves document",
+                description: "Proposed managed identity access.", authenticationType: "EntraManagedIdentity",
+                protocolId: "https", requestDataIds: [], responseDataIds: [], dataMode: "merge" },
+            ] },
+          }, snapshot);
+        });
+        const context = await page.evaluate(() => window.authContext);
+        for (const id of ["EntraDelegatedUserAccess", "EntraManagedIdentity"]) {
+          assert.ok(context.catalog.authentication.some(method => method.id === id));
+          assert.ok(context.catalog.nodeTypes.find(type => type.id === "nt_browser").allowedAuthenticationIds.includes(id));
+        }
+        const flows = created.doc.edges.filter(edge => edge.title.includes("document"));
+        assert.deepEqual(flows.map(edge => edge.authenticationTypes),
+          [["EntraDelegatedUserAccess"], ["EntraManagedIdentity"]]);
+        assert.ok(flows.every(edge => edge.protocolId === "https"));
+        const updated = await commitAtomicStore(page, flows => {
+          const store = window.atomicStore;
+          store.applyThreatModelDesign({ answer: "Protocol-only change.", assumptions: [],
+            design: { scenario: {}, nodes: [], boundaries: [], data: [], edges: flows.map(edge => ({
+              id: edge.id, source: edge.source, target: edge.target, title: edge.title,
+              description: edge.description, authenticationType: null, protocolId: null,
+              requestDataIds: [], responseDataIds: [], dataMode: "merge",
+            })) } }, store.prepareThreatModelDesign());
+        }, flows);
+        for (const edge of flows) {
+          assert.deepEqual(updated.doc.edges.find(item => item.id === edge.id).authenticationTypes, edge.authenticationTypes);
+          assert.equal(updated.doc.edges.find(item => item.id === edge.id).protocolId, undefined);
+        }
+        assert.deepEqual((await commitAtomicStore(page, () => window.atomicStore.undo())).doc, created.doc);
+        assert.deepEqual((await commitAtomicStore(page, () => window.atomicStore.undo())).doc, before.doc);
+        assert.deepEqual(created.authenticationLibrary, before.authenticationLibrary);
+      });
+    });
+  });
+
   test("regression: default Power Pages Copilot Studio Dataverse design uses real choices and one coherent Undo step", async () => {
     await getHarness().run("regression: public Power Platform design history", async ({ page }) => {
       await withAtomicStore(page, async () => {

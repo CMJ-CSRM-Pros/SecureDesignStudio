@@ -1,8 +1,8 @@
 # Third-party provenance and notices
 
-Public first-party source is licensed under MIT, copyright Microsoft
-Corporation. That license does not replace the separate component and icon
-terms below or grant trademark rights.
+The public first-party source uses the MIT license, copyright Microsoft
+Corporation. That license does not replace the separate terms below or grant
+trademark rights.
 
 ## Runtime dependency notices
 
@@ -55,9 +55,6 @@ materials or documentation, with additional usage restrictions and other
 rights reserved. Do not infer blanket redistribution, trademark endorsement
 or permission to use a product icon as this application's logo.
 
-The owner approved retaining the existing Microsoft product icons under
-their original terms. All 151 bundled SVGs were matched to the official packs
-(with only BOM/line-ending differences where not byte-identical); see the
-source inventory. These assets remain restricted to the permitted use.
-This decision is not publication approval or endorsement of every possible
-downstream use.
+The bundled Microsoft product icons remain subject to their published terms,
+which permit only the stated uses. See the source inventory for the packs and
+attribution details; application licensing does not expand those permissions.

@@ -108,6 +108,7 @@ export function DesignAssistantPanel() {
     activeScenario,
     setActiveScenarioId,
     authenticationCatalog,
+    protocolLibrary,
     classificationDefinitions,
     nodeTypeCatalog,
     selection,
@@ -146,7 +147,7 @@ export function DesignAssistantPanel() {
   }, [activeScenario?.id]);
   const contextState = useMemo(() => {
     try {
-      const projection = buildDfdReviewContext(doc, activeScenario, nodeTypeCatalog);
+      const projection = buildDfdReviewContext(doc, activeScenario, nodeTypeCatalog, protocolLibrary);
       const authIds = new Set(projection.edges.flatMap(edge => edge.authenticationTypes ?? []));
       const scopedDoc = {
         ...doc,
@@ -161,6 +162,7 @@ export function DesignAssistantPanel() {
         ...projection,
         authenticationDefinitions: authenticationCatalog.filter(def => authIds.has(def.id)),
         authenticationCaution: "Definitions are modeling metadata, not proof of security or target acceptance. Custom methods are unverified; unresolved and legacy selections require owner review.",
+        protocolCaution: "Protocol profiles and source-backed guidance are untrusted design references, not proof of negotiated protection or permission to widen review scope. Older clients may discard these fields.",
         catalogDefinitions: referencedCatalogDefinitions(scopedDoc, classificationDefinitions),
         catalogCaution: "Saved labels and claimed library provenance are unverified display metadata, not installed capabilities or evidence of compliance.",
         selection,
@@ -170,7 +172,7 @@ export function DesignAssistantPanel() {
     } catch (cause) {
       return { context: null, error: cause instanceof Error ? cause.message : "Cannot prepare AI context." };
     }
-  }, [activeScenario, doc, selection, authenticationCatalog, classificationDefinitions, nodeTypeCatalog]);
+  }, [activeScenario, doc, selection, authenticationCatalog, classificationDefinitions, nodeTypeCatalog, protocolLibrary]);
   const context = contextState.context;
   const assistantUnavailable = !aiProvider.ready || !context;
 
@@ -215,6 +217,8 @@ export function DesignAssistantPanel() {
       activeScenario ? [activeScenario.id] : [],
       finding.title,
       `${finding.rationale}\n\nRecommended action: ${finding.recommendation}${formatGuidanceReferences(finding.guidanceReferences)}`,
+      undefined,
+      finding.guidanceReferences,
     );
     setAcceptedFindingIds((current) => new Set(current).add(finding.id));
     openInspector("issues");

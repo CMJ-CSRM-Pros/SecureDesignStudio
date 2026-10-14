@@ -64,6 +64,10 @@ function downloadText(content: string, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+const MICROSOFT_CATALOG_SOURCES = new Set([
+  "Microsoft Azure", "Microsoft 365", "Microsoft Fabric", "Dynamics 365", "Power Platform",
+]);
+
 export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
   const libraries = useLibraries();
   const inventoryField = inventoryFieldFor(libraries.fields);
@@ -77,6 +81,7 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
     exportNodeTypeCatalog,
   } = useStore();
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState("all");
   const [draft, setDraft] = useState<NodeTypeRef | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,18 +105,32 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [draft, onClose]);
 
+  const catalogGroups = useMemo(() => new Map(nodeTypeCatalog.map(ref => {
+    // Keep saved overrides in their original built-in catalog.
+    const source = NODE_TYPE_DEF_MAP[ref.id]?.catalogSource
+      ?? resolveNodeTypeDef(ref.id, nodeTypeCatalog)?.catalogSource
+      ?? "Custom";
+    return [ref.id, MICROSOFT_CATALOG_SOURCES.has(source) ? "Microsoft" : source];
+  })), [nodeTypeCatalog]);
+
+  const catalogChoices = useMemo(() =>
+    [...new Set(catalogGroups.values())].sort((a, b) => a.localeCompare(b)),
+  [catalogGroups]);
+
   const filteredTypes = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return [...nodeTypeCatalog]
       .filter((ref) => {
-        if (!needle) return true;
         const def = resolveNodeTypeDef(ref.id, nodeTypeCatalog);
-        return [ref.label, ref.id, def?.category, def?.catalogSource]
+        const group = catalogGroups.get(ref.id);
+        if (scope !== "all" && scope !== `catalog:${group}`) return false;
+        if (!needle) return true;
+        return [ref.label, ref.id, def?.category, def?.catalogSource, group]
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(needle));
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [nodeTypeCatalog, query]);
+  }, [nodeTypeCatalog, query, scope, catalogGroups]);
 
   const iconOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -332,6 +351,18 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
         </header>
 
         <div className="ps-catalog-toolbar">
+          <select
+            aria-label="Catalog"
+            value={scope}
+            disabled={!!draft}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === "all" || catalogChoices.some(group => value === `catalog:${group}`)) setScope(value);
+            }}
+          >
+            <option value="all">All node types</option>
+            {catalogChoices.map(group => <option key={group} value={`catalog:${group}`}>{group}</option>)}
+          </select>
           <input
             ref={searchRef}
             type="search"
@@ -370,8 +401,10 @@ export function NodeTypeCatalogModal({ onClose }: { onClose: () => void }) {
 
         {error && !draft && <div className="ps-catalog-error" role="alert">{error}</div>}
         {importNotice && <p role="status">{importNotice}</p>}
+        <p role="status">{filteredTypes.length} matching node types</p>
         <div className="ps-catalog-layout">
           <div className="ps-catalog-list">
+            {filteredTypes.length === 0 && <p className="ps-empty">No node types match this catalog and search.</p>}
             {filteredTypes.map((ref) => {
               const def = resolveNodeTypeDef(ref.id, nodeTypeCatalog);
               const builtIn = NODE_TYPE_DEF_MAP[ref.id] != null;

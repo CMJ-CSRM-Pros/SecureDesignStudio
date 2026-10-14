@@ -64,6 +64,7 @@ import {
   PRODUCTION_IDENTITY_TENANT_DEFS,
   PRODUCTION_IDENTITY_TENANT_LABELS,
   AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY,
+  edgeRequiresApplicationId,
   edgeRequiresProductionIdentity,
   isCatalogReferenceId,
   assertCatalogSelection,
@@ -130,6 +131,11 @@ import {
   withAuthenticationDefinitions, UNKNOWN_AUTH_BEHAVIOR,
   type AuthTypeDef, type AuthenticationCompatibility,
 } from "./authentication";
+import {
+  loadProtocolLibrary, persistProtocolLibrary, validateProtocolDefinitions, validateProtocolReference,
+  resolveProtocolReference, withProtocolDefinitions,
+  type ProtocolTypeDef,
+} from "./protocols";
 import {
   DEFAULT_NODE_SIZE,
   boundaryRect,
@@ -563,10 +569,14 @@ export interface ImportPrivacyManagerSummary {
 interface StoreApi {
   doc: PsDocument;
   documentSessionId: number;
-  prepareThreatModelDesign: (scope?: readonly string[]) => DesignRequestSnapshot;
+  prepareThreatModelDesign: (scope?: readonly string[], protocolScope?: readonly string[]) => DesignRequestSnapshot;
   prepareThreatModelDesignPlan: () => ReturnType<typeof buildDesignPlanContext>;
-  applyThreatModelDesign: (result: unknown, expected: DesignRequestSnapshot) => { scenarioId: string | null; changed: boolean; summary: string; warning?: string };
+  applyThreatModelDesign: (result: unknown, expected: DesignRequestSnapshot) => { scenarioId: string | null; changed: boolean; summary: string; warning?: string; partial?: boolean };
   authenticationLibrary: readonly AuthTypeDef[];
+  protocolLibrary: readonly ProtocolTypeDef[];
+  protocolStorageError: string | null;
+  applyProtocolLibrary: (next: readonly ProtocolTypeDef[], expected: readonly ProtocolTypeDef[]) => void;
+  useLibraryProtocolDefinition: (id: string) => void;
   authenticationCatalog: readonly AuthTypeDef[];
   authenticationWarnings: string[];
   authenticationCompatibility: AuthenticationCompatibility | null;
@@ -762,7 +772,8 @@ interface StoreApi {
     scenarioIds: string[],
     title: string,
     description: string,
-    threatNote?: { origin: "authored-threat"; justification?: string }
+    threatNote?: { origin: "authored-threat"; justification?: string },
+    guidanceReferences?: PsIssue["guidanceReferences"]
   ) => PsIssue;
   updateIssue: (
     id: string,
@@ -952,6 +963,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const libraryNodes = useMemo(() => libraries.nodes.filter(type =>
     libraries.provenance[`nodes/${type.id.toLowerCase()}`] !== "core"), [libraries]);
   const libraryInitial = useMemo(() => loadAuthenticationLibrary(libraries.authentication), [libraries]);
+  const protocolInitial = useMemo(() => loadProtocolLibrary(), []);
+  const [protocolLibrary, setProtocolLibraryState] = useState(protocolInitial.definitions);
+  const [protocolStorageError, setProtocolStorageError] = useState(protocolInitial.error);
+  const protocolLibraryRef = useRef(protocolLibrary);
+  const setProtocolLibrary = useCallback((next: ProtocolTypeDef[]) => {
+    protocolLibraryRef.current = next;
+    setProtocolLibraryState(next);
+  }, []);
   const classificationInitial = useMemo(() => loadClassificationLibrary(undefined, libraries.classifications), [libraries]);
   const [classificationLibrary, setClassificationLibraryState] = useState(classificationInitial.library);
   const [classificationLibrarySource, setClassificationLibrarySource] = useState<StoreApi["classificationLibrarySource"]>(
@@ -975,7 +994,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const captureCatalogDefinitions = useCallback(
     (document: PsDocument, classifications: readonly CatalogDefinitionSnapshot[] = classificationDefinitionsRef.current) =>
-      withCatalogDefinitions(document, [...classifications, ...libraries.taxonomy]),
+      withCatalogDefinitions(
+        withProtocolDefinitions(document, protocolLibraryRef.current),
+        [...classifications, ...libraries.taxonomy],
+      ),
     [libraries],
   );
   const [authenticationLibrary, setAuthenticationLibraryState] = useState(libraryInitial.methods);
@@ -1494,17 +1516,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         !method.disabled && !method.legacy && !method.unavailableReason &&
         libraryRef.current.some(item => item.id === method.id && !item.disabled)),
       classifications: classificationLibraryRef.current,
+      protocols: protocolLibraryRef.current,
     };
   }, [libraries]);
 
-  const prepareThreatModelDesign = useCallback((scope?: readonly string[]): DesignRequestSnapshot => {
+  const prepareThreatModelDesign = useCallback((scope?: readonly string[], protocolScope?: readonly string[]): DesignRequestSnapshot => {
     const current = docRef.current;
     const scenarioId = current.scenarios.length ? activeScenarioIdRef.current : null;
     const catalog = designerCatalog();
     return {
       scenarioId, documentKey: designerDocumentKey(current), catalogKey: JSON.stringify(catalog),
       ...(scope ? { scope: [...scope] } : {}),
-      context: buildDesignerContext(current, scenarioId, catalog, scope),
+      ...(protocolScope ? { protocolScope: [...protocolScope] } : {}),
+      context: buildDesignerContext(current, scenarioId, catalog, scope, protocolScope),
     };
   }, [designerCatalog]);
 
@@ -1515,14 +1539,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [designerCatalog]);
 
   const applyThreatModelDesign = useCallback((result: unknown, expected: DesignRequestSnapshot) => {
-    const current = prepareThreatModelDesign(expected.scope);
+    const current = prepareThreatModelDesign(expected.scope, expected.protocolScope);
     if (current.scenarioId !== expected.scenarioId || current.documentKey !== expected.documentKey ||
         current.catalogKey !== expected.catalogKey ||
         JSON.stringify(current.context) !== JSON.stringify(expected.context)) {
       throw new Error("The model, scenario or catalog changed while AI was working. No changes were applied; send your prompt again.");
     }
     const previous = docRef.current;
-    const applied = applyDesignerResult(previous, current.scenarioId, result, designerCatalog(), expected.scope);
+    const applied = applyDesignerResult(previous, current.scenarioId, result, designerCatalog(),
+      expected.scope, expected.protocolScope);
     const changed = applied.doc !== previous;
     if (changed) {
       const next = withCatalogDefinitions(
@@ -1537,7 +1562,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setActiveScenarioId(applied.scenarioId);
     }
     return { scenarioId: applied.scenarioId, changed, summary: describeDesignerChanges(previous, applied.doc),
-      warning: applied.warning };
+      warning: applied.warning, partial: applied.partial };
   }, [designerCatalog, prepareThreatModelDesign, libraries, updateDocumentHistory, setSelection, setActiveScenarioId]);
 
   const restoreHistorySelection = useCallback((entry: HistoryEntry, previousDoc: PsDocument) => {
@@ -2097,6 +2122,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       : {};
     const current = withLibraryDefinitions(docRef.current, libraries, libraryRef.current, classificationDefinitionsRef.current);
     const catalog = authenticationCatalogFor(current, libraryRef.current, libraries.authentication);
+    const previousEdge = current.edges.find(edge => edge.id === id);
+    if (previousEdge && patch.target && patch.target !== previousEdge.target
+        && !Object.prototype.hasOwnProperty.call(patch, "authenticationTypes")) {
+      const target = current.nodes.find(node => node.id === patch.target);
+      const accepted = new Set(allowedAuthMethodsForNode(target, current.nodeTypes, catalog));
+      if ((previousEdge.authenticationTypes ?? []).some(method => !accepted.has(method))) {
+        throw new Error("The target node does not accept this edge's existing authentication. Choose an accepted method explicitly before rerouting.");
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "protocolId") && patch.protocolId !== undefined) {
+      const resolution = resolveProtocolReference(patch.protocolId, current.protocolDefinitions, protocolLibraryRef.current);
+      if (resolution.status !== "resolved" || !resolution.selectable) {
+        throw new Error(resolution.status === "unresolved"
+          ? "This protocol is unresolved. Choose a profile from the active Communication Library."
+          : resolution.status === "resolved" ? resolution.unavailableReason ?? "This protocol is not selectable."
+            : "This protocol is not selectable.");
+      }
+    }
     if ("authenticationTypes" in patch) {
       const edge = docRef.current.edges.find(entry => entry.id === id);
       const target = docRef.current.nodes.find(node => node.id === (patch.target ?? edge?.target));
@@ -2121,7 +2164,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     }
     snapshot();
-    setDoc((d) => withAuthenticationDefinitions({
+    setDoc((d) => withProtocolDefinitions(withAuthenticationDefinitions({
       ...d,
       edges: d.edges.map((e) => {
         if (e.id !== id) return e;
@@ -2130,7 +2173,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // custom methods. Only an explicit field edit removes it.
         return merged;
       }),
-    }, catalog));
+    }, catalog), protocolLibraryRef.current));
   }, [snapshot]);
 
   const deleteEdge = useCallback((id: string) => {
@@ -2623,10 +2666,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       scenarioIds: string[],
       title: string,
       description: string,
-      threatNote?: { origin: "authored-threat"; justification?: string }
+      threatNote?: { origin: "authored-threat"; justification?: string },
+      guidanceReferences?: PsIssue["guidanceReferences"]
     ): PsIssue => {
       const issue: PsIssue = {
         id: uid("i"),
+        ...(guidanceReferences?.length ? { guidanceReferences: guidanceReferences.map(reference => ({
+          ...reference, sources: [...reference.sources],
+        })) } : {}),
         targetKind,
         targetId,
         scenarioIds: [...scenarioIds],
@@ -2941,7 +2988,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Evaluate before taking history: an evaluator failure must leave both
   // the document and Undo/Redo untouched. Commit a successful pass atomically.
   const analyze = useCallback((): number => {
-    const manager = new IssueManager(classificationDefinitionsRef.current, undefined, libraries.rules, libraries.fields, libraries.authentication, libraries.help);
+    const manager = new IssueManager(classificationDefinitionsRef.current, undefined, libraries.rules,
+      libraries.fields, libraries.authentication, libraries.help, protocolLibraryRef.current);
     const current = withLibraryDefinitions(docRef.current, libraries, libraryRef.current, classificationDefinitionsRef.current);
     const next = manager.analyze(withAuthenticationDefinitions(current, authenticationCatalogFor(current, libraryRef.current, libraries.authentication)));
     snapshot();
@@ -3976,6 +4024,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setClassificationRecoveryRaw(null);
   }, [snapshot, classificationRecoveryRaw]);
 
+  const applyProtocolLibrary = useCallback((
+    next: readonly ProtocolTypeDef[], expected: readonly ProtocolTypeDef[],
+  ) => {
+    const before = protocolLibraryRef.current;
+    if (JSON.stringify(validateProtocolDefinitions(before)) !== JSON.stringify(validateProtocolDefinitions(expected))) {
+      throw new Error("The Communication Library changed. Review the current definitions before applying this operation.");
+    }
+    const validated = validateProtocolDefinitions(next);
+    persistProtocolLibrary(validated, protocolStorageError ? undefined : before);
+    setProtocolLibrary(validated);
+    setProtocolStorageError(null);
+  }, [protocolStorageError, setProtocolLibrary]);
+
+  const useLibraryProtocolDefinition = useCallback((id: string) => {
+    const current = docRef.current;
+    if (!current.edges.some(edge => edge.protocolId === id)) {
+      throw new Error("This communication profile is not referenced by the current diagram.");
+    }
+    const definition = protocolLibraryRef.current.find(profile => profile.id === id);
+    if (!definition) throw new Error("The active Communication Library has no definition for this ID.");
+    const definitions = validateProtocolDefinitions([
+      ...(current.protocolDefinitions ?? []).filter(profile => profile.id !== id),
+      definition,
+    ]);
+    snapshot();
+    setDoc({ ...current, protocolDefinitions: definitions });
+  }, [snapshot]);
+
   const classificationDeleteReason = useCallback((id: string): string | null => {
     const current = classificationLibraryRef.current;
     if (!current.classifications.some(item => item.id === id)) return "Classification is no longer in the active library.";
@@ -4471,6 +4547,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     availableCatalogDefinitions,
     nodeTypeCatalog,
     authenticationLibrary,
+    protocolLibrary,
+    protocolStorageError,
+    applyProtocolLibrary,
+    useLibraryProtocolDefinition,
     authenticationCatalog,
     authenticationWarnings: authWarnings,
     authenticationCompatibility,
@@ -4801,6 +4881,8 @@ export function normalizeDoc(
   const base = emptyDocument();
   const authenticationDefinitions = doc.authenticationDefinitions === undefined
     ? [] : validatePortableAuthenticationDefinitions(doc.authenticationDefinitions);
+  const protocolDefinitions = doc.protocolDefinitions === undefined
+    ? [] : validateProtocolDefinitions(doc.protocolDefinitions);
   const catalogDefinitions = doc.catalogDefinitions === undefined
     ? undefined : validateCatalogDefinitions(doc.catalogDefinitions);
   const rawNodeTypes = doc.nodeTypes ?? base.nodeTypes;
@@ -5102,6 +5184,7 @@ export function normalizeDoc(
   return {
     version: 1,
     authenticationDefinitions,
+    protocolDefinitions,
     ...(catalogDefinitions !== undefined ? { catalogDefinitions } : {}),
     nodeTypes,
     nodes: normalizedNodes,
@@ -5110,6 +5193,10 @@ export function normalizeDoc(
       const authenticationTypes = normalizeAuthTypes(e, authenticationDefinitions);
       const rawPi = (e as { productionIdentity?: unknown }).productionIdentity;
       const productionIdentity = normalizeEdgeProductionIdentity(rawPi);
+      const rawProtocolId = (e as { protocolId?: unknown }).protocolId;
+      const protocolId = validateProtocolReference(rawProtocolId === null ? undefined : rawProtocolId);
+      const rawApplicationId = (e as { applicationId?: unknown }).applicationId;
+      const applicationId = typeof rawApplicationId === "string" ? rawApplicationId : undefined;
       return {
         id: e.id ?? uid("e"),
         ...normalizeEntityMetadata(e, "edge"),
@@ -5119,6 +5206,8 @@ export function normalizeDoc(
         targetHandle: e.targetHandle,
         title: e.title ?? "",
         description: e.description ?? "",
+        ...(protocolId ? { protocolId } : {}),
+        ...(applicationId !== undefined ? { applicationId } : {}),
         requiredAccessRights: normalizeRequiredAccessRights(e.requiredAccessRights, e.id),
         authenticationTypes,
         productionIdentity,
@@ -5198,6 +5287,7 @@ export function normalizeDoc(
           ...(typeof i.kind === "string" && i.kind && i.notEvaluatedReason !== undefined
             ? { notEvaluatedReason: normalizeIssueNotEvaluatedReason(i.notEvaluatedReason) } : {}),
           ...(resolutionLink ? { resolutionLink } : {}),
+          ...(Array.isArray(i.guidanceReferences) ? { guidanceReferences: i.guidanceReferences } : {}),
           targetKind,
           targetId,
           scenarioIds: Array.from(new Set(validScenarioIds)),
@@ -5323,6 +5413,7 @@ export {
   PRODUCTION_IDENTITY_TENANT_DEFS,
   PRODUCTION_IDENTITY_TENANT_LABELS,
   AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY,
+  edgeRequiresApplicationId,
   edgeRequiresProductionIdentity,
   isGuid,
   formatProductionIdentity,

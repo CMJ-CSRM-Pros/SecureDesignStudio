@@ -105,7 +105,7 @@ the full normalized native model and saved dependencies, and payment SQL
 `GE.DS` mapping in TM7. TM7 is lossy: privacy data and detailed rights remain
 in the native file; XML assertions do not certify desktop TMT rendering.
 
-Browser contracts exercise the five gallery files and all 11 scenarios,
+Browser contracts exercise the five gallery files and their scenarios,
 rendered service/role/scope, Diagram and Sequence, complete model/view
 save/reopen, measured sizes, label/path overlap, fit clipping and Show all.
 Tests use isolated installed browsers, synthetic data and network guards;

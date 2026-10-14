@@ -80,12 +80,90 @@ async function newModel(page) {
 }
 
 export function registerAuthenticationContracts({ getHarness, exportModel }) {
+  test("regression: communication profile edits retain guidance sources and authentication suggestions", async () => {
+    await getHarness().run("regression: communication profile edit initialization", async ({ page }) => {
+      await page.getByRole("button", { name: "Model", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Customize communication profiles", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Communication Library", exact: true });
+      await dialog.getByRole("button", { name: "HTTPS", exact: true }).click();
+      const original = await page.evaluate(async () =>
+        (await import("/src/protocols.ts")).PROTOCOL_TYPE_DEFS.find(profile => profile.id === "https"));
+      const sources = dialog.getByRole("textbox", { name: "AI guidance source URLs (one URL per line)", exact: true });
+      const suggestions = dialog.getByRole("textbox", {
+        name: "Advisory authentication IDs (comma separated; does not change edge authentication)", exact: true,
+      });
+      assert.equal(await sources.inputValue(), original.aiDesignGuidance.sources.join("\n"));
+      assert.equal(await suggestions.inputValue(), original.authenticationSuggestions.join(", "));
+      await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Team HTTPS");
+      await dialog.getByRole("button", { name: "Save profile", exact: true }).click();
+      const saved = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("secure-design-studio:protocol-library:v1")).protocols.find(profile => profile.id === "https"));
+      assert.deepEqual(saved, { ...original, label: "Team HTTPS" });
+      await sources.fill("https://example.invalid/revised-reference");
+      await dialog.getByRole("button", { name: "Cancel edits", exact: true }).click();
+      assert.equal(await sources.inputValue(), original.aiDesignGuidance.sources.join("\n"));
+      await dialog.getByRole("textbox", { name: "Description", exact: true }).fill("Revised description.");
+      await dialog.getByRole("button", { name: "Save profile", exact: true }).click();
+      const revised = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("secure-design-studio:protocol-library:v1")).protocols.find(profile => profile.id === "https"));
+      assert.deepEqual(revised, { ...saved, description: "Revised description." });
+      await dialog.getByRole("button", { name: "Close Communication Library", exact: true }).click();
+    });
+  });
+
+  test("regression: opened authentication stays visible independently of absent, null or unresolved protocols", async () => {
+    await getHarness().run("regression: protocol independent saved authentication", async ({ page }) => {
+      const methods = await page.evaluate(async () => (await import("/src/authentication.ts")).AUTH_TYPE_DEFS);
+      const disabledProtocol = await page.evaluate(async () => ({
+        ...(await import("/src/protocols.ts")).PROTOCOL_TYPE_DEFS.find(profile => profile.id === "https"),
+        disabled: true,
+      }));
+      const custom = {
+        ...structuredClone(methods.find(method => method.id === "ApiKey")),
+        id: "auth_saved_partner", label: "Saved partner assertion", shortLabel: "Partner",
+        aliases: [], behavior: { productionIdentity: "unknown", audience: false, constraints: false,
+          anonymous: false, managedIdentity: false },
+      };
+      for (const { protocolId, auth, saved, protocolDefinition, expected, short } of [
+        { auth: "Microsoft Entra ID - delegated user access", expected: "EntraDelegatedUserAccess", short: "Entra user" },
+        { protocolId: null, auth: "EntraManagedIdentity", expected: "EntraManagedIdentity", short: "Managed identity" },
+        { protocolId: "future-profile", auth: "ApiKey", expected: "ApiKey", short: "API key" },
+        { auth: custom.id, saved: custom, expected: custom.id, short: "Partner" },
+        { protocolId: "https", protocolDefinition: disabledProtocol, auth: "ApiKey", expected: "ApiKey", short: "API key" },
+        { auth: "EntraApplicationOnlyWithCdt", expected: "EntraApplicationOnlyWithCdt", short: "Unresolved" },
+      ]) {
+        const input = modelFixture();
+        const edge = input.doc.edges.find(edge => edge.id === "e_request");
+        delete edge.authenticationTypes;
+        edge.authenticationType = auth;
+        if (protocolId !== undefined) edge.protocolId = protocolId;
+        if (saved) input.doc.authenticationDefinitions = [saved];
+        if (protocolDefinition) input.doc.protocolDefinitions = [protocolDefinition];
+        await upload(page.locator("#ps-file-open-input"), input, "legacy-auth.tma");
+        await edgeLabel(page).locator(".ps-edge-auth-badge").getByText(short, { exact: true }).waitFor();
+        assert.equal(await edgeLabel(page).getByText("Auth —", { exact: true }).count(), 0);
+        await selectFlow(page);
+        assert.equal(await selector(page).inputValue(), expected);
+        assert.ok((await selector(page).locator(`option[value="${expected}"]`).textContent()).trim());
+        const exported = await exportModel(page);
+        assert.deepEqual(exported.doc.edges.find(edge => edge.id === "e_request").authenticationTypes, [expected]);
+        await page.getByRole("tab", { name: /^Edges/ }).click();
+        const row = page.getByRole("row", { name: /^Request payload, sequence/ });
+        const label = saved?.label ?? methods.find(method => method.id === expected)?.label ?? expected;
+        assert.ok((await row.textContent()).includes(label));
+        await page.getByRole("button", { name: "Sequence", exact: true }).click();
+        assert.ok((await page.locator(".ps-seq-svg").textContent()).includes(`Auth: ${label}`));
+        await page.getByRole("button", { name: "Diagram", exact: true }).click();
+      }
+    });
+  });
+
   test("regression: Internal process call is a distinct selectable built-in", async () => {
     await getHarness().run("regression: internal process authentication", async ({ page }) => {
       await selectFlow(page);
-      const productionIdentity = page.getByRole("group", { name: "Production identity" });
       const appId = "12345678-1234-1234-1234-123456789abc";
-      await productionIdentity.getByLabel("App ID (GUID)").fill(appId);
+      const applicationId = page.getByRole("textbox", { name: "Application ID (GUID)", exact: true });
+      await applicationId.fill(appId);
       await selector(page).selectOption("InternalProcessCall");
       await page.getByText(
         "Calls another component within the same process boundary. No particular authentication mechanism is required because the call does not cross that boundary.",
@@ -93,12 +171,13 @@ export function registerAuthenticationContracts({ getHarness, exportModel }) {
       ).waitFor();
       await edgeLabel(page).getByText("Internal", { exact: true }).waitFor();
       assert.equal(await edgeLabel(page).getByText("Anonymous", { exact: true }).count(), 0);
-      assert.equal(await productionIdentity.count(), 0,
-        "Internal process calls do not prompt for production identity");
+      assert.equal(await applicationId.inputValue(), appId,
+        "Changing authentication preserves the independent caller Application ID");
+      assert.equal(await page.getByRole("combobox", { name: "Tenant", exact: true }).count(), 0,
+        "Legacy tenant evidence is not an editable authentication selector");
       await selector(page).selectOption("ApiKey");
-      await productionIdentity.waitFor();
-      assert.equal(await productionIdentity.getByLabel("App ID (GUID)").inputValue(), appId,
-        "Changing methods preserves existing production identity evidence");
+      assert.equal(await applicationId.inputValue(), appId,
+        "Changing methods preserves the active caller Application ID");
     });
   });
 
@@ -282,9 +361,9 @@ export function registerAuthenticationContracts({ getHarness, exportModel }) {
       assert.equal(await page.locator(".ps-auth-description b, .ps-auth-description script, a[href^='javascript:']").count(), 0);
       assert.match(await page.locator(".ps-auth-selection-warning").first().textContent(), /Unverified/);
       const guid = "12345678-1234-1234-1234-123456789abc";
-      await page.getByRole("textbox", { name: "App ID (GUID)", exact: true }).fill(guid);
+      await page.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).fill(guid);
       await selector(page).selectOption("CustomAuthentication");
-      assert.equal(await page.getByRole("textbox", { name: "App ID (GUID)", exact: true }).inputValue(), guid);
+      assert.equal(await page.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).inputValue(), guid);
       await selector(page).selectOption(method.id);
 
       const dialog = await openLibrary(page);
@@ -308,7 +387,9 @@ export function registerAuthenticationContracts({ getHarness, exportModel }) {
       const saved = await exportModel(page);
       const savedEdge = saved.doc.edges.find(entry => entry.id === "e_request");
       assert.deepEqual(savedEdge.authenticationTypes, [method.id]);
-      assert.equal(savedEdge.productionIdentity.appId, guid);
+      assert.equal(savedEdge.applicationId, guid);
+      assert.deepEqual(savedEdge.productionIdentity, undefined,
+        "A caller Application ID does not create or rewrite historical identity evidence");
       assert.equal(saved.doc.authenticationDefinitions.find(entry => entry.id === method.id).label, "Partner renamed");
       assert.ok(!Object.hasOwn(saved.doc, "authenticationLibrary"));
 

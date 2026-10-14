@@ -10,7 +10,7 @@ const byId = new Map(core.nodes.map(type => [type.id, type.definition]));
 const withheld = ["azure.compute.vm-infra", "azure.network.network-security", "azure.network.route"];
 
 test("Microsoft cloud catalog: approved AI-guidance set is complete and owner-withheld IDs stay blank", () => {
-  const entries = [...byId].filter(([, definition]) => definition.aiDesignGuidance);
+  const entries = [...byId].filter(([id, definition]) => definition.aiDesignGuidance && !id.startsWith("generic."));
   const ids = entries.map(([id]) => id).sort();
   assert.equal(ids.length, 166);
   assert.equal(createHash("sha256").update(ids.join("\n")).digest("hex"),
