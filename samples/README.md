@@ -59,6 +59,13 @@ control owner, actual payload, retention and review assumptions.
   operation, resource and enforcing owner. Managed identity authenticates the
   workload; it does not delegate a user or ensure tenant isolation. Direct
   mTLS is not certificate-based Entra token acquisition.
+- Intended HTTP/API and direct mTLS hops reference the shipped HTTPS
+  communication profile and embed its exact definition for portable reopen.
+  HTTPS declares intended channel protection, not verified TLS, authorization,
+  or a specific HTTP/TLS version or transport. Authentication and directional
+  privacy/retention choices remain independent. SQL hops stay unspecified:
+  managed identity does not establish a wire protocol, and no SQL profile is
+  invented.
 - Fictional App IDs identify the **calling application**, not the human.
   Within each model, client `11111111-1111-4111-8111-111111111111`
   is the end-user client; subsequent distinct calling applications have
@@ -95,11 +102,12 @@ clinical safety, PCI compliance or prompt-injection resistance.
 
 ```powershell
 node --test tests\authentication\samples.test.mjs
+node --test tests\authentication\communication-protocols.test.mjs
 node --test --test-name-pattern="regression: sample " tests\browser\contracts.test.mjs
 ```
 
 `sample-expectations.mjs` contains independent intended service/role,
-authentication, calling-client, classification and request-order choices.
+authentication, communication profile, calling-client, classification and request-order choices.
 Pure contracts additionally check exact sensitive-data directions/retention,
 the full normalized native model and saved dependencies, and payment SQL
 `GE.DS` mapping in TM7. TM7 is lossy: privacy data and detailed rights remain

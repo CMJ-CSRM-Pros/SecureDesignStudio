@@ -13,6 +13,7 @@ const { resolveDfdRole, resolveNodeReviewScope, resolveFlowReviewScope } = await
 const { buildDfdReviewContext } = await import("../../src/dfdReviewContext.ts");
 const { withAuthenticationDefinitions } = await import("../../src/authentication.ts");
 const { withCatalogDefinitions } = await import("../../src/catalogDefinitions.ts");
+const { PROTOCOL_TYPE_DEFS, resolveProtocolReference, withProtocolDefinitions } = await import("../../src/protocols.ts");
 const { isAuthoredThreatNote } = await import("../../src/threatNotes.ts");
 const sampleDirectory = new URL("../../samples/", import.meta.url);
 const sampleFiles = readdirSync(sampleDirectory).filter(name => name.endsWith(".tma")).sort();
@@ -40,7 +41,7 @@ for (const file of sampleFiles) {
     assert.equal(input.view.activeScenarioId, "s_secure", "Open on the reference design");
     const normalized = normalizeDoc(doc);
     for (const key of ["nodes", "edges", "boundaries", "scenarios", "data", "comments", "workItems",
-      "issues", "authenticationDefinitions", "catalogDefinitions"]) {
+      "issues", "authenticationDefinitions", "protocolDefinitions", "catalogDefinitions"]) {
       assert.deepEqual(JSON.parse(JSON.stringify(normalized[key])), doc[key],
         `${key} must not require legacy migration or implicit geometry repair`);
     }
@@ -48,6 +49,9 @@ for (const file of sampleFiles) {
       "The complete native model is normalization-idempotent");
     assert.deepEqual(withCatalogDefinitions(withAuthenticationDefinitions(normalized, AUTH_TYPE_DEFS)), normalized,
       "Saved dependencies are complete without replacing profile libraries");
+    assert.deepEqual(withProtocolDefinitions(normalized, PROTOCOL_TYPE_DEFS), normalized,
+      "Saved communication profiles are complete without replacing the profile library");
+    assert.deepEqual(doc.protocolDefinitions.map(profile => profile.id), ["https"]);
     for (const type of doc.nodeTypes) {
       assert.deepEqual(JSON.parse(JSON.stringify(normalized.nodeTypes.find(item => item.id === type.id))), type);
       assert.ok(["Process", "DataStore", "ExternalInteractor"].includes(type.definition.defaultDfdRole));
@@ -95,6 +99,12 @@ for (const file of sampleFiles) {
       assert.deepEqual([edge.source, edge.target], expected.endpoints[edge.id], `${edge.id}: intended request direction`);
       assert.ok(nodes.has(edge.source) && nodes.has(edge.target), `${edge.id}: valid endpoints`);
       assert.equal(edge.authenticationTypes.length, 1);
+      assert.equal(edge.protocolId, expected.protocols[edge.id], `${edge.id}: intended transport profile`);
+      const protocol = resolveProtocolReference(edge.protocolId, doc.protocolDefinitions, PROTOCOL_TYPE_DEFS);
+      if (edge.protocolId) {
+        assert.equal(protocol.status, "resolved", `${edge.id}: portable communication profile`);
+        assert.equal(protocol.definition.semantics.channelProtection, "implicit-tls");
+      } else assert.equal(protocol.status, "unspecified", `${edge.id}: do not infer a wire protocol`);
       const definition = auth.get(edge.authenticationTypes[0]);
       assert.ok(definition && !definition.legacy, `${edge.id}: a current, unambiguous built-in method`);
       if (definition.behavior.audience) assert.ok(edge.audience?.trim());

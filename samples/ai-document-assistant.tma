@@ -345,7 +345,8 @@
             "x": 280,
             "y": 250
           }
-        ]
+        ],
+        "protocolId": "https"
       },
       {
         "id": "e_prompt",
@@ -371,7 +372,8 @@
             "x": 625,
             "y": 270
           }
-        ]
+        ],
+        "protocolId": "https"
       },
       {
         "id": "e_retrieve",
@@ -392,10 +394,11 @@
         "waypoints": [
           {
             "id": "w_retrieve",
-            "x": 975,
+            "x": 1040,
             "y": 392
           }
-        ]
+        ],
+        "protocolId": "https"
       },
       {
         "id": "e_generate",
@@ -419,7 +422,8 @@
             "x": 940,
             "y": 190
           }
-        ]
+        ],
+        "protocolId": "https"
       },
       {
         "id": "e_log",
@@ -441,19 +445,20 @@
           {
             "id": "w_log_out",
             "x": 685,
-            "y": 450
+            "y": 500
           },
           {
             "id": "w_log",
-            "x": 940,
-            "y": 490
+            "x": 850,
+            "y": 570
           },
           {
             "id": "w_log_in",
             "x": 1040,
-            "y": 540
+            "y": 620
           }
-        ]
+        ],
+        "protocolId": "https"
       }
     ],
     "boundaries": [
@@ -866,6 +871,39 @@
         "id": "wi_reference_controls",
         "description": "Verify cross-document prompt injection and excessive provider disclosure controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
         "link": ""
+      }
+    ],
+    "protocolDefinitions": [
+      {
+        "id": "https",
+        "label": "HTTPS",
+        "shortLabel": "HTTPS",
+        "description": "HTTP with intended TLS-based channel protection; does not specify HTTP/TLS versions, caller identity or authorization.",
+        "group": "Web",
+        "semantics": {
+          "protocol": "HTTP",
+          "transport": "http-dependent",
+          "channelProtection": "implicit-tls",
+          "description": "TLS-protected HTTP, including HTTP/2 over TLS or HTTP/3 over QUIC with TLS. HTTPS is not necessarily TCP. Protection is a declared design, not verified deployment evidence."
+        },
+        "authenticationSuggestions": [
+          "EntraApplicationOnlyAccess",
+          "EntraDelegatedUserAccess",
+          "OAuthAccessToken",
+          "ClientCertificateMtls",
+          "ApiKey"
+        ],
+        "disabled": false,
+        "aiDesignGuidance": {
+          "content": "HTTPS provides intended TLS-based confidentiality and integrity for HTTP requests/responses, not caller authorization. Establish HTTP/TLS versions and hops: HTTP/2 alone is not proof of TLS; HTTP/3 uses QUIC with TLS, so HTTPS need not use TCP. Require certificate-chain and hostname validation and ask where proxies terminate TLS and whether downstream hops are protected. Does mTLS authenticate the direct client, does an application token authenticate a different principal, and how are issuer, audience, expiry and least-privilege permissions validated? mTLS and certificate-bound OAuth tokens may coexist; the single authentication choice is not an exhaustive layered-auth model. Identify browser/client, gateway and backend trust boundaries. Inventory sensitive request URLs, headers, cookies and bodies plus response data, caches and logs. Can redirects, HTTP fallback or unprotected backend hops downgrade protection? Verify actual configuration, successful and failed certificate/authorization tests, termination paths and negotiated transport. Editable HTTPS labels and guidance do not prove TLS was used.",
+          "sources": [
+            "https://www.rfc-editor.org/rfc/rfc9113",
+            "https://www.rfc-editor.org/rfc/rfc9114",
+            "https://www.rfc-editor.org/rfc/rfc8705"
+          ],
+          "revision": 1,
+          "updatedOn": "2026-10-13"
+        }
       }
     ]
   },
