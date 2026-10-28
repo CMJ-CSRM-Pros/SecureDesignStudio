@@ -72,7 +72,7 @@ check [third-party provenance](third-party-notices.md). Root licensing and
 other release clearances are not implied by those component notices.
 
 
-## Contributor Acknoledgment
+## Contributor Acknowledgment
 
 Thank you to our contributors
 - Jeffrey Raj (MSFT)
