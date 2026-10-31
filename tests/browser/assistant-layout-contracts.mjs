@@ -21,13 +21,14 @@ function assertInside(inner, outer, label) {
 
 async function assistantLayout(page, content) {
   const panel = page.locator("#ps-inspector-panel");
-  const compact = await panel.evaluate(element => {
+  const compact = await page.locator(".ps-assistant-surface-body").evaluate(element => {
     const style = getComputedStyle(element);
     return element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) <= 440;
   });
   return {
     panel, compact,
-    scroller: compact ? page.locator("#ps-inspector-panel-assistant") : content,
+    scroller: compact || await content.evaluate(element => element.classList.contains("ps-assistant-analysis"))
+      ? page.locator(".ps-assistant") : content,
   };
 }
 
@@ -35,8 +36,6 @@ export async function exerciseAnalysisLayout({ page, observations }, { width, he
   await page.setViewportSize({ width, height });
   await page.getByRole("tab", { name: /^Findings\b/ }).click();
   const analysis = page.locator(".ps-assistant-analysis");
-  const modes = page.getByRole("tablist", { name: "Design Assistant modes" });
-  const context = page.getByLabel("Included model context");
   observations.initialAnalysis = await bounds(analysis);
   await analysis.waitFor({ state: "visible" });
   if (width === 1366 && height === 900) {
@@ -93,19 +92,17 @@ export async function exerciseAnalysisLayout({ page, observations }, { width, he
     "Multiple findings overflow a usable scrolling region");
   assert.equal(observations.scroller.overflowY, "auto", "The active layout owns vertical scrolling");
   assertInside(observations.scroller, await bounds(panel), "The scroller is bounded by the inspector");
-  if (compact) {
-    assert.equal(observations.analysis.overflowY, "visible", "Compact results do not create a nested scroller");
-  }
+  assert.equal(observations.analysis.overflowY, "visible", "Results do not create a nested scroller");
   const fixedHeaders = [
     page.locator(".ps-inspector-header"), page.getByRole("tablist", { name: "Inspector views" }),
-    ...(compact ? [] : [modes, context]),
+    page.locator(".ps-assistant-surface-bar"),
   ];
   const fixedBounds = await Promise.all(fixedHeaders.map(bounds));
   await scroller.hover();
   await page.mouse.wheel(0, 500);
   await until(() => scroller.evaluate(element => element.scrollTop > 0), "wheel scrolls analysis");
   assert.deepEqual(await Promise.all(fixedHeaders.map(bounds)), fixedBounds,
-    "Inspector headers stay fixed; roomy layouts also keep mode and context fixed");
+    "Inspector headers and display/export controls stay fixed");
   assert.equal((await bounds(panel)).scrollTop, 0, "The outer inspector does not scroll");
 
   await scroller.evaluate(element => { element.scrollTop = 0; });
@@ -258,11 +255,13 @@ export function registerAssistantLayoutContracts({ getHarness }) {
           observations.theme = theme;
           await exerciseAnalysisLayout({ page, observations }, { width: 320, height });
           const inspector = page.locator(".ps-inspector");
+          const restore = page.getByRole("button", { name: "Restore inspector size", exact: true });
+          assert.equal(await restore.getAttribute("aria-expanded"), "true", "Narrow Assistant opens expanded");
+          await restore.click();
           const original = await inspector.boundingBox();
           const expand = page.getByRole("button", { name: "Expand inspector", exact: true });
           await expand.focus();
           await page.keyboard.press("Enter");
-          const restore = page.getByRole("button", { name: "Restore inspector size", exact: true });
           await until(() => restore.getAttribute("aria-expanded").then(value => value === "true"), "expanded state");
           const expanded = await inspector.boundingBox();
           assert.ok(expanded.height > original.height, "Expansion adds usable inspector height");
@@ -288,7 +287,7 @@ export function registerAssistantLayoutContracts({ getHarness }) {
             .evaluate(element => element === document.activeElement), "Hidden expand control returns focus to active tab");
           assert.equal(await page.locator(".ps-inspector-expand").isVisible(), false);
           await page.setViewportSize({ width: 320, height });
-          assert.equal(await expand.getAttribute("aria-expanded"), "false", "Leaving the bottom-sheet layout resets expansion");
+          assert.equal(await restore.getAttribute("aria-expanded"), "true", "Returning to the narrow Assistant expands it for review");
           observations.expansion = { original, expanded, zoom };
         });
       });

@@ -1,6 +1,7 @@
 import defaults from "./data/authTypes.json";
 import compatibilityIdentities from "./data/authenticationCompatibility.json";
 import type { AllowedAuthMethodStatus, PsDocument } from "./types";
+import { validateAiDesignGuidance, type AiDesignGuidance } from "../shared/aiDesignGuidance";
 
 export type KnownAuthenticationType =
   | "EntraDelegatedUserAccess"
@@ -44,6 +45,7 @@ export interface AuthTypeDef {
   disabled: boolean;
   legacy: boolean;
   aliases: string[];
+  aiDesignGuidance?: AiDesignGuidance;
   unresolved?: true;
   // Resolution-only diagnostic. Never serialize this as a saved definition.
   unavailableReason?: string;
@@ -95,7 +97,8 @@ function text(value: unknown, where: string, max: number, allowEmpty = false): s
 
 function parseDefinition(value: unknown, where: string, canonical?: AuthTypeDef): AuthTypeDef {
   const raw = object(value, where);
-  keys(raw, ["id", "label", "description", "shortLabel", "behavior", "disabled", "legacy", "aliases"], where);
+  keys(raw, ["id", "label", "description", "shortLabel", "behavior", "disabled", "legacy", "aliases", "aiDesignGuidance"], where);
+  const aiDesignGuidance = validateAiDesignGuidance(raw.aiDesignGuidance);
   if (!isAuthenticationType(raw.id)) {
     throw new Error(`${where}.id: use a letter followed by letters, numbers, ".", "_" or "-" (maximum 128); reserved object names are not IDs.`);
   }
@@ -128,6 +131,7 @@ function parseDefinition(value: unknown, where: string, canonical?: AuthTypeDef)
     },
     disabled: raw.disabled === true, legacy: raw.legacy === undefined ? canonical?.legacy ?? false : raw.legacy === true,
     aliases: aliases.map((alias, index) => text(alias, `${where}.aliases[${index}]`, 160)),
+    ...(aiDesignGuidance ? { aiDesignGuidance } : {}),
   };
 }
 
@@ -135,6 +139,10 @@ export const AUTH_TYPE_DEFS: readonly AuthTypeDef[] = Object.freeze(defaults.map
   const def = parseDefinition(value, `Shipped authentication[${index}]`);
   Object.freeze(def.behavior);
   Object.freeze(def.aliases);
+  if (def.aiDesignGuidance) {
+    if (def.aiDesignGuidance.sources) Object.freeze(def.aiDesignGuidance.sources);
+    Object.freeze(def.aiDesignGuidance);
+  }
   return Object.freeze(def);
 }));
 // Import identity is not installed authority. These names preserve historical
@@ -194,7 +202,7 @@ export function assertInstalledAuthenticationContracts(
   for (const definition of definitions) {
     const canonical = installedAuthentication(definition.id, installed);
     if (canonical && !sameAuthenticationContract(definition, canonical)) {
-      throw new Error(`"${definition.id}": installed behavior, legacy status and aliases are protected. Edit Method and Description only.`);
+      throw new Error(`"${definition.id}": installed behavior, legacy status and aliases are protected. Edit Method, Description and AI design guidance only.`);
     }
   }
 }
@@ -235,7 +243,7 @@ function validateDefinitions(value: unknown, portable: boolean, installed: reado
         || JSON.stringify(def.behavior) !== JSON.stringify(canonical.behavior)
         || def.legacy !== canonical.legacy
         || JSON.stringify(def.aliases) !== JSON.stringify(canonical.aliases))) {
-      throw new Error(`"${def.id}": built-in ID, behavior, legacy status and aliases are protected. Edit Method and Description only.`);
+      throw new Error(`"${def.id}": built-in ID, behavior, legacy status and aliases are protected. Edit Method, Description and AI design guidance only.`);
     }
     if (!canonical && !historical && (def.legacy || def.aliases.length)) {
       throw new Error(`"${def.id}": legacy status and aliases are reserved for shipped compatibility definitions.`);
@@ -356,6 +364,26 @@ export function withAuthenticationDefinitions(doc: PsDocument, catalog: readonly
     if (def && !def.unresolved && !def.unavailableReason && !definitions.has(id)) definitions.set(id, def);
   }
   return { ...doc, authenticationDefinitions: [...definitions.values()] };
+}
+
+export function withAuthenticationGuidance(
+  doc: PsDocument, catalog: readonly AuthTypeDef[], id: string, value: AiDesignGuidance | undefined,
+): PsDocument {
+  const guidance = validateAiDesignGuidance(value);
+  const definition = doc.authenticationDefinitions?.find(method => method.id === id)
+    ?? catalog.find(method => method.id === id);
+  if (!definition || definition.unresolved) {
+    throw new Error("Resolve this authentication method before editing its guidance. Existing flow values are preserved.");
+  }
+  if (JSON.stringify(definition.aiDesignGuidance) === JSON.stringify(guidance)) return doc;
+  const { unresolved, unavailableReason, aiDesignGuidance, ...stored } = definition;
+  const next = { ...stored, ...(guidance ? { aiDesignGuidance: guidance } : {}) };
+  return {
+    ...doc,
+    authenticationDefinitions: doc.authenticationDefinitions?.some(method => method.id === id)
+      ? doc.authenticationDefinitions.map(method => method.id === id ? next : method)
+      : [...(doc.authenticationDefinitions ?? []), next],
+  };
 }
 
 interface AuthenticationItemLabel {

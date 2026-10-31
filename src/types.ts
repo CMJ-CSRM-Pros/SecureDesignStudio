@@ -1033,6 +1033,7 @@ export interface PsIssue {
   guidanceReferences?: Array<{
     typeId: string;
     protocolId?: string;
+    methodId?: string;
     definitionSource: "saved" | "available" | "core";
     revision: number;
     updatedOn: string;

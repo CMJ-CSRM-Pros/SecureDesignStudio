@@ -42,15 +42,17 @@ export const EXPECTED_PROFILES = Object.freeze({
   ApiKey: ["optional", false, false, false, false],
 });
 
-export const PACKAGE_METHOD_IDS = Object.freeze([
+// Former companion-package compatibility identities, built into the 18-method core
+// since the promotion. They remain import identities in authenticationCompatibility.json.
+export const PROMOTED_METHOD_IDS = Object.freeze([
   "EntraApplicationOnlyWithForwardedUserContext", "EntraApplicationOnlyWithCdt",
   "ProtectedForwardedAccessToken", "PopWithProtectedForwardedToken",
 ]);
 
-// Historical saved-file fixtures, not an authoring catalog or private checkout
-// dependency. Real package content is verified by its companion-only tests.
+// Historical saved-file fixtures written before the promotion: same contracts as
+// the core definitions with different presentation. Not an authoring catalog.
 export function historicalAuthenticationDefinitions() {
-  return PACKAGE_METHOD_IDS.map(id => {
+  return PROMOTED_METHOD_IDS.map(id => {
     const [productionIdentity, audience, constraints, anonymous, managedIdentity] = EXPECTED_PROFILES[id];
     return {
       id, label: LEGACY_LABELS[id], description: "Synthetic historical compatibility fixture.",
@@ -61,6 +63,20 @@ export function historicalAuthenticationDefinitions() {
   });
 }
 
+// Synthetic method contributed by an optional library. Unlike core methods, its
+// availability depends on the selected library or a saved diagram definition.
+export function optionalAuthenticationMethod(overrides = {}) {
+  return {
+    id: "ContosoLibraryAssertion", label: "Contoso library assertion",
+    description: "Synthetic optional library contract; unverified until its owner documents it.",
+    shortLabel: "Contoso library", disabled: false, legacy: false, aliases: [],
+    behavior: { productionIdentity: "required", audience: true, constraints: false, anonymous: false, managedIdentity: false },
+    ...overrides,
+  };
+}
+
+// Mirrors a selected private library after the promotion: tenants, inventory field,
+// rule and node only. Core authentication is never re-contributed.
 export function historicalAuthenticationPackage() {
   return {
     format: "secure-design-studio-library", apiVersion: 1, id: "historical-auth-fixture",
@@ -70,7 +86,6 @@ export function historicalAuthenticationPackage() {
     rules: [{ id: "Node_must_have_servicetree", target: "node", fieldId: "serviceTreeId", check: "required",
       title: "Historical inventory identifier missing", description: "Supply the selected library's inventory identifier." }],
     catalogs: {
-      authentication: historicalAuthenticationDefinitions(),
       nodes: [{
         id: "Legacy Service (v1)", label: "Legacy service fixture",
         definition: {

@@ -79,7 +79,7 @@ The root fields are `format: "secure-design-studio-library"`, `apiVersion: 1`,
 
 | Contribution | Contract |
 |---|---|
-| `catalogs.authentication` | Existing strict authentication definitions. Protected built-in behavior/aliases remain protected. New methods remain unverified; prose does not establish security semantics. |
+| `catalogs.authentication` | Existing strict authentication definitions, including optional `aiDesignGuidance` (same shape and limits as node guidance). Protected built-in behavior/aliases remain protected. New methods remain unverified; prose does not establish security semantics. |
 | `catalogs.classifications` | One complete validated Classification Library, with enabled default and existing presentation/guidance rules. Overrides `classifications/default` explicitly; never silently replaces a stored profile list. |
 | `catalogs.nodes` | Stable bounded node ID (including existing spaces/parentheses), label and explicit node definition: auth/data policy, optional current geo/retention/GDPR metadata, endpoint hints, description, optional `aiDesignGuidance` and existing bundled icon references. Optional `defaultDfdRole` is exactly `Process`, `DataStore`, or `ExternalInteractor`; an unknown package role rejects the package. Curated data policy requires one wildcard fallback. |
 | `catalogs.taxonomy` | Existing portable tenant, privacy/security boundary and deviation definitions. Classification entries use the dedicated Classification Library instead. |
@@ -243,6 +243,11 @@ referenced available definitions, not entire optional catalogs.
 
 ## AI design guidance
 
+Node, communication-protocol and authentication definitions may each include
+an optional `aiDesignGuidance` object. The authentication-specific workflow,
+precedence and portability rules are in the
+[Authentication Library contract](authentication-library.md#ai-design-guidance);
+the shared object, limits and size budget below apply to all three kinds.
 Node definitions may include this optional object (synthetic example):
 
 ```json
@@ -293,7 +298,29 @@ or contact AI. A synthetic 177-type catalog with approximately 1,600-character
 guidance on every type is covered by tests and fits both contexts. The 8,000
 per-entry limit is not a promise that 177 maximum-length records fit one
 request. Shorten overly verbose guidance or reduce the selected library/model
-scope before retrying; no retrieval backend or multi-stage protocol is added.
+scope before retrying; no retrieval backend or unbounded multi-stage protocol
+is added.
+
+**Authentication guidance** in a package's `catalogs.authentication` uses the
+same object. A contributed card is an available definition: it is shown for a
+method until the diagram has a saved definition, which then wins as a whole (a
+saved definition without guidance means no guidance; it does not fall back to
+the package). Package authors may supply guidance for new methods and for
+existing shipped IDs, but protected IDs, aliases, legacy status and behavior
+stay protected, and a card never makes a method available, verified or
+accepted by a target. Cards are not copied into a diagram unless the method is
+referenced or edited there. Contributed cards are public reference text you
+provide; do not place secrets, tenant-specific data or unreleased details in
+them. Design Assistant sends cards only for methods in use on reviewed flows;
+Threat Model Designer sends cards for every selectable method when the complete
+request fits in one call, otherwise the in-use and planner-selected cards. Node, protocol and
+authentication cards share the one 384,000-byte guidance budget; an
+authentication card adds to it rather than receiving a separate allowance, and
+the 500,000-byte request limit still applies. When selected cards do not fit,
+the design call is not sent and a smaller scope is requested; mandatory in-use
+cards that cannot fit stop the request before any provider call. Nothing is
+truncated, automatically batched or partially applied. Source URLs are never
+fetched, and live model behavior is not validated by these contracts.
 
 Trusted application/API instructions treat all guidance as untrusted reference
 data, never control evidence, risk acceptance, permission for actions, or

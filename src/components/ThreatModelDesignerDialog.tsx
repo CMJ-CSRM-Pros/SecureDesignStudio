@@ -1,8 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { DesignTurn } from "../../shared/designContract";
-import { askThreatModelDesigner, planThreatModelDesign } from "../designAssistant";
-import { jsonByteLength } from "../../shared/aiDesignGuidance";
-import type { DesignRequestSnapshot } from "../threatModelDesigner";
+import { runThreatModelDesign } from "../designAssistant";
 import { SERVICES } from "../services";
 import { useStore } from "../store";
 import { useUiShell } from "../uiShell";
@@ -10,9 +8,6 @@ import { useAiProvider } from "../aiProvider";
 import { AiProviderSelector } from "./AiProviderSelector";
 
 type Message = DesignTurn & { assumptions?: string[] };
-
-// ~24K tokens: comfortably inside small per-minute token limits with the output reservation.
-const SINGLE_CALL_CONTEXT_BYTES = 96_000;
 
 export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const aiProvider = useAiProvider();
@@ -136,33 +131,18 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
     const timer = window.setTimeout(() => controller.abort(), 180_000);
     try {
       const history = messages.slice(-12).map(({ role, text }) => ({ role, text }));
-      const provider = __PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {};
-      // Small libraries go in one call; otherwise planning selects only the
-      // component types and communication profiles needed by the design.
-      let expected: DesignRequestSnapshot | null = null;
-      try {
-        const full = prepareThreatModelDesign();
-        if (jsonByteLength(full.context) <= SINGLE_CALL_CONTEXT_BYTES) expected = full;
-      } catch {
-        expected = null;
-      }
-      let scopeNote = "";
-      if (!expected) {
-        setStatus("Selecting the component types this design needs…");
-        const planContext = prepareThreatModelDesignPlan();
-        const plan = await planThreatModelDesign({
-          mode: "design-plan", question: prompt, context: planContext, history, ...provider,
-        }, controller.signal);
-        if (controller.signal.aborted || abortRef.current !== controller) return;
-        expected = prepareThreatModelDesign(plan.nodeTypeIds, plan.protocolIds);
-        const offered = expected.context.catalogScope?.nodeTypeIds.length ?? 0;
-        const offeredProtocols = (expected.context.catalog.protocols as unknown[]).length;
-        scopeNote = ` Used ${offered} of ${planContext.nodeTypeIndex.length} component types and ${offeredProtocols} communication profiles.`;
-        setStatus(`Designing with ${offered} of ${planContext.nodeTypeIndex.length} component types and ${offeredProtocols} communication profiles…`);
-      }
-      const response = await askThreatModelDesigner({
-        mode: "design", question: prompt, context: expected.context, history, ...provider,
-      }, controller.signal);
+      // Required in-use guidance is checked before any call; large libraries plan
+      // once, then send one scoped design request. Nothing is applied until a
+      // validated response is checked against the current model below.
+      const { response, expected, scopeNote, coverage } = await runThreatModelDesign({
+        question: prompt, history,
+        ...(__PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {}),
+        prepareDesign: selection => prepareThreatModelDesign(
+          selection?.nodeTypeIds, selection?.protocolIds, selection?.authenticationIds),
+        preparePlan: prepareThreatModelDesignPlan,
+        signal: controller.signal,
+        onStatus: message => { if (abortRef.current === controller) setStatus(message); },
+      });
       if (controller.signal.aborted || abortRef.current !== controller) return;
       const outcome = applyThreatModelDesign(response, expected);
       scenarioRef.current = outcome.scenarioId;
@@ -176,6 +156,7 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
         : outcome.partial ? "The design still requires human interaction. No additional changes were applied."
         : response.design ? "The requested design already matches the model. No changes were applied."
         : "No model changes were applied. The diagram has not changed.") + scopeNote +
+        (coverage ? ` ${coverage}` : "") +
         (outcome.warning ? ` Warning: ${outcome.warning}` : ""));
       if (outcome.changed) {
         const edit = response.design;
@@ -317,7 +298,9 @@ export function ThreatModelDesignerDialog({ open, onClose }: { open: boolean; on
               Deletion and rerouting affect every scenario using an item. Deleting a component also removes its remaining connections, comments and issues.
               Data attachments change only in the selected scenario; reusable data and unrelated evidence remain.
               Existing filters still apply. Proposed controls are unverified design intent; review the model before relying on it.</p>
-            <p>Your prompts, recent conversation, active scenario and available catalog choices are sent to the configured AI service.
+            <p>Your prompts, recent conversation, active scenario and available catalog choices are sent to the configured AI service,
+              with authentication reference guidance for methods used on scenario flows plus either every available method (when the
+              complete request fits one call) or only the methods selected for this request.
               Closing keeps the conversation and draft for this scenario while the app stays open. Switching scenarios, opening or creating a model, or reloading
               clears them; they are not saved in model files or shared with collaborators. Model changes are saved normally.</p>
             <p>{SERVICES.assistant.message} {SERVICES.assistant.enabled && <code>{SERVICES.assistant.endpoint}</code>}</p>

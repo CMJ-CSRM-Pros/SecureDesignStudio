@@ -1381,13 +1381,21 @@ test("designer API: uses existing identity/endpoint with isolated generation pol
     context: { ...communicationRequest.context, communicationGuidance: [unbound] } })).status, 200,
   "Offered protocol guidance can inform proposed new design flows");
   responseValue = { answer: "Review", references: [], findings: [] };
-  assert.equal((await invoke({ ...communicationRequest, mode: "analyze" })).status, 200);
+  // Design contexts offer unbound authentication cards; review modes accept only flow-bound cards.
+  const reviewContext = { ...communicationRequest.context,
+    authenticationGuidance: (communicationRequest.context.authenticationGuidance ?? []).filter(entry => entry.appliesToEdgeIds.length) };
+  assert.equal((await invoke({ ...communicationRequest, mode: "analyze", context: reviewContext })).status, 200);
   assert.match(sent.at(-1).body.messages[0].content, /including endpoint crossings.*never grants node-interior scope/);
   assert.match(sent.at(-1).body.messages[0].content, /URLs are provenance only, not content to fetch/);
   const beforeUnboundReview = sent.length;
   assert.equal((await invoke({ ...communicationRequest, mode: "analyze",
-    context: { ...communicationRequest.context, communicationGuidance: [unbound] } })).status, 400);
+    context: { ...reviewContext, communicationGuidance: [unbound] } })).status, 400);
   assert.equal(sent.length, beforeUnboundReview);
+  if (communicationRequest.context.authenticationGuidance?.some(entry => !entry.appliesToEdgeIds.length)) {
+    assert.equal((await invoke({ ...communicationRequest, mode: "analyze" })).status, 400,
+      "Unbound design authentication cards are rejected in review mode");
+    assert.equal(sent.length, beforeUnboundReview);
+  }
   const manyNodeGuidance = Array.from({ length: 24 }, (_, i) => ({
     typeId: `node-${i}`, definitionSource: "available", revision: 1, updatedOn: "2026-10-13",
     sources: [], content: "n".repeat(8000), appliesToNodeIds: [],
@@ -1402,9 +1410,17 @@ test("designer API: uses existing identity/endpoint with isolated generation pol
   } })).status, 400, "Combined guidance budget applies even when each collection alone fits");
   assert.equal(sent.length, beforeBudget);
   responseValue = { nodeTypeIds: ["synthetic-web"], protocolIds: ["https"], rationale: "Proposed HTTPS transport." };
+  // Planning carries indexes only; the design context's authentication card bodies are not part of a plan request.
+  const { authenticationGuidance: designAuthenticationGuidance, ...planBase } = communicationRequest.context;
   const planRequest = { ...communicationRequest, mode: "design-plan", context: {
-    ...communicationRequest.context, nodeTypeIndex: [{ id: "synthetic-web" }], protocolIndex: [{ id: "https" }],
+    ...planBase, nodeTypeIndex: [{ id: "synthetic-web" }], protocolIndex: [{ id: "https" }],
   } };
+  if (designAuthenticationGuidance?.length) {
+    const beforeBodies = sent.length;
+    assert.equal((await invoke({ ...planRequest, context: { ...planRequest.context, authenticationGuidance: designAuthenticationGuidance } })).status, 400,
+      "Planning requests never carry authentication card bodies");
+    assert.equal(sent.length, beforeBodies);
+  }
   assert.equal((await invoke(planRequest)).status, 200);
   assert.deepEqual(sent.at(-1).body.response_format.json_schema.schema.properties.protocolIds.items.enum, ["https"]);
   responseValue.protocolIds = ["invented"];

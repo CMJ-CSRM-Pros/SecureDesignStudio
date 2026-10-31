@@ -1,7 +1,10 @@
 import { resolveNodeTypeDef, type NodeTypeRef, type PsDocument } from "./types";
+import type { AuthTypeDef } from "./authentication";
 import {
+  AUTHENTICATION_GUIDANCE_ABSENT, AUTHENTICATION_GUIDANCE_UNRESOLVED,
   validateAiDesignGuidance, validateAiGuidanceContext,
   type AiDesignGuidance, type AiGuidanceContextEntry, type AiGuidanceReference,
+  type AuthenticationGuidanceContextEntry, type AuthenticationGuidanceMissingEntry,
   type CommunicationGuidanceContextEntry,
 } from "../shared/aiDesignGuidance";
 
@@ -55,10 +58,59 @@ export function withNodeTypeGuidance(
     ? doc.nodeTypes.map(type => type.id === id ? next : type) : [...doc.nodeTypes, next] };
 }
 
+// Whole-definition, saved-first resolution: a saved definition without guidance
+// never borrows library guidance, and unresolved placeholders have none.
+export function resolveAuthenticationGuidanceDefinition(
+  methodId: string, doc: Pick<PsDocument, "authenticationDefinitions">, available: readonly AuthTypeDef[],
+): { definition: AuthTypeDef; definitionSource: "saved" | "available" } | undefined {
+  const saved = doc.authenticationDefinitions?.find(definition => definition.id === methodId);
+  const definition = saved ?? available.find(candidate => candidate.id === methodId);
+  return definition && !definition.unresolved ? { definition, definitionSource: saved ? "saved" : "available" } : undefined;
+}
+
+// Binds method guidance to the supplied flows that use it (legacy multi-auth
+// binds each method). Offered IDs add unbound design choices; callers must pass
+// only offered, selectable methods. Validation and budgets remain the caller's.
+export function buildAuthenticationGuidanceContext(
+  doc: Pick<PsDocument, "authenticationDefinitions">, available: readonly AuthTypeDef[],
+  edges: readonly { id: string; authenticationTypes?: readonly string[] }[],
+  offered: readonly string[] = [],
+): { authenticationGuidance: AuthenticationGuidanceContextEntry[]; authenticationGuidanceMissing: AuthenticationGuidanceMissingEntry[] } {
+  const entries = new Map<string, AuthenticationGuidanceContextEntry>();
+  const missing: AuthenticationGuidanceMissingEntry[] = [];
+  const entry = (methodId: string, appliesToEdgeIds: string[]): AuthenticationGuidanceContextEntry | string => {
+    const resolved = resolveAuthenticationGuidanceDefinition(methodId, doc, available);
+    if (!resolved) return AUTHENTICATION_GUIDANCE_UNRESOLVED;
+    const guidance = resolved.definition.aiDesignGuidance;
+    if (!guidance) return AUTHENTICATION_GUIDANCE_ABSENT;
+    return { methodId, definitionSource: resolved.definitionSource, content: guidance.content,
+      sources: [...(guidance.sources ?? [])], revision: guidance.revision, updatedOn: guidance.updatedOn, appliesToEdgeIds };
+  };
+  for (const edge of edges) {
+    for (const methodId of new Set(edge.authenticationTypes ?? [])) {
+      const existing = entries.get(methodId);
+      if (existing) {
+        existing.appliesToEdgeIds.push(edge.id);
+        continue;
+      }
+      const resolved = entry(methodId, [edge.id]);
+      if (typeof resolved === "string") missing.push({ edgeId: edge.id, methodId, reason: resolved });
+      else entries.set(methodId, resolved);
+    }
+  }
+  for (const methodId of new Set(offered)) {
+    if (entries.has(methodId)) continue;
+    const resolved = entry(methodId, []);
+    if (typeof resolved !== "string") entries.set(methodId, resolved);
+  }
+  return { authenticationGuidance: [...entries.values()], authenticationGuidanceMissing: missing };
+}
+
 export function guidanceReferencesForFinding(
   context: {
     aiDesignGuidance?: AiGuidanceContextEntry[];
     communicationGuidance?: CommunicationGuidanceContextEntry[];
+    authenticationGuidance?: AuthenticationGuidanceContextEntry[];
     edges?: readonly { id: string; source: string; target: string; protocolId?: string }[];
     boundaries?: readonly { id: string; nodeIds: string[] }[];
   },
@@ -72,23 +124,27 @@ export function guidanceReferencesForFinding(
   for (const ref of references) if (ref.kind === "boundary") {
     for (const id of context.boundaries?.find(boundary => boundary.id === ref.id)?.nodeIds ?? []) nodeIds.add(id);
   }
+  // Each kind is projected from its own collection with explicit fields so an
+  // entry cannot carry another kind's identifier into accepted provenance.
+  const provenance = (entry: { definitionSource: AiGuidanceReference["definitionSource"]; revision: number; updatedOn: string; sources?: string[] }) => ({
+    definitionSource: entry.definitionSource, revision: entry.revision, updatedOn: entry.updatedOn, sources: [...(entry.sources ?? [])],
+  });
   const nodeReferences = (context.aiDesignGuidance ?? [])
     .filter(entry => entry.appliesToNodeIds.some(id => nodeIds.has(id)))
-    .map(({ content, appliesToNodeIds, ...reference }) => reference);
+    .map(entry => ({ typeId: entry.typeId, ...provenance(entry) }));
   const edgeIds = new Set(references.filter(ref => ref.kind === "edge").map(ref => ref.id));
   const communicationReferences = (context.communicationGuidance ?? [])
     .filter(entry => entry.appliesToEdgeIds.some(id => edgeIds.has(id)))
-    .map(({ content, appliesToEdgeIds, ...reference }) => ({
-      typeId: reference.protocolId, protocolId: reference.protocolId,
-      definitionSource: reference.definitionSource, revision: reference.revision,
-      updatedOn: reference.updatedOn, sources: reference.sources,
-    }));
-  return [...nodeReferences, ...communicationReferences];
+    .map(entry => ({ typeId: entry.protocolId, protocolId: entry.protocolId, ...provenance(entry) }));
+  const authenticationReferences = (context.authenticationGuidance ?? [])
+    .filter(entry => entry.appliesToEdgeIds.some(id => edgeIds.has(id)))
+    .map(entry => ({ typeId: entry.methodId, methodId: entry.methodId, ...provenance(entry) }));
+  return [...nodeReferences, ...communicationReferences, ...authenticationReferences];
 }
 
 export function formatGuidanceReferences(references: readonly AiGuidanceReference[] | undefined): string {
   if (!references?.length) return "";
   return "\n\nAI design guidance supplied as unverified reference context (not deployment evidence):\n"
-    + references.map(ref => `${ref.protocolId ? `Protocol ${ref.protocolId}` : ref.typeId} · revision ${ref.revision} · edited ${ref.updatedOn} · ${ref.definitionSource}`
+    + references.map(ref => `${ref.methodId ? `Authentication ${ref.methodId}` : ref.protocolId ? `Protocol ${ref.protocolId}` : ref.typeId} · revision ${ref.revision} · edited ${ref.updatedOn} · ${ref.definitionSource}`
       + (ref.sources.length ? `\nSources: ${ref.sources.join(", ")}` : "\nNo sources supplied.")).join("\n");
 }

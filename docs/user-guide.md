@@ -397,6 +397,7 @@ identity and summary audience. Guidance does not create dependency nodes or
 verify that a proposed control is deployed.
 It is untrusted reference text for Threat Model Designer and Design Assistant,
 not a policy rule, risk waiver, or evidence that a deployment has a control.
+Methods have the same kind of card; see Customize authentication below.
 Existing Description text is never converted into guidance automatically.
 In node **Properties > General / Security**, expand **AI design guidance** to
 read it and its source URLs/revision/edit date. **Edit guidance for this type in
@@ -412,8 +413,9 @@ formats are not guaranteed to retain it. See the [guidance contract and
 limits](custom-libraries.md#ai-design-guidance).
 
 **Model > Customize authentication** opens one Authentication Library per
-browser profile/origin. Edit **Method** and **Description** for flow selectors
-and node-type policies. It contains 17 modern profiles plus the ambiguous
+browser profile/origin. Edit **Method**, **Description** and optional **AI
+design guidance** for flow selectors and node-type policies. It contains 17
+modern profiles plus the ambiguous
 legacy certificate entry. It also distinguishes **Internal process call** from
 anonymous access: use it only for calls that stay inside one process boundary
 and require no particular authentication mechanism. The flow inspector hides
@@ -421,12 +423,54 @@ caller Application ID controls for this method while retaining any existing
 legacy identity evidence for later review. JSON import/export moves it between
 profiles without editing shipped source JSON.
 
+**Authentication AI design guidance** works like node-type guidance but is
+attached to a method. In the library editor it uses the same content, source
+URL, revision and edit-date fields; **Remove guidance from draft** and Save
+clears it, and Cancel discards the draft. Saving updates your profile library
+and matching definitions in the current diagram. On a flow, expand
+**Authentication AI design guidance** below the authentication selector to read
+the card, its sources, revision and edit date. It is labelled unverified
+reference guidance, not evidence that the flow is secure. Selecting a method
+sends no AI request, and source URLs are not fetched.
+
+On a flow, **Edit guidance for this method in this diagram** opens a draft with
+**Save guidance** and **Cancel guidance edit** (Escape cancels and returns
+focus). This is method-wide: Save changes the diagram's definition of that
+method for every flow that uses it, across all scenarios, but not your profile
+library, the flow's selected method, Description, audience, constraints,
+caller ID, rights or protocol. Use the flow Description for flow-specific
+context. Undo/Redo restores the whole edit. A saved diagram definition wins as
+a whole: if you remove its guidance, the library's card does not return unless
+you explicitly use the library definition in the diagram. If the method changed
+elsewhere while you edited, Save reports it and applies nothing; reopen the
+editor. Older builds may reject a definition containing guidance; the method
+compatibility notice does not guarantee guidance support, so keep an editable
+`.tma` backup.
+
+Design Assistant sends only the cards for methods used by flows in the reviewed
+scenario scope. Threat Model Designer sends cards for every selectable method
+when the whole request fits in one call; otherwise it sends cards for methods on
+included flows plus any it selects from a compact index. When the selected
+cards plus the
+rest of the request would exceed the size limits, it stops and asks for a
+smaller scope rather than dropping or batching cards. Cards are untrusted
+reference text, never instructions, policy or proof of a control. Four
+owner-specific methods (App + user context, CDT, PFAT and PoP + PFT; now core
+definitions) have
+deliberately limited cards, because no authoritative public specification was
+found: those cards list owner-contract questions and generic conditional facts,
+not a complete sourced description of the mechanism, so ask the owner for the
+contract.
+See the [guidance contract](authentication-library.md#ai-design-guidance),
+[custom-library rules](custom-libraries.md#ai-design-guidance) and
+[AI size limits](bring-your-own-ai.md#request-size-and-tokens-per-minute).
+
 Library presence is not target acceptance. **Not specified** means no selection;
 **Custom method** is unverified. Disabled methods remain on existing flows.
 Saved diagram definitions do not overwrite your library: resolve conflicts
 explicitly. Never infer direct mTLS from legacy certificate authentication.
 The [library contract](authentication-library.md) covers stable IDs,
-safe deletion, Undo/Redo, and compatibility.
+safe deletion, Undo/Redo, guidance and compatibility.
 
 **Model > Communication Library** edits the source-backed protocol profiles
 available to new edge selections. A diagram carries portable definitions for
@@ -617,12 +661,64 @@ diagram selection moves away. Like Issues, an unpinned inspector follows the
 selection to Properties; pin it to keep reviewing findings. Chat reference
 buttons use the same navigation. Missing references are shown as unavailable.
 
-When space permits, AI Analysis scrolls its results while the mode selector and
-model context remain visible; Chat keeps its own scrolling area and fixed
-composer. In short panels, Assistant content scrolls together instead, keeping
-the inspector title and tabs visible. Scroll or Tab through finding actions to
-reach the final result. In the compact layout, focus the Assistant panel and
-use Page Up/Page Down or Home/End to scroll with the keyboard.
+AI Analysis uses one scrolling area for its setup controls and results, so
+provider information cannot trap findings in a thin strip. **Go to AI findings**
+jumps past those controls. Chat keeps its own scrolling area and composer when
+space permits; in short panels its content scrolls together. Scroll or Tab
+through finding actions to reach the final result.
+
+#### Keep the Assistant review open
+
+Use the **Assistant display** selector above the review:
+
+- **Dock in inspector** uses the normal Findings tab.
+- **Float in this page** opens a movable, resizable review over the canvas and
+  hides the inspector. Drag its title bar or focus the bar and use arrow keys
+  to move it. Drag the bottom-right handle, or focus it and use arrow keys, to
+  resize; Shift uses larger steps. It stays within the usable viewport and
+  leaves room for the bottom-left canvas controls.
+- **Open separate window** uses a normal resizable browser window, which can
+  be moved to another monitor. Keep the main SDS page open. If browser policy
+  blocks the window, the current review stays in place and the message offers
+  the floating alternative.
+
+These are presentations of the **same review**, not new app sessions. Moving,
+resizing and re-docking keep the results, accepted-state feedback, chat draft,
+conversation and reading position without making another AI request. Escape
+from review content docks it; native select controls handle their own Escape.
+Closing the separate window also docks the review. Reopening Findings in the
+main inspector while undocked offers **Focus Design Assistant** and **Dock
+Design Assistant**.
+
+Findings are labelled with their analyzed scenario snapshot. Navigating the
+model does not silently re-analyze them. Closing a docked inspector cancels a
+pending request but retains previous results and drafts; changing presentation
+does not cancel it. New/Open or changing collaboration rooms clears the outgoing
+review and draft. Changing the AI provider clears findings and conversation,
+while leaving the draft editable. Reloading or closing the main page clears
+this in-memory review state and closes its separate window. It is not stored
+in the model or shared through collaboration.
+
+#### Export findings and issues to Excel
+
+**Excel (.xlsx)** is available above the Assistant review and in **All issues**.
+It exports the latest completed AI findings, including unaccepted ones, and
+**every saved issue across all scenarios and statuses**, regardless of the
+current filter. The workbook includes analysis context/answer, references,
+guidance provenance, descriptions, recommendations, evaluator state and issue
+discussion replies. An accepted finding may appear in both the AI findings
+sheet and the saved Issues sheet; these are distinct records, not deduplicated.
+Saved issues have review status, not an invented severity; AI findings retain
+their suggested severity.
+
+The export is a real `.xlsx` workbook, not HTML renamed to `.xls`. All values,
+including formula-looking strings and URLs, are text cells; there are no
+formulas, macros or external workbook links. Text beyond Excel's cell length
+limit is retained in numbered parts in a **Long text** sheet rather than
+silently truncated. Export is local and does not send an AI request.
+
+Keep the native `.tma` file for an editable model backup. The workbook is a
+review snapshot, not an import format or proof of a complete security analysis.
 
 Drag the Chat text box's bottom-right handle to resize it vertically. Its height
 is bounded to preserve space for the rest of the panel; longer text scrolls

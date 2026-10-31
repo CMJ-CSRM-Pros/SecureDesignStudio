@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { localAiSettings } from "../../scripts/configure-local-ai.mjs";
+
+test("local setup: Vite config imports natively without starting a server", () => {
+  const result = spawnSync(process.execPath, [
+    "--input-type=module", "--eval",
+    "const { default: config } = await import(process.argv[1]); if (typeof config !== 'function') throw new Error('Expected the Vite configuration factory.');",
+    new URL("../../vite.config.ts", import.meta.url).href,
+  ], { encoding: "utf8", timeout: 30_000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+});
 
 test("local AI setup: subscription providers need no Azure configuration or stored credentials", () => {
   for (const provider of ["claude", "codex"]) {

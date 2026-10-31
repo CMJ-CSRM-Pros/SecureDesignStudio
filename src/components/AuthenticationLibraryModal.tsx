@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { useLibraries } from "../libraries/LibraryProvider";
+import { AiDesignGuidanceDetails, AiDesignGuidanceEditor } from "./AiDesignGuidanceEditor";
+import type { AiDesignGuidance } from "../../shared/aiDesignGuidance";
 import {
   authenticationReferences,
   authenticationVersionStatus,
@@ -19,7 +21,10 @@ import {
   type AuthenticationCompatibility,
 } from "../types";
 
-type MethodDraft = { id: string; label: string; description: string; isNew: boolean };
+type MethodDraft = {
+  id: string; label: string; description: string; isNew: boolean;
+  aiDesignGuidance?: AiDesignGuidance; baseline?: string;
+};
 type Confirmation = { kind: "delete" | "reset" | "resolve"; method: AuthTypeDef };
 type ImportPreview = {
   fileName: string;
@@ -56,6 +61,8 @@ function DefinitionText({ method }: { method?: AuthTypeDef }) {
       <dd>{method.label}</dd>
       <dt>Description</dt>
       <dd>{method.description}</dd>
+      <dt>AI design guidance</dt>
+      <dd><AiDesignGuidanceDetails value={method.aiDesignGuidance} /></dd>
     </dl>
   );
 }
@@ -199,7 +206,8 @@ export function AuthenticationLibraryModal({ onClose }: { onClose: () => void })
   const presentationChanged = !!selected && !!selectedBuiltIn && (
     selected.label !== selectedBuiltIn.label ||
     selected.description !== selectedBuiltIn.description ||
-    selected.shortLabel !== selectedBuiltIn.shortLabel
+    selected.shortLabel !== selectedBuiltIn.shortLabel ||
+    JSON.stringify(selected.aiDesignGuidance) !== JSON.stringify(selectedBuiltIn.aiDesignGuidance)
   );
 
   useLayoutEffect(() => {
@@ -295,6 +303,8 @@ export function AuthenticationLibraryModal({ onClose }: { onClose: () => void })
     setDraft({
       id: method?.id ?? uid("auth"), label: method?.label ?? "",
       description: method?.description ?? "", isNew: !method,
+      aiDesignGuidance: method?.aiDesignGuidance ? structuredClone(method.aiDesignGuidance) : undefined,
+      baseline: method ? JSON.stringify(method) : undefined,
     });
   };
 
@@ -442,7 +452,7 @@ export function AuthenticationLibraryModal({ onClose }: { onClose: () => void })
                   <DefinitionText method={confirmation.method} />
                   <p>{confirmation.kind === "delete"
                     ? "Delete this custom method from your browser profile? Methods used by a flow, node policy, or undo/redo history cannot be deleted. Disable the method instead if it must remain available for existing models. Other saved files are never rewritten."
-                    : "Restore the supplied Method, Description, and short display label. The method keeps its enabled/disabled setting. Matching definitions in this diagram follow the reset; different saved definitions remain unchanged."}</p>
+                    : "Restore the supplied Method, Description, short display label, and AI design guidance. The method keeps its enabled/disabled setting. Matching definitions in this diagram follow the reset; different saved definitions remain unchanged."}</p>
                 </>
               )}
             </section>
@@ -545,7 +555,16 @@ export function AuthenticationLibraryModal({ onClose }: { onClose: () => void })
                   {draft ? (
                     <form id="ps-auth-method-form" onSubmit={event => {
                       event.preventDefault();
-                      if (act(() => saveAuthenticationMethod({ id: draft.id, label: draft.label, description: draft.description }), "Method saved to this browser profile.")) {
+                      if (act(() => {
+                        const current = authenticationLibrary.find(method => method.id === draft.id);
+                        if (JSON.stringify(current) !== draft.baseline) {
+                          throw new Error("This authentication method changed while you were editing. Cancel and reopen the editor; no changes were applied.");
+                        }
+                        saveAuthenticationMethod({
+                          id: draft.id, label: draft.label, description: draft.description,
+                          aiDesignGuidance: draft.aiDesignGuidance,
+                        });
+                      }, "Method saved to this browser profile.")) {
                         setSelectedId(draft.id);
                         setQuery("");
                         setDraft(null);
@@ -562,6 +581,9 @@ export function AuthenticationLibraryModal({ onClose }: { onClose: () => void })
                       </label>
                       <p>Plain text only. Method: up to 80 characters. Description: up to 4,000 characters.</p>
                       <p>{isKnownInstalledAuthentication(draft.id, installed) ? "Supplied behavior and identity stay protected; only presentation is edited." : "Custom methods are unverified. A name or description does not establish secure authentication behavior."}</p>
+                      <AiDesignGuidanceEditor value={draft.aiDesignGuidance}
+                        onChange={aiDesignGuidance => setDraft({ ...draft, aiDesignGuidance })}
+                        removeConfirmation="Remove AI design guidance from this draft? Save method to apply this to your profile library and matching definitions in the current diagram." />
                     </form>
                   ) : selected ? (
                     <>
