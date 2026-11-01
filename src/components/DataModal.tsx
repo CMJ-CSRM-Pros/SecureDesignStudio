@@ -153,10 +153,10 @@ export function DataModal({
                         </span>
                         <button
                           className="ps-danger"
-                          onClick={() => {
+                          onClick={event => {
                             if (
                               usedBy === 0 ||
-                              window.confirm(
+                              (event.currentTarget.ownerDocument.defaultView ?? window).confirm(
                                 `This data item is attached to ${usedBy} edge${
                                   usedBy === 1 ? "" : "s"
                                 }. Delete anyway?`

@@ -254,8 +254,8 @@ test("AI providers: shared selection, readiness, request routing, persistence an
       }
       assert.ok(docked.height >= 60 && docked.firstVisible && docked.scrollable,
         `Provider controls must not leave a zero-height results strip: ${JSON.stringify(docked)}`);
-      await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("floating");
-      await page.getByRole("dialog", { name: "Design Assistant review", exact: true }).waitFor();
+      await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("floating");
+      await page.getByRole("dialog", { name: "Inspector", exact: true }).waitFor();
       await analysis.getByRole("button", { name: "Go to AI findings (5)", exact: true }).click();
       assert.ok(await analysis.evaluate(root => root.clientHeight >= 180), "Floating view reserves usable review space");
       await analysis.evaluate(root => { root.scrollTop = root.scrollHeight; });
@@ -267,7 +267,7 @@ test("AI providers: shared selection, readiness, request routing, persistence an
       const screenshot = resolve(tmpdir(), `sds-findings-${viewport.width}x${viewport.height}-${Date.now()}.png`);
       await page.screenshot({ path: screenshot });
       console.log(`Findings review layout evidence: ${screenshot}`);
-      await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("docked");
+      await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("docked");
     }
     assert.equal(posts.length, requestCount, "Moving and resizing findings does not run more AI requests");
     assert.deepEqual(faults, []);

@@ -22,6 +22,8 @@ import { registerThreatNoteContracts } from "./threat-note-contracts.mjs";
 import { registerSampleContracts } from "./sample-contracts.mjs";
 import { registerDesignerContracts } from "./designer-contracts.mjs";
 import { registerAiGuidanceContracts } from "./ai-guidance-contracts.mjs";
+import { unzipSync, strFromU8 } from "fflate";
+import { DOMParser } from "@xmldom/xmldom";
 
 let harness;
 before(async () => { harness = await startHarness(); });
@@ -65,6 +67,112 @@ registerThreatNoteContracts({ getHarness: () => harness, exportModel });
 registerSampleContracts({ getHarness: () => harness, exportModel });
 registerDesignerContracts({ getHarness: () => harness });
 registerAiGuidanceContracts({ getHarness: () => harness, exportModel });
+
+test("usability: all inspector tabs share one persistent docked, floating and popup surface and workbook", async () => {
+  await harness.run("usability: unified inspector presentations", async ({ page }) => {
+    const input = modelFixture();
+    input.doc.workItems = [{ id: "wi_export", description: "=Work to retain", link: "" }];
+    input.doc.comments = [{ id: "c_export", scenarioId: "s_primary", targetKind: "edge", targetId: "e_request",
+      status: "Active", createdAt: 0, text: "Comment to retain", replies: [] }];
+    input.doc.deviations = [{ id: "dev_export", key: "synthetic", kind: "other", title: "Deviation to retain",
+      description: "Synthetic evidence", explanation: "Missing evidence", status: "Active", scenarioIds: [],
+      evidenceIds: [], createdAt: 0, updatedAt: 0 }];
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "inspector.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    const comparison = structuredClone(input);
+    comparison.doc.edges[0].title = "Previous flow";
+    await page.locator("#ps-file-compare-input").setInputFiles({
+      name: "before.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(comparison)),
+    });
+    await until(() => page.evaluate(key => Boolean(localStorage.getItem(key)), autosaveKey), "inspector fixture autosaved");
+    const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), autosaveKey);
+    await page.getByRole("tab", { name: /^Comments\b/ }).click();
+    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await page.getByPlaceholder("Reply…", { exact: true }).fill("Unsent reply survives");
+
+    for (const [tab, id] of [
+      ["Properties", "properties"], ["Edges", "edges"], ["Issues", "issues"], ["Comments", "comments"],
+      ["Deviations", "deviations"], ["Changes", "changes"], ["Data", "data"], ["Work", "work"], ["Findings", "assistant"],
+    ]) {
+      await page.getByRole("tab", { name: new RegExp(`^${tab}\\b`) }).click();
+      const panelId = `#ps-inspector-panel-${id}`;
+      await page.locator(panelId).evaluate(element => { element.dataset.surfaceIdentity = "same-mounted-panel"; });
+      await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("floating");
+      const floating = page.getByRole("dialog", { name: "Inspector", exact: true });
+      await floating.waitFor();
+      assert.equal(await page.locator(".ps-inspector-dock").isVisible(), false);
+      assert.equal(await floating.locator(panelId).getAttribute("data-surface-identity"), "same-mounted-panel");
+      const pending = page.context().waitForEvent("page");
+      await floating.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("window");
+      const child = await pending;
+      await child.locator(panelId).waitFor();
+      assert.equal(await child.locator(panelId).getAttribute("data-surface-identity"), "same-mounted-panel");
+      assert.equal(await child.getByRole("tablist", { name: "Inspector views" }).count(), 1);
+      assert.equal(await child.evaluate(() => window.opener), null);
+      assert.equal(await child.locator("script").count(), 0, "Popup only receives styles and the existing portal");
+      if (id === "comments") {
+        assert.equal(await child.getByPlaceholder("Reply…", { exact: true }).inputValue(), "Unsent reply survives");
+        await child.getByPlaceholder("Reply…", { exact: true }).fill("Edited in popup");
+      }
+      if (id === "work" || id === "data" || id === "comments") {
+        const dialogPending = child.waitForEvent("dialog", { timeout: 6000 });
+        const deleting = id === "comments"
+          ? child.getByRole("button", { name: "Delete", exact: true })
+          : child.locator(panelId).locator(".ps-data-actions button").first();
+        const clickPending = deleting.click();
+        const dialog = await dialogPending;
+        assert.equal(dialog.type(), "confirm", "Confirmation belongs to the inspector window");
+        await dialog.dismiss();
+        await clickPending;
+      }
+      if (id === "data") {
+        await child.getByRole("tab", { name: /^Work\b/ }).click();
+        await child.getByRole("tab", { name: /^Data\b/ }).click();
+        const downloadPending = child.waitForEvent("download");
+        await child.getByRole("button", { name: "Export all inspector data (.xlsx)", exact: true }).click();
+        const download = await downloadPending;
+        assert.equal(download.suggestedFilename(), "secure-design-studio-inspector.xlsx");
+        const chunks = [];
+        for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+        const files = unzipSync(Buffer.concat(chunks));
+        const workbook = new DOMParser().parseFromString(strFromU8(files["xl/workbook.xml"]), "application/xml");
+        const names = [...workbook.getElementsByTagName("sheet")].map(sheet => sheet.getAttribute("name"));
+        for (const name of ["Data", "Work", "Comments", "Edges", "Scenarios", "Deviations", "Changes", "AI findings", "Issues"]) {
+          assert.ok(names.includes(name), name);
+        }
+        assert.match(strFromU8(files[`xl/worksheets/sheet${names.indexOf("Work") + 1}.xml`]), /=Work to retain/);
+        assert.match(strFromU8(files[`xl/worksheets/sheet${names.indexOf("Edges") + 1}.xml`]), /Archive payload/,
+          "Other scenarios export too");
+        assert.match(strFromU8(files[`xl/worksheets/sheet${names.indexOf("Changes") + 1}.xml`]), /Previous flow/);
+      }
+      await child.close();
+      await page.locator(panelId).waitFor();
+      assert.equal(await page.getByRole("combobox", { name: "Inspector display", exact: true }).inputValue(), "docked");
+      assert.equal(await page.locator(panelId).getAttribute("data-surface-identity"), "same-mounted-panel");
+    }
+    await page.getByRole("tab", { name: /^Comments\b/ }).click();
+    assert.equal(await page.getByPlaceholder("Reply…", { exact: true }).inputValue(), "Edited in popup");
+    await page.getByRole("button", { name: "Close inspector", exact: true }).click();
+    await page.getByRole("button", { name: "Open inspector", exact: true }).click();
+    assert.equal(await page.getByPlaceholder("Reply…", { exact: true }).inputValue(), "Edited in popup",
+      "Closing/reopening also preserves unfinished tab drafts");
+    const after = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), autosaveKey);
+    assert.deepEqual(after.doc, before.doc);
+    assert.deepEqual(after.past, before.past);
+    await page.getByRole("tab", { name: /^Changes\b/ }).click();
+    const pending = page.context().waitForEvent("page");
+    await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("window");
+    const child = await pending;
+    const confirmation = child.waitForEvent("dialog", { timeout: 6000 });
+    const removal = child.getByRole("button", { name: "Remove comparison", exact: true }).click();
+    await (await confirmation).accept();
+    await removal;
+    await until(() => child.locator("#ps-inspector-tab-properties").evaluate(element => element === element.ownerDocument.activeElement),
+      "Removing a comparison restores Properties focus inside the popup");
+    await child.close();
+  });
+});
 
 test("regression: catalog selector groups Microsoft, scopes Generic and discovers future sources", async () => {
   await harness.run("regression: catalog source routes", async ({ page }) => {

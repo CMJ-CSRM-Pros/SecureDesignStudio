@@ -119,11 +119,11 @@ export function WorkItemsModal({
                     <td className="ps-data-actions">
                       <button
                         className="ps-danger"
-                        onClick={() => {
+                        onClick={event => {
                           if (
                             (w.description.trim() === "" &&
                               w.link.trim() === "") ||
-                            window.confirm("Delete this work item?")
+                            (event.currentTarget.ownerDocument.defaultView ?? window).confirm("Delete this work item?")
                           ) {
                             deleteWorkItem(w.id);
                           }

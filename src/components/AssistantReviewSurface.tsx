@@ -1,12 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { useUiShell } from "../uiShell";
-import { DesignAssistantPanel } from "./DesignAssistantPanel";
+import { useUiShell, type InspectorPresentation } from "../uiShell";
 import { FindingsExportButton } from "./FindingsExportButton";
 
-type Presentation = "docked" | "floating" | "window";
 type Frame = { left: number; top: number; width: number; height: number };
-type ScrollPlace = { key: string; top: number; left: number; finding?: string; offset?: number };
+type ScrollPlace = { element: HTMLElement; top: number; left: number; finding?: string; offset?: number };
 type ReviewPlace = {
   scroll: ScrollPlace[];
   focus: HTMLElement | null;
@@ -29,18 +27,20 @@ export function clampAssistantFrame(frame: Frame, viewport: { width: number; hei
   };
 }
 
-export function AssistantReviewSurface({
-  dockTarget, dockVisible,
-}: { dockTarget: HTMLElement | null; dockVisible: boolean }) {
-  const { inspectorVisible, openInspector, closeInspector } = useUiShell();
-  const [mode, setMode] = useState<Presentation>("docked");
-  const modeRef = useRef<Presentation>(mode);
+export function InspectorSurface({ children, className = "", dockWidth }: {
+  children: ReactNode; className?: string; dockWidth: number;
+}) {
+  const {
+    inspectorVisible, inspectorActiveTab, openInspector, inspectorHostRef,
+    inspectorPresentation: mode, setInspectorPresentation: setMode,
+  } = useUiShell();
+  const modeRef = useRef<InspectorPresentation>(mode);
   modeRef.current = mode;
   const [error, setError] = useState("");
   const [frame, setFrame] = useState<Frame>(() => clampAssistantFrame({
     left: window.innerWidth - 924, top: 24, width: 900, height: 700,
   }, { width: window.innerWidth, height: window.innerHeight }));
-  // Move one portal container, never remount the review when changing presentation.
+  // Move one portal container so every tab keeps its editors and reading position.
   const [host] = useState(() => {
     const element = document.createElement("div");
     element.className = "ps-assistant-surface-slot";
@@ -51,31 +51,34 @@ export function AssistantReviewSurface({
   const popup = useRef<Window | null>(null);
   const popupCleanup = useRef<(() => void) | null>(null);
   const gestureCleanup = useRef<(() => void) | null>(null);
-  const dockRef = useRef(dockTarget);
-  dockRef.current = dockTarget;
+  const currentTab = useRef(inspectorActiveTab);
+  currentTab.current = inspectorActiveTab;
   const savedPlace = useRef<ReviewPlace>({ scroll: [], focus: null });
   const restoreTicket = useRef(0);
   const popupSize = useRef({ width: 1000, height: 760 });
 
   const capturePlace = (): ReviewPlace => {
-    const scrollers = [...host.querySelectorAll<HTMLElement>("[data-assistant-scroll]")]
-      .filter(element => element.clientHeight > 0);
+    const scrollers = [...host.querySelectorAll<HTMLElement>("*")]
+      .filter(element => element.clientHeight > 0 && (
+        element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth
+        || element.hasAttribute("data-assistant-scroll")
+      ));
     if (!scrollers.length) return savedPlace.current;
     const active = host.ownerDocument.activeElement;
     const focus = active && host.contains(active) && "focus" in active && typeof active.focus === "function"
       ? active as HTMLElement : null;
-    const place: ReviewPlace = {
-      focus,
-      scroll: scrollers.map(element => {
-        const bounds = element.getBoundingClientRect();
-        const anchor = [...element.querySelectorAll<HTMLElement>("[data-finding-id]")]
-          .find(row => row.getBoundingClientRect().bottom > bounds.top && row.getBoundingClientRect().top < bounds.bottom);
-        return {
-          key: element.dataset.assistantScroll!, top: element.scrollTop, left: element.scrollLeft,
-          ...(anchor ? { finding: anchor.dataset.findingId, offset: anchor.getBoundingClientRect().top - bounds.top } : {}),
-        };
-      }),
-    };
+    const scroll = new Map(savedPlace.current.scroll
+      .filter(saved => host.contains(saved.element)).map(saved => [saved.element, saved]));
+    for (const element of scrollers) {
+      const bounds = element.getBoundingClientRect();
+      const anchor = [...element.querySelectorAll<HTMLElement>("[data-finding-id]")]
+        .find(row => row.getBoundingClientRect().bottom > bounds.top && row.getBoundingClientRect().top < bounds.bottom);
+      scroll.set(element, {
+        element, top: element.scrollTop, left: element.scrollLeft,
+        ...(anchor ? { finding: anchor.dataset.findingId, offset: anchor.getBoundingClientRect().top - bounds.top } : {}),
+      });
+    }
+    const place: ReviewPlace = { focus, scroll: [...scroll.values()] };
     if (textControl(focus) && typeof focus.selectionStart === "number" && typeof focus.selectionEnd === "number") {
       place.caret = { start: focus.selectionStart, end: focus.selectionEnd, direction: focus.selectionDirection ?? "none" };
     }
@@ -85,9 +88,8 @@ export function AssistantReviewSurface({
 
   const restorePlace = (place: ReviewPlace, restoreFocus = true) => {
     for (const saved of place.scroll) {
-      const element = [...host.querySelectorAll<HTMLElement>("[data-assistant-scroll]")]
-        .find(candidate => candidate.dataset.assistantScroll === saved.key);
-      if (!element || !element.clientHeight) continue;
+      const element = saved.element;
+      if (!host.contains(element) || !element.clientHeight) continue;
       element.scrollTop = saved.top;
       element.scrollLeft = saved.left;
       const anchor = saved.finding
@@ -125,11 +127,11 @@ export function AssistantReviewSurface({
   };
 
   const dock = () => {
-    const target = dockRef.current?.isConnected ? dockRef.current : parking.current;
+    const target = parking.current;
     if (target) moveHost(target);
     releasePopup();
     gestureCleanup.current?.();
-    openInspector("assistant");
+    openInspector(currentTab.current);
     setMode("docked");
     setError("");
   };
@@ -142,7 +144,6 @@ export function AssistantReviewSurface({
     releasePopup();
     setMode("floating");
     setError("");
-    closeInspector({ restoreFocus: false });
     window.focus();
   };
 
@@ -166,7 +167,7 @@ export function AssistantReviewSurface({
     try {
       opened.opener = null;
       const child = opened.document;
-      child.title = "SecureDesignStudio - Design Assistant";
+      child.title = "SecureDesignStudio - Inspector";
       const base = child.createElement("base");
       base.href = new URL(".", document.baseURI).href;
       child.head.appendChild(base);
@@ -200,12 +201,12 @@ export function AssistantReviewSurface({
       let closedCheck: number | undefined;
       const closing = () => {
         if (popup.current !== opened) return;
-        const target = dockRef.current?.isConnected ? dockRef.current : parking.current;
+        const target = parking.current;
         if (target) moveHost(target);
         popup.current = null;
         popupCleanup.current?.();
         popupCleanup.current = null;
-        openInspector("assistant");
+        openInspector(currentTab.current);
         setMode("docked");
       };
       const resized = () => {
@@ -231,35 +232,45 @@ export function AssistantReviewSurface({
       moveHost(shell, place);
       setMode("window");
       setError("");
-      closeInspector({ restoreFocus: false });
     } catch (cause) {
       if (parking.current && host.ownerDocument !== document) moveHost(parking.current, place);
       releasePopup();
       if (!opened.closed) opened.close();
-      openInspector("assistant");
+      openInspector(currentTab.current);
       setMode("docked");
-      setError(cause instanceof Error ? cause.message : "The separate Assistant window could not be opened.");
+      setError(cause instanceof Error ? cause.message : "The separate inspector window could not be opened.");
     }
   };
 
   useLayoutEffect(() => {
+    inspectorHostRef.current = host;
     if (mode === "docked") {
-      const target = dockTarget?.isConnected ? dockTarget : parking.current;
+      const target = parking.current;
       if (target) moveHost(target);
-      if (dockVisible) restorePlace(savedPlace.current, false);
+      if (inspectorVisible) restorePlace(savedPlace.current, false);
     }
-  }, [dockTarget, dockVisible, mode]);
+    if (!inspectorVisible && mode !== "docked") {
+      if (parking.current) moveHost(parking.current);
+      releasePopup();
+      gestureCleanup.current?.();
+      setMode("docked");
+    }
+  }, [inspectorVisible, mode]);
+
+  useLayoutEffect(() => {
+    if (inspectorVisible) restorePlace(savedPlace.current, false);
+  }, [inspectorActiveTab]);
 
   useEffect(() => {
     const save = () => { capturePlace(); };
-    const interacting = () => { restoreTicket.current++; };
+    const interacting = () => { restoreTicket.current++; capturePlace(); };
     host.addEventListener("scroll", save, true);
     host.addEventListener("pointerdown", interacting, true);
     host.addEventListener("keydown", interacting, true);
     host.addEventListener("wheel", interacting, { passive: true });
     const pageClosing = (event: PageTransitionEvent) => {
       if (!event.isTrusted || !popup.current) return;
-      const target = dockRef.current?.isConnected ? dockRef.current : parking.current;
+      const target = parking.current;
       if (target) moveHost(target);
       releasePopup();
       setMode("docked");
@@ -325,23 +336,15 @@ export function AssistantReviewSurface({
   };
 
   return <>
-    <div hidden ref={parking} />
+    <div className="ps-inspector-dock" hidden={!inspectorVisible || mode !== "docked"} ref={parking} />
     <div ref={floatingLayer} className="ps-assistant-floating-layer" />
-    {mode !== "docked" && dockVisible && dockTarget && createPortal(
-      <div className="ps-assistant-undocked-notice">
-        <p>Design Assistant is {mode === "window" ? "in a separate window" : "floating in this page"}. Your review stays open.</p>
-        <button type="button" onClick={() => mode === "window" ? popup.current?.focus() : host.querySelector<HTMLElement>("button")?.focus()}>
-          Focus Design Assistant
-        </button>
-        <button type="button" onClick={dock}>Dock Design Assistant</button>
-      </div>, dockTarget, "assistant-placeholder",
-    )}
     {createPortal(
-      <section className={`ps-assistant-surface is-${mode}`}
+      <section className={`ps-side${inspectorVisible ? " ps-inspector" : ""} ps-assistant-surface ps-inspector-surface is-${mode} ${className}`}
         role={mode === "docked" ? "region" : "dialog"}
-        aria-label="Design Assistant review"
+        aria-label="Inspector"
         data-ps-temporary-surface={mode === "floating" ? "true" : undefined}
         style={{
+          "--ps-inspector-width": `${dockWidth}px`,
           "--ps-assistant-left": `${frame.left}px`, "--ps-assistant-top": `${frame.top}px`,
           "--ps-assistant-width": `${frame.width}px`, "--ps-assistant-height": `${frame.height}px`,
         } as CSSProperties}
@@ -361,7 +364,7 @@ export function AssistantReviewSurface({
         <header className="ps-assistant-surface-bar" onPointerDown={event => startGesture("move", event)}
           tabIndex={mode === "floating" ? 0 : undefined}
           role={mode === "floating" ? "group" : undefined}
-          aria-label={mode === "floating" ? "Move Design Assistant; use arrow keys" : undefined}
+          aria-label={mode === "floating" ? "Move inspector; use arrow keys" : undefined}
           onKeyDown={event => {
             if (mode !== "floating" || event.target !== event.currentTarget || !event.key.startsWith("Arrow")) return;
             event.preventDefault();
@@ -372,9 +375,9 @@ export function AssistantReviewSurface({
               top: current.top + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0),
             }, { width: window.innerWidth, height: window.innerHeight }));
           }}>
-          {mode !== "docked" && <strong className="ps-assistant-surface-title">Design Assistant</strong>}
-          <div className="ps-assistant-window-actions" role="group" aria-label="Assistant window">
-            <select aria-label="Assistant display" value={mode} onChange={event => {
+          {mode !== "docked" && <strong className="ps-assistant-surface-title">Inspector</strong>}
+          <div className="ps-assistant-window-actions" role="group" aria-label="Inspector window">
+            <select aria-label="Inspector display" value={mode} onChange={event => {
               if (event.target.value === "docked") dock();
               else if (event.target.value === "floating") float();
               else if (event.target.value === "window") openWindow();
@@ -387,12 +390,9 @@ export function AssistantReviewSurface({
           </div>
         </header>
         {error && <p className="ps-assistant-error" role="alert">{error}</p>}
-        <div className="ps-assistant-surface-body"><DesignAssistantPanel
-          visible={mode !== "docked" || dockVisible}
-          inspectorClosed={mode === "docked" && !inspectorVisible}
-        /></div>
+        <div className="ps-inspector-surface-body">{children}</div>
         {mode === "floating" && <button type="button" className="ps-assistant-resize"
-          aria-label="Resize Design Assistant; use arrow keys"
+          aria-label="Resize inspector; use arrow keys"
           title="Drag to resize; arrow keys change width and height"
           onPointerDown={event => startGesture("resize", event)}
           onKeyDown={event => {

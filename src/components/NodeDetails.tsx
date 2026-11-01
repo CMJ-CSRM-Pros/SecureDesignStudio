@@ -104,9 +104,9 @@ export function NodeDetails({ node }: { node: PsNode }) {
     updateNode(node.id, { type: next, ...nodeTypeMetadataDefaults(def, inventoryField).values });
   };
 
-  const applyTypeMetadata = () => {
+  const applyTypeMetadata = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (!metadataDiffers) return;
-    if (!window.confirm(`Replace this node's ${inventoryField.label} and EndpointRegex where type defaults are supplied? Other node data will be kept.`)) return;
+    if (!(event.currentTarget.ownerDocument.defaultView ?? window).confirm(`Replace this node's ${inventoryField.label} and EndpointRegex where type defaults are supplied? Other node data will be kept.`)) return;
     updateNode(node.id, suppliedMetadata);
   };
 

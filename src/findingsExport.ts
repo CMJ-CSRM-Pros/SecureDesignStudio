@@ -2,6 +2,7 @@ import { strToU8, zipSync } from "fflate";
 import type { AssistantAnalysisSnapshot, AssistantFinding } from "./designAssistant";
 import { ISSUE_NOT_EVALUATED_LABELS, type PsDocument } from "./types";
 import { formatGuidanceReferences } from "./aiDesignGuidance";
+import type { ChangeItem } from "./diff";
 
 export const FINDINGS_WORKBOOK_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const CELL_LIMIT = 32_767;
@@ -71,6 +72,7 @@ export function createFindingsWorkbook(
   acceptedIds: ReadonlySet<string>,
   analysis: AssistantAnalysisSnapshot | null,
   exportedAt = new Date(),
+  comparison: { fileName: string | null; changes: readonly ChangeItem[] } = { fileName: null, changes: [] },
 ): Uint8Array {
   if (doc.issues.length >= ROW_LIMIT || findings.length >= ROW_LIMIT) {
     throw new Error("The review exceeds Excel's worksheet row limit. Nothing was exported.");
@@ -93,7 +95,8 @@ export function createFindingsWorkbook(
       rows: [
         ["Source", "SecureDesignStudio"],
         ["Exported UTC", exportedAt.toISOString()],
-        ["Scope", "All retained AI findings and all saved issues, including resolved and filtered-out entries across every scenario."],
+        ["Scope", "All inspector data across every scenario, independent of active tabs, selection and filters: model properties, edges, issues, comments, deviations, comparison changes, data, work and retained AI findings."],
+        ["Comparison file", comparison.fileName ?? "No comparison loaded"],
         ["AI analysis scenario", analysis ? `${analysis.scenarioName} (${analysis.scenarioId})` : "Not recorded"],
         ["AI analysis UTC", timestamp(analysis?.createdAt)],
         ["AI analysis answer", analysis?.answer ?? ""],
@@ -134,6 +137,79 @@ export function createFindingsWorkbook(
         [issue.id, reply.id, timestamp(reply.createdAt), reply.text])),
     },
   ];
+  const records = <T,>(name: string, values: readonly T[], headers: string[], project: (value: T) => string[], widths: number[]) => {
+    if (values.length >= ROW_LIMIT) {
+      throw new Error(`"${name}" exceeds Excel's worksheet row limit. Nothing was exported.`);
+    }
+    sheets.push({
+      name, headers: [...headers, "Complete record (JSON)"], widths: [...widths, 90],
+      rows: values.map(value => [...project(value), JSON.stringify(value)]),
+    });
+  };
+  records("Nodes", doc.nodes, ["Node ID", "Title", "Type ID", "Description"],
+    node => [node.id, node.title, node.type ?? "", node.description ?? ""], [26, 40, 30, 70]);
+  records("Edges", doc.edges, ["Edge ID", "Title", "Source ID", "Source name", "Target ID", "Target name", "Description", "Authentication IDs", "Protocol ID", "Audience", "Constraints", "Application ID", "Required access rights"],
+    edge => [edge.id, edge.title, edge.source, targetName("node", edge.source), edge.target, targetName("node", edge.target),
+      edge.description, (edge.authenticationTypes ?? []).join("\n"), edge.protocolId ?? "", edge.audience ?? "",
+      edge.constraints ?? "", edge.applicationId ?? "", edge.requiredAccessRights ?? ""],
+    [26, 40, 26, 35, 26, 35, 70, 32, 30, 40, 50, 40, 60]);
+  records("Boundaries", doc.boundaries, ["Boundary ID", "Title", "Type"],
+    boundary => [boundary.id, boundary.title, boundary.type], [26, 40, 20]);
+  records("Scenarios", doc.scenarios, ["Scenario ID", "Name", "Description"],
+    scenario => [scenario.id, scenario.name, scenario.description ?? ""], [26, 40, 70]);
+  const scenarioEdges: Sheet = {
+    name: "Scenario edges", headers: ["Scenario ID", "Scenario name", "Edge ID", "Sequence number", "Request data IDs", "Response data IDs"],
+    widths: [26, 40, 26, 20, 50, 50], rows: [],
+  };
+  for (const scenario of doc.scenarios) {
+    for (const [index, id] of (scenario.edgeIds ?? []).entries()) {
+      if (scenarioEdges.rows.length >= ROW_LIMIT - 1) {
+        throw new Error('"Scenario edges" exceeds Excel\'s worksheet row limit. Nothing was exported.');
+      }
+      scenarioEdges.rows.push([scenario.id, scenario.name, id, String(scenario.edgeNumbers?.[id] ?? index + 1),
+        (scenario.edgeRequestData?.[id] ?? []).join("\n"), (scenario.edgeResponseData?.[id] ?? []).join("\n")]);
+    }
+  }
+  sheets.push(scenarioEdges);
+  records("Data", doc.data, ["Data ID", "Name", "Classification ID", "Sample"],
+    data => [data.id, data.name, data.classification, data.sample], [26, 40, 30, 70]);
+  records("Work", doc.workItems, ["Work item ID", "Description", "Link"],
+    item => [item.id, item.description, item.link], [26, 80, 60]);
+  records("Comments", doc.comments, ["Comment ID", "Status", "Scenario ID", "Scenario name", "Target kind", "Target ID", "Target name", "Created UTC", "Comment text"],
+    comment => [comment.id, comment.status, comment.scenarioId,
+      doc.scenarios.find(scenario => scenario.id === comment.scenarioId)?.name ?? "(missing scenario)",
+      comment.targetKind, comment.targetId, targetName(comment.targetKind, comment.targetId), timestamp(comment.createdAt), comment.text],
+    [26, 14, 26, 40, 14, 26, 40, 27, 90]);
+  const commentReplies: Sheet = {
+    name: "Comment replies", headers: ["Comment ID", "Reply ID", "Created UTC", "Discussion text"],
+    widths: [26, 26, 27, 100], rows: [],
+  };
+  for (const comment of doc.comments) {
+    for (const reply of comment.replies) {
+      if (commentReplies.rows.length >= ROW_LIMIT - 1) {
+        throw new Error('"Comment replies" exceeds Excel\'s worksheet row limit. Nothing was exported.');
+      }
+      commentReplies.rows.push([comment.id, reply.id, timestamp(reply.createdAt), reply.text]);
+    }
+  }
+  sheets.push(commentReplies);
+  records("Deviations", doc.deviations, ["Deviation ID", "Kind", "Status", "Title", "Description", "Explanation", "Scenarios", "Created UTC", "Updated UTC"],
+    deviation => [deviation.id, deviation.kind, deviation.status, deviation.title, deviation.description, deviation.explanation,
+      scenarios(deviation.scenarioIds), timestamp(deviation.createdAt), timestamp(deviation.updatedAt)],
+    [26, 24, 14, 42, 70, 70, 40, 27, 27]);
+  records("Changes", comparison.changes, ["Change ID", "Category", "Description", "Scenario ID", "Scenario name", "Edge number"],
+    change => [change.id, change.category, change.description, change.scenarioId ?? "", change.scenarioName ?? "",
+      change.edgeNumber === undefined ? "" : String(change.edgeNumber)], [26, 22, 90, 26, 40, 20]);
+  records("Text annotations", doc.textAnnotations ?? [], ["Annotation ID", "Text"],
+    annotation => [annotation.id, annotation.text], [26, 90]);
+  const definitions = [
+    ...doc.nodeTypes.map(definition => ({ kind: "nodeType", definition })),
+    ...(doc.authenticationDefinitions ?? []).map(definition => ({ kind: "authentication", definition })),
+    ...(doc.protocolDefinitions ?? []).map(definition => ({ kind: "protocol", definition })),
+    ...(doc.catalogDefinitions ?? []).map(definition => ({ kind: definition.kind, definition })),
+  ];
+  records("Definitions", definitions, ["Kind", "Definition ID"],
+    record => [record.kind, record.definition.id], [26, 40]);
   const overflow: Sheet = {
     name: "Long text", headers: ["Sheet", "Record row", "Column", "Part", "Full text segment"],
     widths: [22, 14, 28, 10, 100], rows: [],

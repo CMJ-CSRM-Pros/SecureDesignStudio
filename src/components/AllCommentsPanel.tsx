@@ -175,7 +175,7 @@ function CommentRow({
 
   const onDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Delete this comment and its replies?")) return;
+    if (!(e.currentTarget.ownerDocument.defaultView ?? window).confirm("Delete this comment and its replies?")) return;
     deleteComment(comment.id);
   };
 

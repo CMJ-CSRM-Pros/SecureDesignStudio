@@ -62,7 +62,11 @@ test("findings workbook exports every saved status/scenario and unaccepted AI re
   const before = structuredClone({ doc, findings });
   const accepted = new Set(["f_first"]);
   const result = open(createFindingsWorkbook(doc, findings, accepted, source, when));
-  assert.deepEqual(result.sheets.map(sheet => sheet.name), ["Export info", "AI findings", "Issues", "Issue replies"]);
+  assert.deepEqual(result.sheets.map(sheet => sheet.name), [
+    "Export info", "AI findings", "Issues", "Issue replies", "Nodes", "Edges", "Boundaries",
+    "Scenarios", "Scenario edges", "Data", "Work", "Comments", "Comment replies",
+    "Deviations", "Changes", "Text annotations", "Definitions",
+  ]);
   const ai = result.sheet("AI findings").rows;
   assert.equal(ai.length, 3);
   assert.equal(ai[1][6], "Yes");
@@ -150,4 +154,53 @@ test("unsupported row counts and invalid timestamps fail explicitly", () => {
   const manyReplies = fixture();
   manyReplies.issues[0].replies = new Array(1_048_576);
   assert.throws(() => createFindingsWorkbook(manyReplies, [], new Set(), null, when), /discussion exceeds/);
+});
+
+test("all inspector tabs export complete model records, directional scenario data and comparison context", () => {
+  const doc = fixture();
+  doc.nodes[0].metadata = { custom: "=1+2" };
+  doc.edges = [{ id: "e_export", title: "Flow", source: "n_first", target: "n_missing", description: "All fields",
+    authenticationTypes: ["ApiKey"], requiredAccessRights: "Read only", waypoints: [{ id: "w_1", x: 4, y: 7 }],
+    metadata: { custom: "Unrecognized metadata survives" } }];
+  doc.scenarios[0] = { ...doc.scenarios[0], description: "Second scenario", nodeIds: ["n_first"], boundaryIds: [],
+    edgeIds: ["e_export"], edgeNumbers: { e_export: 27 }, nodeData: { n_first: { d_1: "Session" } },
+    edgeRequestData: { e_export: ["d_1"] }, edgeResponseData: { e_export: ["d_2"] } };
+  doc.data = [
+    { id: "d_1", name: "=Untrusted data", classification: "EUPI", sample: "Sample <text>" },
+    { id: "d_2", name: "Response data", classification: "EUII", sample: "0000123" },
+  ];
+  doc.workItems = [{ id: "wi_1", description: "+Work text", link: "https://example.invalid/work" }];
+  doc.comments = [{ id: "c_1", scenarioId: "s_other", targetKind: "edge", targetId: "e_export",
+    status: "Resolved", createdAt: 0, text: "A".repeat(34_000),
+    replies: [{ id: "cr_1", text: "=Reply text", createdAt: 1000 }] }];
+  doc.deviations = [{ id: "dev_1", kind: "other", key: "key", title: "Deviation", status: "Active",
+    description: "Description", explanation: "Explanation", scenarioIds: [], evidenceIds: ["ev_1"], createdAt: 0, updatedAt: 1000 }];
+  doc.boundaries = [{ id: "b_1", title: "Boundary", type: "security", nodeIds: ["n_first"], position: { x: 1, y: 2 },
+    size: { width: 100, height: 100 }, inboundAllow: "443" }];
+  doc.textAnnotations = [{ id: "a_1", text: "Canvas note", position: { x: 1, y: 1 }, size: { width: 100, height: 50 } }];
+  const changes = [{ id: "chg_1", category: "edge", description: "Flow updated", target: { kind: "edge", id: "e_export" },
+    scenarioId: "s_other", scenarioName: "Another scenario", edgeNumber: 27 }];
+  const before = structuredClone(doc);
+  const result = open(createFindingsWorkbook(doc, [], new Set(), null, when, { fileName: "before.tma", changes }));
+  assert.equal(result.sheet("Export info").rows.find(row => row[0] === "Comparison file")[1], "before.tma");
+  assert.deepEqual(result.sheet("Scenario edges").rows[1], ["s_other", "Another scenario", "e_export", "27", "d_1", "d_2"]);
+  assert.equal(result.sheet("Data").rows[1][1], "=Untrusted data");
+  assert.equal(result.sheet("Data").rows[2][3], "0000123");
+  assert.deepEqual(result.sheet("Comment replies").rows[1], ["c_1", "cr_1", "1970-01-01T00:00:01.000Z", "=Reply text"]);
+  for (const [sheetName, source] of [
+    ["Nodes", doc.nodes], ["Edges", doc.edges], ["Boundaries", doc.boundaries], ["Scenarios", doc.scenarios],
+    ["Data", doc.data], ["Work", doc.workItems], ["Comments", doc.comments], ["Deviations", doc.deviations],
+    ["Text annotations", doc.textAnnotations], ["Changes", changes],
+  ]) {
+    const sheet = result.sheet(sheetName);
+    const column = sheet.rows[0].indexOf("Complete record (JSON)");
+    assert.ok(column >= 0);
+    const fullRecords = sheet.rows.slice(1).map((row, index) => {
+      const overflow = result.sheet("Long text")?.rows.slice(1).filter(part =>
+        part[0] === sheetName && part[1] === String(index + 2) && part[2] === "Complete record (JSON)");
+      return JSON.parse(overflow?.length ? overflow.map(part => part[4]).join("") : row[column]);
+    });
+    assert.deepEqual(fullRecords, source, sheetName);
+  }
+  assert.deepEqual(doc, before, "Export is read-only");
 });
