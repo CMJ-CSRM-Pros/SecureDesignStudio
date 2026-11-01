@@ -82,7 +82,7 @@ export function IssueRow({
 
   const onDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Delete this issue and its replies?")) return;
+    if (!(e.currentTarget.ownerDocument.defaultView ?? window).confirm("Delete this issue and its replies?")) return;
     deleteIssue(issue.id);
   };
 

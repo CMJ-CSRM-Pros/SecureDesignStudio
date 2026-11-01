@@ -70,8 +70,9 @@ export function Combobox({
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    const owner = rootRef.current?.ownerDocument ?? document;
+    owner.addEventListener("mousedown", onDown);
+    return () => owner.removeEventListener("mousedown", onDown);
   }, [open]);
 
   const sortedOptions = useMemo(

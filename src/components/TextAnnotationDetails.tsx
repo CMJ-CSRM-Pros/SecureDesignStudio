@@ -56,8 +56,8 @@ export function TextAnnotationDetails({ annotation }: { annotation: PsTextAnnota
           {scenario.name}
         </label>)}
       </fieldset>
-      <button type="button" onClick={() => {
-        if (!window.confirm("Delete this text annotation from every scenario? This is undoable.")) return;
+      <button type="button" onClick={event => {
+        if (!(event.currentTarget.ownerDocument.defaultView ?? window).confirm("Delete this text annotation from every scenario? This is undoable.")) return;
         deleteTextAnnotation(annotation.id); setSelection(null);
       }}>Delete text annotation</button>
     </section>

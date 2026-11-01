@@ -64,7 +64,7 @@ function StatusBar() {
 }
 
 function AppShell() {
-  const { darkTheme, inspectorVisible, openInspector, reopenFocusRequest, outOfScopeColor, externalInteractorColor } =
+  const { darkTheme, inspectorVisible, inspectorPresentation, openInspector, reopenFocusRequest, outOfScopeColor, externalInteractorColor } =
     useUiShell();
   const reopenInspectorRef = useRef<HTMLButtonElement>(null);
 
@@ -80,7 +80,7 @@ function AppShell() {
       style={{ "--ps-oos-color": outOfScopeColor, "--ps-external-color": externalInteractorColor } as CSSProperties}>
       <Toolbar />
       <main
-        className={`ps-main ${inspectorVisible ? "ps-inspector-visible" : "ps-inspector-hidden"}`}
+        className={`ps-main ${inspectorVisible && inspectorPresentation === "docked" ? "ps-inspector-visible" : "ps-inspector-hidden"}`}
       >
         <div className="ps-canvas">
           <MainView />
