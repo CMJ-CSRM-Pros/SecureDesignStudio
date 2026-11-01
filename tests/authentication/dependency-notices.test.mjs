@@ -6,6 +6,36 @@ import { tmpdir } from "node:os";
 import { distributionLicensePlugin } from "../../scripts/distribution-license.mjs";
 
 const notices = JSON.parse(await readFile(new URL("../../src/data/runtimeDependencyNotices.json", import.meta.url), "utf8"));
+
+test("API dependencies: the Identity SDK supports patched MSAL without a forced-major override", async () => {
+  const manifest = JSON.parse(await readFile(resolve("api/package.json"), "utf8"));
+  const lock = JSON.parse(await readFile(resolve("api/package-lock.json"), "utf8"));
+  const config = JSON.parse(await readFile(resolve("staticwebapp.config.json"), "utf8"));
+  const engine = /^>=(\d+)\./.exec(lock.packages["node_modules/@azure/identity"].engines.node);
+  const runtime = /^node:(\d+)$/.exec(config.platform?.apiRuntime);
+  assert.ok(engine && runtime, "An explicit supported API runtime is required");
+  assert.ok(Number(runtime[1]) >= Number(engine[1]), "The deployed API runtime must support the SDK");
+  assert.equal(manifest.overrides?.["@azure/identity"]?.["@azure/msal-node"], undefined);
+  assert.equal(manifest.overrides?.["@azure/msal-node"], undefined);
+  const declared = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(
+    lock.packages["node_modules/@azure/identity"].dependencies["@azure/msal-node"],
+  );
+  assert.ok(declared, "Review changes to the SDK's declared MSAL range");
+  const minimum = declared.slice(1).map(Number);
+  const resolutions = Object.entries(lock.packages)
+    .filter(([path]) => path.endsWith("node_modules/@azure/msal-node"));
+  assert.ok(resolutions.length > 0);
+  for (const [path, dependency] of resolutions) {
+    const parsed = /^(\d+)\.(\d+)\.(\d+)$/.exec(dependency.version);
+    assert.ok(parsed, `${path} must resolve a stable release`);
+    const [major, minor, patch] = parsed.slice(1).map(Number);
+    assert.ok(major > 7 || (major === 7 && minor >= 1), `${path} must include the 7.1.0 security fix`);
+    assert.equal(major, minimum[0], `${path} must remain in the SDK's supported major`);
+    assert.ok(minor > minimum[1] || (minor === minimum[1] && patch >= minimum[2]),
+      `${path} must meet the SDK's declared minimum`);
+  }
+});
+
 test("build dependencies: standalone inlining removes vulnerable dependencies and escapes closing tags", async () => {
   const { singleFileBuildPlugin } = await import("../../scripts/single-file-build.mjs");
   const lock = JSON.parse(await readFile(resolve("package-lock.json"), "utf8"));
