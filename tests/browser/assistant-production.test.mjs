@@ -183,7 +183,7 @@ async function assertFindingVisible(page, id = "edge") {
 
 async function popOutReview(page) {
   const pending = page.context().waitForEvent("page");
-  await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("window");
+  await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("window");
   const child = await pending;
   await child.locator(".ps-assistant").waitFor();
   await frameSettled(child);
@@ -192,9 +192,9 @@ async function popOutReview(page) {
 
 async function readWorkbookDownload(page) {
   const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export all findings and issues (.xlsx)", exact: true }).click();
+  await page.getByRole("button", { name: "Export all inspector data (.xlsx)", exact: true }).click();
   const download = await pending;
-  assert.equal(download.suggestedFilename(), "secure-design-studio-findings.xlsx");
+  assert.equal(download.suggestedFilename(), "secure-design-studio-inspector.xlsx");
   const chunks = [];
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);
   const files = unzipSync(Buffer.concat(chunks));
@@ -220,16 +220,16 @@ test("production review: floating resize and redock preserve the mounted review,
     await page.locator(".ps-assistant").evaluate(root => { root.dataset.reviewIdentity = "same-review"; });
     await placeFindingAtTop(page);
     const before = await savedState(page);
-    await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("floating");
-    const surface = page.getByRole("dialog", { name: "Design Assistant review", exact: true });
+    await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("floating");
+    const surface = page.getByRole("dialog", { name: "Inspector", exact: true });
     await surface.waitFor();
     await frameSettled(page);
-    assert.equal(await page.locator(".ps-inspector").count(), 0, "Undocking frees the canvas");
+    assert.equal(await page.locator(".ps-inspector-dock").isVisible(), false, "Undocking frees the canvas");
     assert.equal(await page.locator(".ps-assistant").getAttribute("data-review-identity"), "same-review");
     assert.equal(await page.locator(".ps-assistant-finding").count(), findings.length);
     await assertFindingVisible(page);
     const size = await surface.boundingBox();
-    const resize = surface.getByRole("button", { name: "Resize Design Assistant; use arrow keys", exact: true });
+    const resize = surface.getByRole("button", { name: "Resize inspector; use arrow keys", exact: true });
     await resize.focus();
     await page.keyboard.press("Shift+ArrowLeft");
     await page.keyboard.press("Shift+ArrowUp");
@@ -264,7 +264,7 @@ test("production review: floating resize and redock preserve the mounted review,
     await page.keyboard.press("Delete");
     assert.deepEqual((await savedState(page)).doc, before.doc, "Delete while reviewing does not delete a model target");
     await assertFindingVisible(page);
-    await surface.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("docked");
+    await surface.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("docked");
     await page.locator("#ps-inspector-panel-assistant .ps-assistant").waitFor();
     await frameSettled(page);
     await assertFindingVisible(page);
@@ -301,15 +301,16 @@ test("production review: popup retains results and exports all issues despite ma
       "Popup theme follows the main app");
     await page.getByRole("button", { name: "Review", exact: true }).click();
     await page.getByRole("menuitem", { name: /^Issues/ }).click();
-    await page.getByRole("tab", { name: /^Resolved \(/ }).click();
-    const workbook = await readWorkbookDownload(page);
+    await child.getByRole("tab", { name: /^Resolved \(/ }).click();
+    const workbook = await readWorkbookDownload(child);
     assert.equal(workbook["AI findings"].length, findings.length + 1, "Unaccepted findings are included");
     assert.equal(workbook.Issues.length, 3, "The status filter does not omit the active issue");
     assert.equal(workbook.Issues[1][5], "=1+2", "Formula-looking issue titles remain text");
     assert.equal(workbook["Issue replies"][1][3], "+Untrusted spreadsheet text");
-    const popupWorkbook = await readWorkbookDownload(child);
-    assert.deepEqual(popupWorkbook.Issues, workbook.Issues, "Export works from either document");
     await child.close();
+    await page.getByRole("tab", { name: /^Findings\b/ }).click();
+    const dockedWorkbook = await readWorkbookDownload(page);
+    assert.deepEqual(dockedWorkbook.Issues, workbook.Issues, "Export works from either document");
     await page.locator("#ps-inspector-panel-assistant .ps-assistant").waitFor();
     await frameSettled(page);
     await assertFindingVisible(page);
@@ -326,10 +327,10 @@ test("production review: blocked popup falls back to floating and chat draft/car
     await input.fill("Keep this draft and reading place");
     await input.evaluate(element => element.setSelectionRange(5, 15));
     await page.evaluate(() => { window.SDS_ORIGINAL_OPEN = window.open; window.open = () => null; });
-    await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("window");
+    await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("window");
     await page.getByRole("alert").filter({ hasText: "browser blocked" }).waitFor();
     assert.equal(await input.inputValue(), "Keep this draft and reading place");
-    await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("floating");
+    await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("floating");
     assert.equal(await input.inputValue(), "Keep this draft and reading place");
     await page.evaluate(() => { window.open = window.SDS_ORIGINAL_OPEN; delete window.SDS_ORIGINAL_OPEN; });
     const child = await popOutReview(page);

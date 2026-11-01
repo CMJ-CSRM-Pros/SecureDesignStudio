@@ -52,7 +52,7 @@ export function EdgeTable() {
   // hooks run on every render of this component.
   useEffect(() => {
     if (!selectedEdgeId) return;
-    const active = document.activeElement as HTMLElement | null;
+    const active = rowRefs.current.get(selectedEdgeId)?.ownerDocument.activeElement;
     const isOurRow =
       active?.tagName === "TR" &&
       active.getAttribute("data-edge-row") === "1";

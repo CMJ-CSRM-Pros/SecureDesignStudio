@@ -667,28 +667,33 @@ jumps past those controls. Chat keeps its own scrolling area and composer when
 space permits; in short panels its content scrolls together. Scroll or Tab
 through finding actions to reach the final result.
 
-#### Keep the Assistant review open
+#### Move the whole inspector
 
-Use the **Assistant display** selector above the review:
+Use the **Inspector display** selector above the inspector. It is available
+from every tab, not just Findings:
 
-- **Dock in inspector** uses the normal Findings tab.
-- **Float in this page** opens a movable, resizable review over the canvas and
-  hides the inspector. Drag its title bar or focus the bar and use arrow keys
+- **Dock in inspector** uses the normal right-side inspector.
+- **Float in this page** moves the whole tabbed inspector over the canvas and
+  frees its docked space. Drag its title bar or focus the bar and use arrow keys
   to move it. Drag the bottom-right handle, or focus it and use arrow keys, to
   resize; Shift uses larger steps. It stays within the usable viewport and
   leaves room for the bottom-left canvas controls.
 - **Open separate window** uses a normal resizable browser window, which can
   be moved to another monitor. Keep the main SDS page open. If browser policy
-  blocks the window, the current review stays in place and the message offers
+  blocks the window, the current inspector stays in place and the message offers
   the floating alternative.
 
-These are presentations of the **same review**, not new app sessions. Moving,
-resizing and re-docking keep the results, accepted-state feedback, chat draft,
+These are presentations of the **same inspector**, not new app sessions or
+independent per-tab windows. Properties, Edges, Issues, Comments, Deviations,
+Changes, Data, Work and Findings remain together, with conditional tabs shown
+when applicable. Moving, resizing, switching tabs and re-docking keep filters,
+unfinished replies, edits, results, accepted-state feedback, chat draft,
 conversation and reading position without making another AI request. Escape
-from review content docks it; native select controls handle their own Escape.
-Closing the separate window also docks the review. Reopening Findings in the
-main inspector while undocked offers **Focus Design Assistant** and **Dock
-Design Assistant**.
+from floating or separate-window content docks it; native select controls
+handle their own Escape. Closing the separate window also docks the inspector
+on its current tab. Model/Review/View commands in the main page route to this
+same inspector while it is undocked. Closing/reopening the inspector retains
+its tab drafts; presentation resets to docked when it is closed or on reload.
 
 Findings are labelled with their analyzed scenario snapshot. Navigating the
 model does not silently re-analyze them. Closing a docked inspector cancels a
@@ -699,14 +704,23 @@ while leaving the draft editable. Reloading or closing the main page clears
 this in-memory review state and closes its separate window. It is not stored
 in the model or shared through collaboration.
 
-#### Export findings and issues to Excel
+#### Export all inspector data to Excel
 
-**Excel (.xlsx)** is available above the Assistant review and in **All issues**.
-It exports the latest completed AI findings, including unaccepted ones, and
-**every saved issue across all scenarios and statuses**, regardless of the
-current filter. The workbook includes analysis context/answer, references,
-guidance provenance, descriptions, recommendations, evaluator state and issue
-discussion replies. An accepted finding may appear in both the AI findings
+**Excel (.xlsx)** is available above every inspector tab in all three display
+modes, including when there are no findings or issues. It downloads
+`secure-design-studio-inspector.xlsx` with **all tabs' retained data across all
+scenarios and statuses**, regardless of selection, the current tab or filters.
+Sheets include nodes and their properties, edges and scenario-specific sequence
+numbers/request/response attachments, boundaries, scenarios and retention,
+data items, work items, comments and their replies, deviations, loaded comparison
+changes, text annotations, saved definitions, saved issues and their replies,
+and the latest completed AI findings (including unaccepted ones).
+Complete-record JSON columns preserve additional properties and metadata.
+Comparison context is recorded even when the loaded comparison has no changes.
+The workbook also includes AI analysis context/answer, references, guidance
+provenance, descriptions, recommendations and evaluator state.
+Unsent drafts are not saved model data and are not exported.
+An accepted finding may appear in both the AI findings
 sheet and the saved Issues sheet; these are distinct records, not deduplicated.
 Saved issues have review status, not an invented severity; AI findings retain
 their suggested severity.

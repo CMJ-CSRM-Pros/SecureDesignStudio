@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useUiShell } from "../uiShell";
 
 // HoverTooltip wraps a trigger element and shows a portal-rendered tooltip
 // just below it on mouse hover or keyboard focus. Designed for hyperlink-rich
@@ -51,6 +52,7 @@ export function HoverTooltip({
   children,
   makeKeyboardFocusable = true,
 }: Props) {
+  const { inspectorPresentation } = useUiShell();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<PortalPos>({
     top: 0,
@@ -61,6 +63,8 @@ export function HoverTooltip({
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const showTimer = useRef<number | undefined>(undefined);
   const hideTimer = useRef<number | undefined>(undefined);
+  const ownerDocument = triggerRef.current?.ownerDocument ?? document;
+  const ownerWindow = ownerDocument.defaultView ?? window;
 
   const clearTimers = useCallback(() => {
     if (showTimer.current !== undefined) {
@@ -90,7 +94,7 @@ export function HoverTooltip({
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const vw = window.innerWidth;
+    const vw = el.ownerDocument.defaultView?.innerWidth ?? window.innerWidth;
     const desiredMax = Math.min(360, vw - 16);
     // Clamp left so the tooltip doesn't run off the right edge of the
     // viewport. We can't yet measure the tooltip width here (first frame),
@@ -108,22 +112,22 @@ export function HoverTooltip({
     reposition();
     const handleScroll = () => reposition();
     const handleResize = () => reposition();
-    window.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", handleResize);
+    ownerWindow.addEventListener("scroll", handleScroll, true);
+    ownerWindow.addEventListener("resize", handleResize);
     return () => {
-      window.removeEventListener("scroll", handleScroll, true);
-      window.removeEventListener("resize", handleResize);
+      ownerWindow.removeEventListener("scroll", handleScroll, true);
+      ownerWindow.removeEventListener("resize", handleResize);
     };
-  }, [open, reposition]);
+  }, [open, reposition, ownerWindow, inspectorPresentation]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+    ownerWindow.addEventListener("keydown", onKey);
+    return () => ownerWindow.removeEventListener("keydown", onKey);
+  }, [open, ownerWindow]);
 
   useEffect(() => {
     return () => clearTimers();
@@ -197,7 +201,7 @@ export function HoverTooltip({
           >
             {content}
           </div>,
-          document.body
+          ownerDocument.body
         )
       : null;
 

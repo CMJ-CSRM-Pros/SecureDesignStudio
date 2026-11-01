@@ -143,7 +143,7 @@ export function AllIssuesPanel({ embedded = false }: { embedded?: boolean }) {
     <div className="ps-allcomments ps-allissues">
       <header className="ps-allcomments-header">
         <h3>All issues</h3>
-        <FindingsExportButton compact />
+        {!embedded && <FindingsExportButton compact />}
         {!embedded && (
           <button
             className="ps-allcomments-close"

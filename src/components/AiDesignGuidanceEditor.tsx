@@ -54,8 +54,8 @@ export function AiDesignGuidanceEditor({ value, onChange, autoFocus = false,
         <input type="date" value={value.updatedOn}
           onChange={event => onChange({ ...value, updatedOn: event.target.value })} />
       </label>
-      <button type="button" onClick={() => {
-        if (!value.content || window.confirm(removeConfirmation)) onChange(undefined);
+      <button type="button" onClick={event => {
+        if (!value.content || (event.currentTarget.ownerDocument.defaultView ?? window).confirm(removeConfirmation)) onChange(undefined);
       }}>Remove guidance from draft</button>
     </>}
     {error && <p className="ps-catalog-error" role="alert">{error}</p>}

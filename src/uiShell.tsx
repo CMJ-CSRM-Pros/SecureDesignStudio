@@ -6,8 +6,10 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type MutableRefObject,
 } from "react";
 
+export type InspectorPresentation = "docked" | "floating" | "window";
 export type InspectorTab =
   | "properties"
   | "edges"
@@ -31,6 +33,9 @@ interface UiPreferences {
 }
 
 interface UiShellApi extends UiPreferences {
+  inspectorPresentation: InspectorPresentation;
+  setInspectorPresentation: (presentation: InspectorPresentation) => void;
+  inspectorHostRef: MutableRefObject<HTMLElement | null>;
   documentFileName: string;
   setDocumentFileName: (documentFileName: string) => void;
   openInspector: (tab?: InspectorTab, trigger?: HTMLElement | null) => void;
@@ -135,6 +140,8 @@ const UiShellContext = createContext<UiShellApi | null>(null);
 
 export function UiShellProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState(loadPreferences);
+  const [inspectorPresentation, setInspectorPresentation] = useState<InspectorPresentation>("docked");
+  const inspectorHostRef = useRef<HTMLElement | null>(null);
   const [documentFileName, setDocumentFileName] = useState(
     "secure-design-studio-diagram.tma",
   );
@@ -160,8 +167,9 @@ export function UiShellProvider({ children }: { children: ReactNode }) {
     };
     const focusInspectorTab = (tab: InspectorTab) => {
       requestAnimationFrame(() => {
-        document
-          .getElementById(`ps-inspector-tab-${tab}`)
+        inspectorHostRef.current?.ownerDocument.defaultView?.focus();
+        inspectorHostRef.current
+          ?.querySelector<HTMLElement>(`#ps-inspector-tab-${tab}`)
           ?.focus({ preventScroll: true });
       });
     };
@@ -179,6 +187,9 @@ export function UiShellProvider({ children }: { children: ReactNode }) {
     };
     return {
       ...preferences,
+      inspectorPresentation,
+      setInspectorPresentation,
+      inspectorHostRef,
       documentFileName,
       setDocumentFileName,
       openInspector: (tab = preferences.inspectorActiveTab, trigger) => {
@@ -241,7 +252,7 @@ export function UiShellProvider({ children }: { children: ReactNode }) {
       requestFitView: () => setFitViewRequest((current) => current + 1),
       reopenFocusRequest,
     };
-  }, [preferences, documentFileName, fitViewRequest, reopenFocusRequest]);
+  }, [preferences, documentFileName, fitViewRequest, reopenFocusRequest, inspectorPresentation]);
 
   return (
     <UiShellContext.Provider value={value}>{children}</UiShellContext.Provider>

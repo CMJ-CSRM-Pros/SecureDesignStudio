@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { useUiShell, type InspectorTab } from "../uiShell";
 import { AllCommentsPanel } from "./AllCommentsPanel";
@@ -8,7 +8,8 @@ import { BoundaryDetails } from "./BoundaryDetails";
 import { TextAnnotationDetails } from "./TextAnnotationDetails";
 import { ChangesPanel } from "./ChangesPanel";
 import { DataModal } from "./DataModal";
-import { AssistantReviewSurface } from "./AssistantReviewSurface";
+import { InspectorSurface } from "./AssistantReviewSurface";
+import { DesignAssistantPanel } from "./DesignAssistantPanel";
 import { EdgeDetails } from "./EdgeDetails";
 import { EdgeTable } from "./EdgeTable";
 import { NodeDetails } from "./NodeDetails";
@@ -64,6 +65,8 @@ export function SidePanel() {
     inspectorWidth,
     inspectorPinned,
     inspectorActiveTab,
+    inspectorPresentation,
+    inspectorHostRef,
     closeInspector,
     setInspectorWidth,
     setInspectorPinned,
@@ -71,7 +74,6 @@ export function SidePanel() {
   } = useUiShell();
   const previousSelectionRef = useRef<string | null | undefined>(undefined);
   const [inspectorExpanded, setInspectorExpanded] = useState(false);
-  const [assistantDock, setAssistantDock] = useState<HTMLElement | null>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const expandButtonFocusedRef = useRef(false);
   const tabsRef = useRef(new Map<InspectorTab, HTMLButtonElement | null>());
@@ -98,9 +100,8 @@ export function SidePanel() {
       inspectorActiveTab !== "changes" &&
       !inspectorPinned
     ) {
-      const focusWasInInspector =
-        document.activeElement instanceof HTMLElement &&
-        document.activeElement.closest(".ps-inspector") !== null;
+      const active = inspectorHostRef.current?.ownerDocument.activeElement;
+      const focusWasInInspector = !!active && inspectorHostRef.current?.contains(active);
       setInspectorActiveTab("properties");
       if (focusWasInInspector) {
         requestAnimationFrame(() =>
@@ -132,9 +133,8 @@ export function SidePanel() {
 
   useEffect(() => {
     if (inspectorActiveTab === "changes" && !diffFileName) {
-      const focusWasInChanges =
-        document.activeElement instanceof HTMLElement &&
-        document.activeElement.closest("#ps-inspector-panel-changes") !== null;
+      const focusWasInChanges = inspectorHostRef.current?.ownerDocument.activeElement
+        ?.closest("#ps-inspector-tab-changes, #ps-inspector-panel-changes") != null;
       setInspectorActiveTab("properties");
       if (focusWasInChanges) {
         requestAnimationFrame(() =>
@@ -147,10 +147,9 @@ export function SidePanel() {
   useEffect(() => {
     if (inspectorActiveTab === "deviations" && doc.deviations.length === 0) {
       const focusWasInDeviations =
-        document.activeElement instanceof HTMLElement &&
-        document.activeElement.closest(
+        inspectorHostRef.current?.ownerDocument.activeElement?.closest(
           "#ps-inspector-tab-deviations, #ps-inspector-panel-deviations",
-        ) !== null;
+        ) != null;
       setInspectorActiveTab("properties");
       if (focusWasInDeviations) {
         requestAnimationFrame(() =>
@@ -182,9 +181,9 @@ export function SidePanel() {
   useEffect(() => {
     if (!inspectorVisible) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       if (
-        document.querySelector(
+        (inspectorHostRef.current?.ownerDocument ?? document).querySelector(
           ".ps-modal-overlay, [data-ps-temporary-surface='true']",
         )
       ) {
@@ -193,9 +192,10 @@ export function SidePanel() {
       event.preventDefault();
       closeInspector();
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [inspectorVisible, closeInspector]);
+    const owner = inspectorHostRef.current?.ownerDocument ?? document;
+    owner.addEventListener("keydown", onKeyDown);
+    return () => owner.removeEventListener("keydown", onKeyDown);
+  }, [inspectorVisible, inspectorPresentation, closeInspector]);
 
   const detail = useMemo(() => {
     if (selection?.kind === "annotation") {
@@ -330,19 +330,9 @@ export function SidePanel() {
   };
 
   return (
-    <>
-    <AssistantReviewSurface dockTarget={assistantDock} dockVisible={inspectorVisible && inspectorActiveTab === "assistant"} />
-    {inspectorVisible && (
-    <aside
-      className={`ps-side ps-inspector${inspectorExpanded ? " ps-inspector-expanded" : ""}${inspectorActiveTab === "assistant" ? " ps-inspector-assistant" : ""}`}
-      aria-labelledby="ps-inspector-title"
-      style={
-        {
-          "--ps-inspector-width": `${clampWidth(inspectorWidth)}px`,
-        } as CSSProperties
-      }
-    >
-      <div
+    <InspectorSurface dockWidth={clampWidth(inspectorWidth)}
+      className={`${inspectorExpanded ? "ps-inspector-expanded" : ""}${inspectorActiveTab === "assistant" ? " ps-inspector-assistant" : ""}`}>
+      {inspectorPresentation === "docked" && <div
         className="ps-side-resizer"
         onPointerDown={onResizeStart}
         onDoubleClick={() => setInspectorWidth(DEFAULT_WIDTH)}
@@ -365,7 +355,7 @@ export function SidePanel() {
         aria-valuemax={Math.round(maximumWidth())}
         aria-valuenow={Math.round(clampWidth(inspectorWidth))}
         title="Drag or use arrow keys to resize; double-click to reset"
-      />
+      />}
       <header className="ps-inspector-header">
         <div>
           <h2 id="ps-inspector-title">
@@ -387,7 +377,7 @@ export function SidePanel() {
               : contextLabel}
           </p>
         </div>
-        <button
+        {inspectorPresentation === "docked" && <button
           ref={expandButtonRef}
           type="button"
           className="ps-inspector-icon ps-inspector-expand"
@@ -405,7 +395,7 @@ export function SidePanel() {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             <path d={inspectorExpanded ? "M3 5l5 5 5-5" : "M3 11l5-5 5 5"} />
           </svg>
-        </button>
+        </button>}
         <button
           type="button"
           className="ps-inspector-icon"
@@ -489,12 +479,14 @@ export function SidePanel() {
         </section>
         <section
           id="ps-inspector-panel-assistant"
-          ref={setAssistantDock}
           role="tabpanel"
           aria-labelledby="ps-inspector-tab-assistant"
           tabIndex={0}
           hidden={inspectorActiveTab !== "assistant"}
-        >
+        ><div className="ps-assistant-surface-body"><DesignAssistantPanel
+          visible={inspectorVisible && inspectorActiveTab === "assistant"}
+          inspectorClosed={!inspectorVisible}
+        /></div>
         </section>
         <section
           id="ps-inspector-panel-comments"
@@ -541,8 +533,6 @@ export function SidePanel() {
           <WorkItemsModal embedded />
         </section>
       </div>
-    </aside>
-    )}
-    </>
+    </InspectorSurface>
   );
 }

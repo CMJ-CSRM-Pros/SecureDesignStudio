@@ -33,7 +33,7 @@ function targetsEqual(
 }
 
 export function ChangesPanel({ embedded = false }: { embedded?: boolean }) {
-  const { inspectorActiveTab, setInspectorActiveTab } = useUiShell();
+  const { inspectorActiveTab, inspectorPresentation, inspectorHostRef, setInspectorActiveTab } = useUiShell();
   const {
     doc,
     diffChanges,
@@ -55,7 +55,7 @@ export function ChangesPanel({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (!embedded || inspectorActiveTab !== "changes") return;
-    const panel = document.getElementById("ps-inspector-panel");
+    const panel = inspectorHostRef.current?.querySelector<HTMLElement>("#ps-inspector-panel");
     if (!panel) return;
     const frame = requestAnimationFrame(() => {
       panel.scrollTop = savedScrollTopRef.current;
@@ -68,7 +68,7 @@ export function ChangesPanel({ embedded = false }: { embedded?: boolean }) {
       cancelAnimationFrame(frame);
       panel.removeEventListener("scroll", rememberScroll);
     };
-  }, [embedded, inspectorActiveTab]);
+  }, [embedded, inspectorActiveTab, inspectorPresentation]);
 
   // Clear the highlighted change when the active selection drifts away from
   // its target. Mirrors the AllIssuesPanel "selectedIssueId" pattern but has
@@ -157,7 +157,7 @@ export function ChangesPanel({ embedded = false }: { embedded?: boolean }) {
   };
 
   const openProperties = (c: ChangeItem) => {
-    const panel = document.getElementById("ps-inspector-panel");
+    const panel = inspectorHostRef.current?.querySelector<HTMLElement>("#ps-inspector-panel");
     if (panel) savedScrollTopRef.current = panel.scrollTop;
     navigate(c);
     setInspectorActiveTab("properties");
@@ -170,16 +170,16 @@ export function ChangesPanel({ embedded = false }: { embedded?: boolean }) {
         <button
           className="ps-diff-remove"
           title="Discard the loaded comparison (the toolbar Compare button will disappear until you load a new one)"
-          onClick={() => {
+          onClick={event => {
             if (
-              window.confirm(
+              (event.currentTarget.ownerDocument.defaultView ?? window).confirm(
                 "Remove the loaded comparison? You will need to re-pick the previous-version file to compare again.",
               )
             ) {
               clearDiff();
               setInspectorActiveTab("properties");
               requestAnimationFrame(() =>
-                document.getElementById("ps-inspector-tab-properties")?.focus(),
+                inspectorHostRef.current?.querySelector<HTMLElement>("#ps-inspector-tab-properties")?.focus(),
               );
             }
           }}
