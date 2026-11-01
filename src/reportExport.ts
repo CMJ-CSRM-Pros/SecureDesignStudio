@@ -36,15 +36,19 @@ function safeFileStem(value: string): string {
   );
 }
 
-function downloadBlob(blob: Blob, fileName: string): void {
+export function downloadBlob(blob: Blob, fileName: string, ownerDocument: Document = document): void {
+  if (!ownerDocument.body) throw new Error("The download window is no longer available.");
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
+  const anchor = ownerDocument.createElement("a");
   anchor.href = url;
   anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  try {
+    ownerDocument.body.appendChild(anchor);
+    anchor.click();
+  } finally {
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 }
 
 export async function captureDiagramPng(

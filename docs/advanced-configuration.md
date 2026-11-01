@@ -140,12 +140,23 @@ are unchanged. The same layout applies to the API watch command.
 
 `shared/aiDesignGuidance.ts` supplies the guidance validator, fixed trusted
 reference-data policy and request-size budgets to both browser and API.
-It also compiles under `api/dist/shared/`. Node-type guidance stays in the
+It also compiles under `api/dist/shared/`. Node-type, protocol and
+authentication-method guidance stays in the
 serialized user/model-context message, never interpolated into the system
 prompt. Both AI experiences resolve diagram-local guidance before installed
-definitions; review includes only applicable interior-node bindings. Guidance
-sources are not fetched. See [AI design guidance](custom-libraries.md#ai-design-guidance)
+definitions; review includes only applicable interior-node bindings, and only
+cards for authentication methods used by in-scope flows. Guidance
+sources are not fetched, and guidance carries no privileged instructions or
+verified authentication assurance. The browser and API enforce one
+384,000-byte serialized guidance budget across node, protocol and
+authentication cards, plus the 500,000-byte whole-request limit; these are
+UTF-8 byte limits, not provider token limits. See
+[AI design guidance](custom-libraries.md#ai-design-guidance) and the
+[authentication guidance contract](authentication-library.md#ai-design-guidance)
 for authoring, portability, provenance and explicit overflow behavior.
+Local development guards are unchanged: credential-free `npm run dev` still
+makes no AI or other non-local request, and selecting or editing guidance
+sends nothing.
 
 The API isolates authoring (`mode: "design"`) from the evidence-based review
 policy. Authoring uses strict JSON-schema output with the request's actual
@@ -162,7 +173,22 @@ components without a suitable service type, with `dfdRole` set independently.
 IDs are still rejected atomically rather than coerced to unrelated services.
 
 Authoring accepts at most 12 history messages, a 4,000-character prompt
-and a 500,000-byte request. Complete JSON responses have bounded lists (24 nodes,
+and a 500,000-byte request. Threat Model Designer treats that request as one
+**ask, then response** exchange when its library is large: the planning call
+sends compact node, protocol and authentication indexes (no card bodies) and the
+design call sends the selected and already-used cards (planning selects at
+most 24 component types, 24 protocols and 8 authentication methods). Both calls
+are independent HTTP requests; the provider is not assumed to remember the first.
+The required in-use cards are checked before any call: if they cannot fit, no
+provider call is made. If selected
+cards push the design request past the guidance or request budget, the design
+call is not sent: the dialog explains the exceeded boundary and measured sizes,
+asks for a narrower design task, and applies nothing. SDS does not truncate
+cards, batch automatically or add a repeated "ask for another card" loop. The
+status line reports which authentication guidance was supplied and any
+in-use or proposed authentication method without a card. Chat and AI Analysis
+have no selection round; they send the cards for in-use flow methods directly.
+Complete JSON responses have bounded lists (24 nodes,
 48 flows, 12 boundaries and 24 data items); unknown fields, invalid references,
 unavailable catalog values and non-stop/truncated completions never partially
 apply. The service request timeout is 90 seconds and the dialog cancels after
@@ -400,7 +426,9 @@ not leave an unneeded API running.
 
 Chat and AI Analysis send the prompt plus the active scenario, its member
 nodes, edges and boundaries, referenced authentication and catalog-display
-definitions (including any saved, unverified library metadata), attached
+definitions (including any saved, unverified library metadata), the authored
+AI design guidance for in-use node types, protocols and authentication methods,
+attached
 data (including sample fields), retention, and selection metadata. Filters
 and selection do **not** narrow this to just visible or selected objects.
 DFD scope omits excluded node-interior fields and excluded-flow data

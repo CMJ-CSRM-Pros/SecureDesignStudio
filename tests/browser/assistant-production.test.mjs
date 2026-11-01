@@ -4,6 +4,8 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import { unzipSync, strFromU8 } from "fflate";
+import { DOMParser } from "@xmldom/xmldom";
 import { modelFixture, autosaveKey, publicPowerPlatformPrompt, publicPowerPlatformDesignFixture } from "./fixture.mjs";
 import { until } from "./harness.mjs";
 
@@ -81,7 +83,10 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
           planRequests.push(payload);
           const available = new Set(payload.context.nodeTypeIndex.map(entry => entry.id));
           return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
-            nodeTypeIds: PLANNED_NODE_TYPES.filter(id => available.has(id)), rationale: "Synthetic plan.",
+            nodeTypeIds: PLANNED_NODE_TYPES.filter(id => available.has(id)),
+            ...(payload.context.protocolIndex ? { protocolIds: [] } : {}),
+            ...(payload.context.authenticationIndex ? { authenticationIds: [] } : {}),
+            rationale: "Synthetic plan.",
           }) });
         }
         requests.push(payload);
@@ -103,10 +108,12 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
       return route.abort("blockedbyclient");
     });
     await context.routeWebSocket(/.*/, socket => { faults.push("Unexpected WebSocket"); socket.close(); });
+    context.on("page", child => {
+      child.on("pageerror", error => faults.push(error.message));
+      child.on("console", message => { if (message.type() === "error") faults.push(message.text()); });
+      child.on("dialog", async dialog => { faults.push(`Unexpected ${dialog.type()}`); await dialog.dismiss(); });
+    });
     const page = await context.newPage();
-    page.on("pageerror", error => faults.push(error.message));
-    page.on("console", message => { if (message.type() === "error") faults.push(message.text()); });
-    page.on("dialog", async dialog => { faults.push(`Unexpected ${dialog.type()}`); await dialog.dismiss(); });
     // Every request is fulfilled from built files or synthetic data; no listener or API is contacted.
     await page.goto(origin);
     assert.equal(await page.locator(".ps-command-version").textContent(), `v${version}`);
@@ -144,6 +151,258 @@ async function run(exercise, { designer = false, greenfield = false, respond, st
     await browser.close();
   }
 }
+
+async function settleReviewGeometry(page) {
+  await scenario(page).selectOption("");
+  await until(() => page.locator(".react-flow__node-process").count().then(count => count === 4), "review fixture nodes measured");
+  await savedState(page);
+  await scenario(page).selectOption("s_primary");
+  await savedState(page);
+}
+
+async function frameSettled(page) {
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
+async function placeFindingAtTop(page, id = "edge") {
+  await page.locator(`[data-finding-id="${id}"]`).evaluate(row => {
+    const root = row.closest(".ps-assistant");
+    root.scrollTop += row.getBoundingClientRect().top - root.getBoundingClientRect().top;
+  });
+  await frameSettled(page);
+}
+
+async function assertFindingVisible(page, id = "edge") {
+  const bounds = await page.locator(`[data-finding-id="${id}"]`).evaluate(row => {
+    const root = row.closest(".ps-assistant").getBoundingClientRect();
+    const item = row.getBoundingClientRect();
+    return { top: item.top - root.top, bottom: item.bottom - root.top, height: root.height };
+  });
+  assert.ok(bounds.bottom > 0 && bounds.top < bounds.height, `Reading place remains visible: ${JSON.stringify(bounds)}`);
+}
+
+async function popOutReview(page) {
+  const pending = page.context().waitForEvent("page");
+  await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("window");
+  const child = await pending;
+  await child.locator(".ps-assistant").waitFor();
+  await frameSettled(child);
+  return child;
+}
+
+async function readWorkbookDownload(page) {
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export all findings and issues (.xlsx)", exact: true }).click();
+  const download = await pending;
+  assert.equal(download.suggestedFilename(), "secure-design-studio-findings.xlsx");
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  const files = unzipSync(Buffer.concat(chunks));
+  const parse = path => new DOMParser().parseFromString(strFromU8(files[path]), "application/xml");
+  const names = [...parse("xl/workbook.xml").getElementsByTagName("sheet")].map(sheet => sheet.getAttribute("name"));
+  return Object.fromEntries(names.map((name, index) => {
+    const sheet = parse(`xl/worksheets/sheet${index + 1}.xml`);
+    assert.equal(sheet.getElementsByTagName("f").length, 0, "No model text becomes a formula");
+    const rows = [...sheet.getElementsByTagName("row")].map(row => [...row.getElementsByTagName("c")].map(cell => {
+      assert.equal(cell.getAttribute("t"), "inlineStr");
+      return cell.getElementsByTagName("t")[0]?.textContent ?? "";
+    }));
+    return [name, rows];
+  }));
+}
+
+test("production review: floating resize and redock preserve the mounted review, reading place and model", async () => {
+  await run(async ({ page, requests }) => {
+    await settleReviewGeometry(page);
+    await page.setViewportSize({ width: 1000, height: 620 });
+    await savedState(page);
+    await heading(page, "Flow finding").click();
+    await page.locator(".ps-assistant").evaluate(root => { root.dataset.reviewIdentity = "same-review"; });
+    await placeFindingAtTop(page);
+    const before = await savedState(page);
+    await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("floating");
+    const surface = page.getByRole("dialog", { name: "Design Assistant review", exact: true });
+    await surface.waitFor();
+    await frameSettled(page);
+    assert.equal(await page.locator(".ps-inspector").count(), 0, "Undocking frees the canvas");
+    assert.equal(await page.locator(".ps-assistant").getAttribute("data-review-identity"), "same-review");
+    assert.equal(await page.locator(".ps-assistant-finding").count(), findings.length);
+    await assertFindingVisible(page);
+    const size = await surface.boundingBox();
+    const resize = surface.getByRole("button", { name: "Resize Design Assistant; use arrow keys", exact: true });
+    await resize.focus();
+    await page.keyboard.press("Shift+ArrowLeft");
+    await page.keyboard.press("Shift+ArrowUp");
+    await frameSettled(page);
+    const smaller = await surface.boundingBox();
+    assert.equal(Math.round(smaller.width), Math.round(size.width - 40));
+    assert.equal(Math.round(smaller.height), Math.round(size.height - 40));
+    await surface.locator(".ps-assistant-surface-bar").focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowDown");
+    const moved = await surface.boundingBox();
+    assert.ok(moved.x > smaller.x && moved.y > smaller.y, "Keyboard movement changes only the review window");
+    const handle = await resize.boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2 + 24, handle.y + handle.height / 2 + 18);
+    await page.mouse.up();
+    await frameSettled(page);
+    const pointerSized = await surface.boundingBox();
+    assert.equal(Math.round(pointerSized.width), Math.round(moved.width + 24));
+    assert.equal(Math.round(pointerSized.height), Math.round(moved.height + 18));
+    const title = await surface.locator(".ps-assistant-surface-title").boundingBox();
+    await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(title.x + title.width / 2 - 8, title.y + title.height / 2 - 5);
+    await page.mouse.up();
+    await frameSettled(page);
+    const pointerMoved = await surface.boundingBox();
+    assert.equal(Math.round(pointerMoved.x), Math.round(pointerSized.x - 8));
+    assert.equal(Math.round(pointerMoved.y), Math.round(pointerSized.y - 5));
+    await surface.locator(".ps-assistant-surface-bar").focus();
+    await page.keyboard.press("Delete");
+    assert.deepEqual((await savedState(page)).doc, before.doc, "Delete while reviewing does not delete a model target");
+    await assertFindingVisible(page);
+    await surface.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("docked");
+    await page.locator("#ps-inspector-panel-assistant .ps-assistant").waitFor();
+    await frameSettled(page);
+    await assertFindingVisible(page);
+    assert.equal(await page.locator(".ps-assistant").getAttribute("data-review-identity"), "same-review");
+    assert.deepEqual((await savedState(page)).doc, before.doc);
+    assert.deepEqual((await savedState(page)).past, before.past);
+    assert.equal(requests.length, 1, "Presentation changes never re-run analysis");
+  });
+});
+
+test("production review: popup retains results and exports all issues despite main-panel filters", async () => {
+  const initial = fixture();
+  initial.doc.issues[0].title = "=1+2";
+  initial.doc.issues[0].replies = [{ id: "r_export", createdAt: 1, text: "+Untrusted spreadsheet text" }];
+  initial.doc.issues.push({ ...initial.doc.issues[0], id: "i_resolved_export", title: "Resolved outside the filter",
+    status: "Resolved", scenarioIds: ["s_archive"], replies: [] });
+  await run(async ({ page, requests }) => {
+    await settleReviewGeometry(page);
+    const before = await savedState(page);
+    await heading(page, "Flow finding").click();
+    await placeFindingAtTop(page);
+    await page.evaluate(() => { location.hash = "room=synthetic&key=SYNTHETIC_ROOM_KEY"; });
+    const child = await popOutReview(page);
+    assert.equal(await child.evaluate(() => window.opener), null);
+    assert.equal(await child.locator(".ps-toolbar").count(), 0, "The popup is the same review, not a second app");
+    assert.equal(await child.locator(".ps-assistant-finding").count(), findings.length);
+    assert.doesNotMatch(await child.content(), /SYNTHETIC_ROOM_KEY/);
+    await assertFindingVisible(child);
+    await child.setViewportSize({ width: 760, height: 480 });
+    await frameSettled(child);
+    await assertFindingVisible(child);
+    await page.evaluate(() => document.querySelector(".ps-shell").classList.add("ps-theme-dark"));
+    await until(() => child.locator(".ps-assistant-popup-shell").getAttribute("class").then(value => value.includes("ps-theme-dark")),
+      "Popup theme follows the main app");
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Issues/ }).click();
+    await page.getByRole("tab", { name: /^Resolved \(/ }).click();
+    const workbook = await readWorkbookDownload(page);
+    assert.equal(workbook["AI findings"].length, findings.length + 1, "Unaccepted findings are included");
+    assert.equal(workbook.Issues.length, 3, "The status filter does not omit the active issue");
+    assert.equal(workbook.Issues[1][5], "=1+2", "Formula-looking issue titles remain text");
+    assert.equal(workbook["Issue replies"][1][3], "+Untrusted spreadsheet text");
+    const popupWorkbook = await readWorkbookDownload(child);
+    assert.deepEqual(popupWorkbook.Issues, workbook.Issues, "Export works from either document");
+    await child.close();
+    await page.locator("#ps-inspector-panel-assistant .ps-assistant").waitFor();
+    await frameSettled(page);
+    await assertFindingVisible(page);
+    assert.deepEqual((await savedState(page)).doc, before.doc);
+    assert.deepEqual((await savedState(page)).past, before.past);
+    assert.equal(requests.length, 1);
+  }, { initial });
+});
+
+test("production review: blocked popup falls back to floating and chat draft/caret survive presentation changes", async () => {
+  await run(async ({ page, requests }) => {
+    await page.locator(".ps-assistant").getByRole("tab", { name: "Chat", exact: true }).click();
+    const input = page.getByRole("textbox", { name: "Ask about this model", exact: true });
+    await input.fill("Keep this draft and reading place");
+    await input.evaluate(element => element.setSelectionRange(5, 15));
+    await page.evaluate(() => { window.SDS_ORIGINAL_OPEN = window.open; window.open = () => null; });
+    await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("window");
+    await page.getByRole("alert").filter({ hasText: "browser blocked" }).waitFor();
+    assert.equal(await input.inputValue(), "Keep this draft and reading place");
+    await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("floating");
+    assert.equal(await input.inputValue(), "Keep this draft and reading place");
+    await page.evaluate(() => { window.open = window.SDS_ORIGINAL_OPEN; delete window.SDS_ORIGINAL_OPEN; });
+    const child = await popOutReview(page);
+    const childInput = child.getByRole("textbox", { name: "Ask about this model", exact: true });
+    assert.equal(await childInput.inputValue(), "Keep this draft and reading place");
+    assert.deepEqual(await childInput.evaluate(element => [element.selectionStart, element.selectionEnd]), [5, 15]);
+    await childInput.focus();
+    const closed = child.waitForEvent("close");
+    try {
+      await child.keyboard.press("Escape");
+    } catch (error) {
+      if (!child.isClosed() || !/Target page, context or browser has been closed/.test(error.message)) throw error;
+    }
+    await closed;
+    await input.waitFor();
+    assert.equal(await input.inputValue(), "Keep this draft and reading place");
+    assert.equal(requests.length, 1, "Undocking and failed popup creation never submit a prompt");
+  });
+});
+
+test("production review: closing the docked inspector cancels pending work without losing previous results", async () => {
+  let pending;
+  await run(async ({ page, requests }) => {
+    await page.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => Boolean(pending), "second analysis held");
+    await page.getByRole("button", { name: "Close inspector", exact: true }).click();
+    await until(() => page.locator(".ps-inspector").count().then(count => count === 0), "inspector closed");
+    await reply(pending.route, { answer: "Late cancelled analysis", references: [flow],
+      findings: [{ ...findings[0], title: "Must not replace the retained results" }] });
+    await page.getByRole("button", { name: "Open inspector", exact: true }).click();
+    await page.getByRole("tab", { name: /^Findings\b/ }).click();
+    try {
+      await page.locator(".ps-assistant").getByRole("alert").filter({ hasText: "cancelled when the inspector closed" }).waitFor();
+    } catch (error) {
+      console.error("Review close diagnostics:", await page.evaluate(() => ({
+        error: document.querySelector(".ps-assistant-error")?.textContent,
+        activeTab: document.querySelector(".ps-inspector-tabs [aria-selected='true']")?.textContent,
+        findings: document.querySelectorAll(".ps-assistant-finding").length,
+        assistantVisible: Boolean(document.querySelector(".ps-assistant")?.getBoundingClientRect().height),
+      })));
+      throw error;
+    }
+    assert.equal(await page.locator(".ps-assistant-finding").count(), findings.length);
+    assert.equal(await page.getByText("Must not replace the retained results", { exact: true }).count(), 0);
+    assert.equal(requests.length, 2, "Reopening never resubmits");
+  }, { respond: async request => {
+    if (request.index === 0) return reply(request.route, { answer: "Completed analysis", references: [flow], findings });
+    pending = request;
+  } });
+});
+
+test("production review: pending analysis survives undocking but a replacement model rejects its late results", async () => {
+  const pending = [];
+  await run(async ({ page, requests, importModel }) => {
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Design Assistant", exact: true }).click();
+    await page.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => pending.length === 1, "held review request");
+    const child = await popOutReview(page);
+    await reply(pending[0].route, { answer: "Snapshot response", references: [flow], findings });
+    await until(() => child.locator(".ps-assistant-finding").count().then(count => count === findings.length), "analysis completed in popup");
+    assert.equal(requests.length, 1);
+    await child.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => pending.length === 2, "second held review request");
+    await importModel(modelFixture());
+    await reply(pending[1].route, { answer: "Must not enter replacement model", references: [flow], findings });
+    await frameSettled(child);
+    assert.equal(await child.locator(".ps-assistant-finding").count(), 0);
+    assert.equal(await child.getByText("Must not enter replacement model", { exact: true }).count(), 0);
+    assert.equal(requests.length, 2);
+    await child.close();
+  }, { designer: true, respond: async request => { pending.push(request); } });
+});
 
 // Synthetic first-phase reply: large catalogs are planned before the design call.
 const PLANNED_NODE_TYPES = ["nt_browser", "PowerPages", "CopilotStudio", "Dataverse", "Dataverse Table",
@@ -201,6 +460,10 @@ test("production: both AI contexts carry complete saved guidance and accepted fi
     assert.equal(planRequests[0].context.aiDesignGuidance, undefined, "Planning sends only the type index");
     assert.equal(planRequests[0].context.catalog, undefined);
     assert.ok(planRequests[0].context.nodeTypeIndex.length > coreGuidance.length);
+    assert.ok(Array.isArray(planRequests[0].context.authenticationIndex), "Planning offers the compact authentication index");
+    assert.equal(planRequests[0].context.authenticationGuidance, undefined, "Planning never sends authentication card bodies");
+    assert.ok(planRequests[0].context.authenticationIndex.every(entry =>
+      Object.keys(entry).sort().join() === "hasGuidance,id,label,usedInScenario"), "The index carries IDs, labels and availability only");
     assert.ok(requests[0].context.catalogScope.nodeTypeIds.includes("PowerPages"));
     assert.deepEqual((await savedState(page)).doc, before.doc);
   }, { initial, designer: true, respond: ({ route }) => reply(route, {
@@ -817,7 +1080,10 @@ test("production designer: Stop, Close, scenario switching and timeout discard l
       if (action === "timeout") {
         await page.evaluate(() => {
           const original = window.setTimeout;
-          window.setTimeout = (callback, delay, ...args) => original(callback, delay === 180000 ? 30 : delay, ...args);
+          window.setTimeout = (callback, delay, ...args) => {
+            if (delay === 180000) window.SDS_EXPIRE_DESIGN = () => callback(...args);
+            return original(callback, delay, ...args);
+          };
         });
       }
       const index = requests.length;
@@ -826,7 +1092,13 @@ test("production designer: Stop, Close, scenario switching and timeout discard l
       if (action === "stop") await designerDialog(page).getByRole("button", { name: "Stop generating" }).click();
       if (action === "close") await designerDialog(page).getByRole("button", { name: "Close Threat Model Designer" }).click();
       if (action === "switch") await scenario(page).selectOption("s_archive");
-      if (action === "timeout") await designerDialog(page).getByRole("alert").filter({ hasText: /timed out/ }).waitFor();
+      if (action === "timeout") {
+        await page.evaluate(() => {
+          if (typeof window.SDS_EXPIRE_DESIGN !== "function") throw new Error("The design timeout was not armed.");
+          window.SDS_EXPIRE_DESIGN();
+        });
+        await designerDialog(page).getByRole("alert").filter({ hasText: /timed out/ }).waitFor();
+      }
       await reply(pending[index].route, syntheticDesign(pending[index].payload.context));
       await page.waitForTimeout(100);
       assert.equal(requests.length, index + 1, `${action} must not accidentally resubmit the form`);
@@ -1081,7 +1353,7 @@ test("production: Assistant findings use issue-style scenario, selection, focus 
 });
 
 test("production: Assistant handles detached and unavailable references without creating orphan issues", async () => {
-  await run(async ({ page, importModel }) => {
+  await run(async ({ page }) => {
     assert.equal(await heading(page, "Unavailable finding").isDisabled(), true);
     await finding(page, "Unavailable finding").getByText("No available diagram reference for this finding.").waitFor();
     assert.equal(await finding(page, "Unavailable finding").getByRole("button", { name: "Create issue", exact: true }).isDisabled(), true);
@@ -1089,14 +1361,13 @@ test("production: Assistant handles detached and unavailable references without 
     await expectSelected(page, "node", "n_detached");
     assert.equal(await scenario(page).inputValue(), "", "Detached objects use Show all scenarios");
 
-    const changed = fixture();
-    changed.doc.nodes = changed.doc.nodes.filter(node => node.id !== "n_client");
-    changed.doc.edges = changed.doc.edges.filter(edge => edge.source !== "n_client" && edge.target !== "n_client");
-    changed.doc.issues = [];
-    await importModel(changed);
-    await page.getByRole("tab", { name: /^Findings\b/ }).click();
+    await heading(page, "Node finding").click();
+    await element(page, "node", "n_client").focus();
+    await page.keyboard.press("Delete");
+    await until(() => element(page, "node", "n_client").count().then(count => count === 0), "referenced node removed in the current model");
     assert.equal(await heading(page, "Node finding").isDisabled(), true, "Removed targets become unavailable");
-    assert.equal(await page.locator(".ps-assistant-finding-selected").count(), 0);
+    await until(() => page.locator(".ps-assistant-finding-selected").count().then(count => count === 0),
+      "Removed targets clear the selected finding feedback");
     await finding(page, "Available reference finding").getByRole("button", { name: "Create issue", exact: true }).click();
     await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) || "null")?.doc.issues
       .some(issue => issue.title === "Available reference finding" && issue.targetId === "n_api"), autosaveKey);

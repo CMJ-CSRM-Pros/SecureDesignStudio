@@ -159,7 +159,10 @@ test("production: standalone Authentication Library definition and version survi
     await reopened.getByRole("tab", { name: /^Edges/ }).click();
     await reopened.getByRole("row", { name: /^Parallel flow, sequence/ }).click();
     await reopened.getByRole("tab", { name: /^Properties/ }).click();
-    await reopened.locator(".ps-auth-selection-warning").filter({ hasText: "Required authentication library is unavailable" }).waitFor();
+    // Promotion: the standalone build installs the core definition, so a retained conflicting snapshot is a
+    // contract conflict rather than a missing library.
+    await reopened.locator(".ps-auth-selection-warning").filter({ hasText: "differs from the installed contract" }).waitFor();
+    assert.equal(await reopened.locator(".ps-auth-selection-warning").filter({ hasText: "Required authentication library is unavailable" }).count(), 0);
     assert.equal(await reopened.getByRole("combobox", { name: /^Authentication method/ })
       .locator(`option[value="${retainedContract.id}"]`).evaluate(option => option.disabled), true);
     assert.equal(await reopened.getByRole("combobox", { name: "Tenant", exact: true }).count(), 0);

@@ -196,7 +196,8 @@ the browser, diagrams, or local settings.
 Hosted Azure processing stays unchanged. `Start-SecureDesignStudio.ps1` remains
 credential-free and starts neither the API nor an AI provider.
 
-**Data handling:** your prompts, included scenario context, catalog guidance and
+**Data handling:** your prompts, included scenario context, catalog guidance
+(including authentication guidance for methods in use) and
 recent design conversation go to the selected provider. Use only information
 you are authorized to send; consumer data handling differs from an
 organization-managed Azure deployment. Read the provider's account controls and
@@ -318,21 +319,67 @@ prompt tokens plus its `max_tokens` reservation before the model runs, so a
 single request larger than the limit is always rejected with HTTP 429.
 
 To keep requests small, **Design with AI** uses two calls when the full
-component library and its design guidance would exceed about 96 KB:
+component library and its design guidance would exceed about 96 KB (a
+heuristic on the context, not a provider limit). When the whole request fits,
+it makes a single call that includes the cards for every selectable
+authentication method as well as the in-use ones; if that complete request
+does not fit, the two-call flow below applies:
 
 1. **Plan.** SDS sends the prompt, the scenario outline (names, types and
-   connections) and an index of component types (ID, label, category, default
-   role, whether guidance exists). The model returns up to 24 type IDs the
-   design needs, chosen from a strict list. No guidance text is sent, and the
+   connections) and compact indexes of component types (ID, label, category,
+   default role, whether guidance exists), protocols and authentication methods
+   (`id`, `label`, `hasGuidance`, `usedInScenario`). The model returns up to 24
+   type IDs the design needs, up to 24 protocol IDs and up to 8 authentication
+   method IDs, chosen from strict lists. No guidance text is sent (the API
+   rejects a plan request that carries authentication card bodies), and the
    output reservation is 1,000 tokens.
 2. **Design.** SDS sends the normal design request, limited to the planned
    types plus any types already used in the scenario, with their complete
-   guidance. If the model needs a service that is not in that subset, it leaves
-   the type blank and names the service in its answer.
+   guidance. Authentication guidance follows the same rule: complete cards for
+   methods on included existing flows (bound to those flows) plus the selected
+   methods (unbound, offered for conditional proposals), but not every
+   selectable method. If the model needs a service that is not in that subset,
+   it leaves the type blank and names the service in its answer. The design
+   catalog still lists every selectable authentication method with
+   `hasGuidance` and `guidanceSupplied`, plus the target-node authentication
+   rules, so an unselected card never clears or forbids a method; a proposed
+   method without a supplied card is reported as such in the status line.
+
+Node, protocol and authentication cards share one **384,000-byte** serialized
+guidance budget, and the whole request (question, context, history, guidance and
+provider) must stay within **500,000 UTF-8 bytes**. These are byte limits, not
+tokens: trusted system instructions and the response schema add provider input
+outside the serialized request, and the debug bytes/4 figure is only an
+estimate. A larger model does not raise these application limits. SDS checks
+the complete request before sending and the API checks it again.
+
+Before any call, SDS builds the request with only the cards already in use and
+checks it. If that required context cannot fit, the error begins "Required
+design context cannot be sent", reports the measured request and guidance bytes
+against both limits, and no AI request is sent. If the selected cards plus that
+context are too large, "Selected design guidance cannot be sent" explains that
+one planning request was sent, the design call was not sent, nothing is
+truncated or applied, and asks for a narrower design task (for example, one
+scenario or fewer requested services). If the planning request itself (the
+indexes plus conversation) is too large it is not sent. SDS does not
+automatically split the work into batches, which could lose cross-flow and
+trust-boundary reasoning, and does not loop asking for more cards. The two
+calls are independent requests; the provider is not assumed to remember the
+first, so the final request is self-contained. If the model, scenario or
+catalog changes between the calls, or a planned ID no longer resolves with its
+guidance, the design call is not sent; resend the prompt. Design Assistant Chat
+and AI Analysis send the cards for in-use flow methods directly, with no extra
+selection call.
+
+Guidance is untrusted reference text, and its source URLs are never fetched.
+Confirm your deployment's actual context window and output limits separately;
+these limits are not proof that a live model will accept or answer well.
 
 With the shipped library, both calls are typically well under 50,000 tokens.
-Small catalogs still use a single call. The status line reports how many
-component types were used. Claude and Codex use the same two-phase flow.
+That estimate predates authentication cards; recheck with `-DebugAI` after
+cards are populated. Small catalogs still use a single call. The status line
+reports how many component types were used. Claude and Codex use the same
+two-phase flow.
 With `-DebugAI`, each call logs its own sizing line (`mode` is `design-plan` or
 `design`).
 

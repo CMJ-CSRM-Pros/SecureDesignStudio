@@ -2,11 +2,27 @@ import {
   MAX_GUIDANCE_CONTENT_LENGTH, MAX_GUIDANCE_SOURCES, validateAiDesignGuidance, type AiDesignGuidance,
 } from "../../shared/aiDesignGuidance";
 import { AutoGrowTextarea } from "./AutoGrowTextarea";
+import { safeNavigationHref } from "../urlSafety";
 
-export function AiDesignGuidanceEditor({ value, onChange, autoFocus = false }: {
+export function AiDesignGuidanceDetails({ value }: { value: AiDesignGuidance | undefined }) {
+  if (!value) return <p className="ps-field-help">AI design guidance not supplied.</p>;
+  return <>
+    <p className="ps-field-help">Revision {value.revision}, edited {value.updatedOn}.
+      Unverified reference guidance, not deployment evidence.</p>
+    <div className="ps-guidance-content">{value.content}</div>
+    {value.sources?.length ? <ul aria-label="Guidance sources">{value.sources.map((url, index) =>
+      <li key={`${index}:${url}`}><a href={safeNavigationHref(url) ?? undefined} target="_blank" rel="noopener noreferrer">{url}</a></li>)}</ul>
+      : <p className="ps-field-help">No sources supplied.</p>}
+  </>;
+}
+
+export function AiDesignGuidanceEditor({ value, onChange, autoFocus = false,
+  removeConfirmation = "Remove AI design guidance from this draft? Save to apply the removal to this type in the diagram.",
+}: {
   value: AiDesignGuidance | undefined;
   onChange: (value: AiDesignGuidance | undefined) => void;
   autoFocus?: boolean;
+  removeConfirmation?: string;
 }) {
   let error = "";
   try { validateAiDesignGuidance(value); }
@@ -39,7 +55,7 @@ export function AiDesignGuidanceEditor({ value, onChange, autoFocus = false }: {
           onChange={event => onChange({ ...value, updatedOn: event.target.value })} />
       </label>
       <button type="button" onClick={() => {
-        if (!value.content || window.confirm("Remove AI design guidance from this draft? Save to apply the removal to this type in the diagram.")) onChange(undefined);
+        if (!value.content || window.confirm(removeConfirmation)) onChange(undefined);
       }}>Remove guidance from draft</button>
     </>}
     {error && <p className="ps-catalog-error" role="alert">{error}</p>}

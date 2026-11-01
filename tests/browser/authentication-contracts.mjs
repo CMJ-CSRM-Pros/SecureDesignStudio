@@ -79,6 +79,89 @@ async function newModel(page) {
     && await page.locator(".react-flow__node-process").count() === 0, "empty diagram");
 }
 
+const guidanceTrigger = "Edit guidance for this method in this diagram";
+const guidanceCard = (overrides = {}) => ({
+  content: "Synthetic authentication card </script><script>globalThis.SDS_AUTH_GUIDANCE_EXECUTED=true</script>\n"
+    + "<img src=x onerror=alert(1)>\nAsk who acquires and presents the credential; verify receiver validation separately.",
+  sources: ["https://example.invalid/auth-reference-a", "https://example.invalid/auth-reference-b"],
+  revision: 3, updatedOn: "2026-10-31", ...overrides,
+});
+const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const suppliedMethod = (page, id) => page.evaluate(async id => structuredClone(
+  (await import("/src/authentication.ts")).AUTH_TYPE_DEFS.find(method => method.id === id)), id);
+const readAutosave = page => page.evaluate(async key => {
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  window.dispatchEvent(new Event("pagehide"));
+  return JSON.parse(localStorage.getItem(key));
+}, autosaveKey);
+
+// Hidden scenario nodes get their first real measurement here, so later scenario switches stay view-only.
+async function uploadMeasured(page, model, name) {
+  await upload(page.locator("#ps-file-open-input"), model, name);
+  const scenario = page.getByRole("combobox", { name: "Scenario", exact: true });
+  const startingScenario = await scenario.inputValue();
+  const waitForMeasuredNodes = ids => page.waitForFunction(({ ids, key }) => {
+    window.dispatchEvent(new Event("pagehide"));
+    const doc = JSON.parse(localStorage.getItem(key) ?? "null")?.doc;
+    const elements = [...document.querySelectorAll(".react-flow__node-process")];
+    return elements.length === ids.length && ids.every(id => {
+      const element = elements.find(candidate => candidate.getAttribute("data-id") === id);
+      const node = doc?.nodes.find(candidate => candidate.id === id);
+      return element && element.offsetWidth > 0 && element.offsetHeight > 0
+        && node?.size?.width === element.offsetWidth && node?.size?.height === element.offsetHeight;
+    });
+  }, { ids, key: autosaveKey });
+  await scenario.selectOption("");
+  await waitForMeasuredNodes(model.doc.nodes.map(node => node.id));
+  await scenario.selectOption(startingScenario);
+  await waitForMeasuredNodes(startingScenario
+    ? model.doc.scenarios.find(item => item.id === startingScenario).nodeIds
+    : model.doc.nodes.map(node => node.id));
+}
+
+// Every flow uses ApiKey across both scenarios; flow-specific fields must survive method-wide guidance edits.
+function guidanceFlowFixture() {
+  const model = modelFixture();
+  for (const edge of model.doc.edges) edge.authenticationTypes = ["ApiKey"];
+  Object.assign(model.doc.edges[0], {
+    audience: "api://retained-audience", constraints: "Retained owner constraint",
+    applicationId: "12345678-1234-1234-1234-123456789abc", protocolId: "https",
+  });
+  return model;
+}
+
+async function openAuthenticationGuidance(page, methodId) {
+  const sections = page.locator("details.ps-node-guidance")
+    .filter({ has: page.locator("summary", { hasText: "Authentication AI design guidance" }) });
+  await sections.first().waitFor({ state: "visible" });
+  const index = await sections.evaluateAll((elements, id) =>
+    elements.findIndex(element => element.textContent.includes(`(${id})`)), methodId);
+  assert.ok(index >= 0, `Authentication guidance section for ${methodId}`);
+  const section = sections.nth(index);
+  if (!await section.evaluate(element => element.open)) await section.locator("summary").click();
+  return section;
+}
+
+async function fillGuidanceDraft(scope, value) {
+  const add = scope.getByRole("button", { name: "Add AI design guidance", exact: true });
+  if (await add.count()) await add.click();
+  await scope.getByRole("textbox", { name: "Guidance content", exact: true }).fill(value.content);
+  await scope.getByRole("textbox", { name: "Source URLs (one per line)", exact: true }).fill((value.sources ?? []).join("\n"));
+  await scope.getByLabel("Authored revision", { exact: true }).fill(String(value.revision));
+  await scope.getByLabel("Updated on (edit date)", { exact: true }).fill(value.updatedOn);
+}
+
+async function answerNextConfirmation(page, expected) {
+  await page.evaluate(expected => {
+    const original = window.confirm;
+    window.confirm = message => {
+      window.confirm = original;
+      window.SDS_LAST_CONFIRMATION = message;
+      return message === expected;
+    };
+  }, expected);
+}
+
 export function registerAuthenticationContracts({ getHarness, exportModel }) {
   test("regression: communication profile edits retain guidance sources and authentication suggestions", async () => {
     await getHarness().run("regression: communication profile edit initialization", async ({ page }) => {
@@ -130,7 +213,9 @@ export function registerAuthenticationContracts({ getHarness, exportModel }) {
         { protocolId: "future-profile", auth: "ApiKey", expected: "ApiKey", short: "API key" },
         { auth: custom.id, saved: custom, expected: custom.id, short: "Partner" },
         { protocolId: "https", protocolDefinition: disabledProtocol, auth: "ApiKey", expected: "ApiKey", short: "API key" },
-        { auth: "EntraApplicationOnlyWithCdt", expected: "EntraApplicationOnlyWithCdt", short: "Unresolved" },
+        // Promoted to core: a historical compatibility reference now resolves without a companion library.
+        { auth: "EntraApplicationOnlyWithCdt", expected: "EntraApplicationOnlyWithCdt", short: "CDT" },
+        { auth: "auth_unresolved_partner", expected: "auth_unresolved_partner", short: "Unresolved" },
       ]) {
         const input = modelFixture();
         const edge = input.doc.edges.find(edge => edge.id === "e_request");
@@ -716,6 +801,310 @@ export function registerAuthenticationContracts({ getHarness, exportModel }) {
         profileUntouched: true, sharedProfile: false,
       });
       observations.syntheticPeers = result;
+    });
+  });
+
+  test("regression: authentication AI guidance library authoring, explicit clear, reset and export stay profile-scoped", async () => {
+    await getHarness().run("regression: authentication AI guidance library authoring", async ({ page }) => {
+      const supplied = await suppliedMethod(page, "ApiKey");
+      const card = guidanceCard();
+      await selectFlow(page);
+      await selector(page).selectOption("ApiKey");
+      const profileApiKey = async () => (await library(page))?.methods.find(method => method.id === "ApiKey");
+      const diagramApiKey = async () => (await exportModel(page)).doc.authenticationDefinitions.find(method => method.id === "ApiKey");
+      const dialog = await openLibrary(page);
+      await dialog.getByRole("searchbox").fill(supplied.label);
+      await dialog.getByRole("button", { name: new RegExp(`^${escapeRegExp(supplied.label)}`) }).click();
+      await dialog.getByRole("button", { name: "Edit method", exact: true }).click();
+      await fillGuidanceDraft(dialog, { ...card, sources: ["javascript:alert(1)"] });
+      await dialog.getByRole("button", { name: "Save method", exact: true }).click();
+      await dialog.locator(".ps-auth-error").filter({ hasText: "AI design guidance" }).waitFor({ state: "visible" });
+      assert.equal(await library(page), null, "Invalid guidance writes nothing to the profile");
+      assert.equal(await dialog.locator("form").count(), 1, "A failed save keeps the recoverable draft");
+      await dialog.getByRole("textbox", { name: "Source URLs (one per line)", exact: true }).fill(card.sources.join("\n"));
+      await dialog.getByRole("button", { name: "Save method", exact: true }).click();
+      await until(async () => (await profileApiKey())?.aiDesignGuidance?.revision === card.revision, "profile guidance saved");
+      assert.deepEqual(await profileApiKey(), { ...supplied, aiDesignGuidance: card },
+        "Only guidance changes; protected behavior, aliases and legacy status stay supplied");
+      assert.equal(await dialog.locator(".ps-guidance-content").textContent(), card.content);
+      assert.deepEqual(await dialog.getByRole("list", { name: "Guidance sources", exact: true }).getByRole("link")
+        .evaluateAll(links => links.map(link => link.textContent)), card.sources);
+      assert.equal(await page.evaluate(() => globalThis.SDS_AUTH_GUIDANCE_EXECUTED), undefined, "Guidance is inert text");
+      await dialog.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual(await profileApiKey(), supplied);
+      await dialog.getByRole("button", { name: "Redo", exact: true }).click();
+      assert.deepEqual(await profileApiKey(), { ...supplied, aiDesignGuidance: card });
+      const exported = await readDownload(page,
+        () => dialog.getByRole("button", { name: "Export JSON", exact: true }).click(),
+        "secure-design-studio-authentication-catalog.json");
+      assert.deepEqual(exported.methods.find(method => method.id === "ApiKey").aiDesignGuidance, card);
+      await closeLibrary(page);
+      assert.deepEqual((await diagramApiKey()).aiDesignGuidance, card, "The matching diagram definition follows the library edit");
+
+      await openLibrary(page);
+      await dialog.getByRole("searchbox").fill(supplied.label);
+      await dialog.getByRole("button", { name: new RegExp(`^${escapeRegExp(supplied.label)}`) }).click();
+      await dialog.getByRole("button", { name: "Edit method", exact: true }).click();
+      const removal = "Remove AI design guidance from this draft? Save method to apply this to your profile library and matching definitions in the current diagram.";
+      await answerNextConfirmation(page, removal);
+      await dialog.getByRole("button", { name: "Remove guidance from draft", exact: true }).click();
+      assert.equal(await page.evaluate(() => window.SDS_LAST_CONFIRMATION), removal);
+      await dialog.getByRole("button", { name: "Save method", exact: true }).click();
+      await until(async () => !Object.hasOwn(await profileApiKey() ?? { aiDesignGuidance: true }, "aiDesignGuidance"), "profile guidance cleared");
+      await closeLibrary(page);
+      assert.equal(Object.hasOwn(await diagramApiKey(), "aiDesignGuidance"), false, "Explicit clear follows to the matching diagram definition");
+      await page.reload();
+      await openLibrary(page);
+      await dialog.getByRole("searchbox").fill(supplied.label);
+      await dialog.getByRole("button", { name: new RegExp(`^${escapeRegExp(supplied.label)}`) }).click();
+      await dialog.getByText("AI design guidance not supplied.", { exact: true }).waitFor({ state: "visible" });
+      assert.equal(Object.hasOwn(await profileApiKey(), "aiDesignGuidance"), false, "Reload never resurrects supplied guidance");
+
+      await dialog.getByRole("button", { name: "Edit method", exact: true }).click();
+      await dialog.getByRole("textbox", { name: "Method", exact: true }).fill("Team API key");
+      await fillGuidanceDraft(dialog, guidanceCard({ content: "Team-specific reset fixture.", revision: 4 }));
+      await dialog.getByRole("button", { name: "Save method", exact: true }).click();
+      await until(async () => (await profileApiKey())?.label === "Team API key", "renamed method with guidance");
+      await dialog.getByRole("button", { name: "Reset built-in presentation", exact: true }).click();
+      assert.match(await dialog.innerText(), /Restore the supplied Method, Description, short display label, and AI design guidance/);
+      await dialog.getByRole("button", { name: "Reset presentation", exact: true }).click();
+      await until(async () => (await profileApiKey())?.label === supplied.label, "reset applied");
+      assert.deepEqual(await profileApiKey(), supplied, "Reset restores the supplied guidance, or its absence, exactly");
+
+      await page.evaluate(key => {
+        const catalog = JSON.parse(localStorage.getItem(key));
+        catalog.methods.find(method => method.id === "ApiKey").aiDesignGuidance = {
+          content: "Other tab guidance.", revision: 7, updatedOn: "2026-10-30",
+        };
+        localStorage.setItem(key, JSON.stringify(catalog));
+      }, libraryKey);
+      await dialog.getByRole("button", { name: "Edit method", exact: true }).click();
+      await dialog.getByRole("textbox", { name: "Description", exact: true }).fill("Stale description.");
+      await dialog.getByRole("button", { name: "Save method", exact: true }).click();
+      await dialog.locator(".ps-auth-error").filter({ hasText: "changed in another tab" }).waitFor({ state: "visible" });
+      assert.equal((await profileApiKey()).aiDesignGuidance.content, "Other tab guidance.",
+        "A guidance-only change in another tab is never overwritten");
+    });
+  });
+
+  test("regression: authentication AI guidance flow edits are method-wide, diagram-only, stale-safe and undoable", async () => {
+    await getHarness().run("regression: authentication AI guidance diagram edits", async ({ page }) => {
+      const supplied = await suppliedMethod(page, "ApiKey");
+      const fixture = guidanceFlowFixture();
+      await uploadMeasured(page, fixture, "auth-guidance.tma");
+      const libraryBefore = await library(page);
+      await selectFlow(page);
+      let section = await openAuthenticationGuidance(page, "ApiKey");
+      assert.match(await section.locator("summary").textContent(),
+        supplied.aiDesignGuidance ? /\/ revision \d+$/ : /\/ not supplied$/);
+      assert.match(await section.innerText(), /Method-wide in this diagram, across all scenarios and every flow using this method/);
+      const edit = () => section.getByRole("button", { name: guidanceTrigger, exact: true });
+      const before = await exportModel(page);
+      const history = await readAutosave(page);
+
+      await edit().click();
+      await section.getByRole("button", { name: "Cancel guidance edit", exact: true }).click();
+      await until(() => edit().evaluate(element => element === document.activeElement), "Cancel returns focus to the edit trigger");
+      await edit().click();
+      await fillGuidanceDraft(section, guidanceCard({ content: "Cancelled draft." }));
+      await section.getByRole("textbox", { name: "Guidance content", exact: true }).press("Escape");
+      await until(() => edit().evaluate(element => element === document.activeElement), "Escape returns focus to the edit trigger");
+      assert.deepEqual((await exportModel(page)).doc, before.doc, "Cancelled drafts apply nothing");
+      await edit().click();
+      await section.getByRole("button", { name: "Save guidance", exact: true }).click();
+      assert.equal((await readAutosave(page)).past.length, history.past.length, "An unchanged save adds no history");
+
+      const card = guidanceCard();
+      await edit().click();
+      await fillGuidanceDraft(section, { ...card, revision: 0 });
+      await section.getByRole("button", { name: "Save guidance", exact: true }).click();
+      await section.locator(".ps-catalog-error").filter({ hasText: "revision" }).first().waitFor({ state: "visible" });
+      assert.deepEqual((await readAutosave(page)).doc, history.doc, "Invalid guidance never partially mutates");
+      await section.getByLabel("Authored revision", { exact: true }).fill(String(card.revision));
+      await section.getByRole("button", { name: "Save guidance", exact: true }).click();
+      await edit().waitFor({ state: "visible" });
+      assert.equal(await section.locator(".ps-guidance-content").textContent(), card.content);
+      assert.equal(await page.evaluate(() => globalThis.SDS_AUTH_GUIDANCE_EXECUTED), undefined, "Guidance is inert text");
+      assert.match(await section.locator("summary").textContent(), /\/ revision 3$/);
+      assert.match(await section.innerText(), /Saved diagram definition/);
+      const applied = await exportModel(page);
+      const expected = structuredClone(before.doc);
+      expected.authenticationDefinitions.find(method => method.id === "ApiKey").aiDesignGuidance = card;
+      assert.deepEqual(applied.doc, expected,
+        "Only the method definition's guidance changes; flows, audiences, identities, protocols, scenarios and geometry do not");
+      assert.deepEqual(await library(page), libraryBefore, "Diagram guidance never writes the profile library");
+      assert.equal((await readAutosave(page)).past.length, history.past.length + 1, "One undoable step");
+
+      await selectFlow(page, "e_parallel");
+      assert.match(await (await openAuthenticationGuidance(page, "ApiKey")).locator("summary").textContent(), /\/ revision 3$/);
+      await page.getByRole("combobox", { name: "Scenario", exact: true }).selectOption("s_archive");
+      await page.getByRole("tab", { name: /^Edges/ }).click();
+      await page.getByRole("row", { name: /^Archive payload, sequence/ }).click();
+      await page.getByRole("tab", { name: /^Properties/ }).click();
+      assert.match(await (await openAuthenticationGuidance(page, "ApiKey")).locator("summary").textContent(), /\/ revision 3$/,
+        "The same method guidance applies in every scenario");
+      await page.getByRole("combobox", { name: "Scenario", exact: true }).selectOption("s_primary");
+      assert.deepEqual((await exportModel(page)).doc, applied.doc, "Inspection and scenario switching are view-only");
+
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual((await exportModel(page)).doc, before.doc);
+      await page.getByRole("button", { name: "Redo", exact: true }).click();
+      assert.deepEqual((await exportModel(page)).doc, applied.doc);
+
+      await selectFlow(page);
+      section = await openAuthenticationGuidance(page, "ApiKey");
+      await edit().click();
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual((await exportModel(page)).doc, before.doc, "Undo restores the document and clears selection");
+      assert.equal(await page.getByRole("textbox", { name: "Guidance content", exact: true }).count(), 0,
+        "Undo dismisses the draft with the existing selection lifecycle");
+      await page.getByRole("button", { name: "Redo", exact: true }).click();
+      assert.deepEqual((await exportModel(page)).doc, applied.doc);
+
+      await selectFlow(page);
+      section = await openAuthenticationGuidance(page, "ApiKey");
+      await edit().click();
+      const adoption = await openLibrary(page);
+      await adoption.locator("details").filter({ has: page.locator("summary", { hasText: `Review definition: ${supplied.label}` }) })
+        .locator("summary").click();
+      await adoption.getByRole("button", { name: "Use library definition in this diagram", exact: true }).click();
+      await adoption.getByRole("button", { name: "Use library definition in this diagram", exact: true }).click();
+      await closeLibrary(page);
+      const changedDefinitionHistory = await readAutosave(page);
+      await section.getByRole("textbox", { name: "Guidance content", exact: true }).fill("Stale draft must not apply.");
+      await section.getByRole("button", { name: "Save guidance", exact: true }).click();
+      await section.locator(".ps-catalog-error").filter({ hasText: "changed while you were editing" }).waitFor({ state: "visible" });
+      assert.deepEqual((await exportModel(page)).doc, before.doc, "A stale definition edit applies nothing");
+      assert.deepEqual((await readAutosave(page)).past, changedDefinitionHistory.past, "A rejected stale edit does not add history");
+      assert.deepEqual((await readAutosave(page)).future, changedDefinitionHistory.future, "A rejected stale edit does not alter redo");
+      await section.getByRole("button", { name: "Cancel guidance edit", exact: true }).click();
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      assert.deepEqual((await exportModel(page)).doc, applied.doc, "Undo restores the explicitly replaced definition");
+
+      const dialog = await openLibrary(page);
+      assert.match(await dialog.innerText(), /saved definition differs/i);
+      await dialog.getByRole("searchbox").fill(supplied.label);
+      await dialog.getByRole("button", { name: new RegExp(`^${escapeRegExp(supplied.label)}`) }).click();
+      await dialog.getByRole("button", { name: "Edit method", exact: true }).click();
+      await dialog.getByRole("textbox", { name: "Description", exact: true }).fill("Profile-only description edit.");
+      await dialog.getByRole("button", { name: "Save method", exact: true }).click();
+      await until(async () => (await library(page))?.methods.find(method => method.id === "ApiKey")?.description
+        === "Profile-only description edit.", "profile edit saved");
+      await closeLibrary(page);
+      assert.deepEqual((await exportModel(page)).doc, applied.doc, "A different saved diagram definition ignores later profile edits");
+
+      await selectFlow(page);
+      section = await openAuthenticationGuidance(page, "ApiKey");
+      await edit().click();
+      const removal = "Remove AI design guidance from this draft? Save guidance to remove it for this method throughout this diagram. Your profile library is unchanged.";
+      await answerNextConfirmation(page, removal);
+      await section.getByRole("button", { name: "Remove guidance from draft", exact: true }).click();
+      assert.equal(await page.evaluate(() => window.SDS_LAST_CONFIRMATION), removal);
+      await section.getByRole("button", { name: "Save guidance", exact: true }).click();
+      await until(() => section.locator("summary").textContent().then(text => /\/ not supplied$/.test(text)),
+        "cleared diagram guidance is not resurrected from the library or supplied definition");
+      const cleared = await exportModel(page);
+      const clearedExpected = structuredClone(applied.doc);
+      delete clearedExpected.authenticationDefinitions.find(method => method.id === "ApiKey").aiDesignGuidance;
+      assert.deepEqual(cleared.doc, clearedExpected, "Clear keeps the saved definition and removes only guidance");
+      await page.reload();
+      await selectFlow(page);
+      assert.match(await (await openAuthenticationGuidance(page, "ApiKey")).locator("summary").textContent(), /\/ not supplied$/);
+      assert.deepEqual((await exportModel(page)).doc, cleared.doc, "Autosave recovery keeps the explicit clear");
+      await uploadMeasured(page, applied, "auth-guidance-reopened.tma");
+      assert.deepEqual((await exportModel(page)).doc, applied.doc, "Native reopen restores saved guidance exactly");
+    });
+  });
+
+  test("regression: authentication AI guidance is read-only for unresolved methods and per-method on legacy multi-auth flows", async () => {
+    await getHarness().run("regression: authentication AI guidance unresolved and legacy", async ({ page }) => {
+      const legacy = modelFixture();
+      legacy.doc.edges[0].authenticationTypes = ["CertificateAuthentication", "EntraApplicationOnlyAccess"];
+      legacy.doc.edges[1].authenticationTypes = ["auth_missing"];
+      await upload(page.locator("#ps-file-open-input"), legacy, "legacy-guidance.tma");
+      const before = await exportModel(page);
+      await selectFlow(page);
+      assert.equal(await page.locator("details.ps-node-guidance")
+        .filter({ has: page.locator("summary", { hasText: "Authentication AI design guidance" }) }).count(), 2,
+      "Each legacy method keeps its own method-wide guidance section");
+      for (const id of ["CertificateAuthentication", "EntraApplicationOnlyAccess"]) {
+        const section = await openAuthenticationGuidance(page, id);
+        assert.equal(await section.getByRole("button", { name: guidanceTrigger, exact: true }).isDisabled(), false, id);
+      }
+      await selectFlow(page, "e_parallel");
+      const missing = await openAuthenticationGuidance(page, "auth_missing");
+      assert.equal(await missing.getByRole("button", { name: guidanceTrigger, exact: true }).isDisabled(), true);
+      assert.match(await missing.innerText(), /Resolve this method in Authentication Library before editing guidance/);
+      assert.deepEqual((await exportModel(page)).doc, before.doc, "Inspecting guidance is read-only and keeps legacy arrays and unresolved IDs");
+    });
+  });
+
+  test("regression: authentication AI guidance never borrows a same-ID profile method for an unresolved flow reference", async () => {
+    await getHarness().run("regression: authentication AI guidance profile collision", async ({ page }) => {
+      const collision = {
+        id: "auth_profile_collision", label: "Profile collision proof", description: "Synthetic profile-only method.",
+        shortLabel: "Collision", aliases: [], legacy: false, disabled: false,
+        behavior: { productionIdentity: "unknown", audience: false, constraints: false, anonymous: false, managedIdentity: false },
+        aiDesignGuidance: { content: "Synthetic profile-only collision card.", revision: 1, updatedOn: "2026-10-31" },
+      };
+      const profile = await page.evaluate(async method => {
+        const { AUTH_TYPE_DEFS, exportAuthenticationCatalog, AUTHENTICATION_STORAGE_KEY } = await import("/src/authentication.ts");
+        const raw = exportAuthenticationCatalog([...AUTH_TYPE_DEFS, method]);
+        localStorage.setItem(AUTHENTICATION_STORAGE_KEY, raw);
+        return raw;
+      }, collision);
+      await page.reload();
+      const input = modelFixture();
+      input.doc.edges[0].authenticationTypes = [collision.id];
+      input.doc.authenticationDefinitions = [];
+      await upload(page.locator("#ps-file-open-input"), input, "profile-collision.tma");
+      const before = await exportModel(page);
+      assert.deepEqual(before.doc.edges.find(edge => edge.id === "e_request").authenticationTypes, [collision.id]);
+      assert.equal(before.doc.authenticationDefinitions.some(method => method.id === collision.id), false,
+        "Opening and saving never capture the same-ID profile method");
+      await edgeLabel(page).locator(".ps-edge-auth-badge").getByText("Unresolved", { exact: true }).waitFor();
+      await selectFlow(page);
+      const section = await openAuthenticationGuidance(page, collision.id);
+      assert.equal(await section.getByRole("button", { name: guidanceTrigger, exact: true }).isDisabled(), true,
+        "A library-name coincidence grants no guidance editing authority");
+      assert.match(await section.innerText(), /Resolve this method in Authentication Library before editing guidance/);
+      assert.equal((await section.innerText()).includes(collision.aiDesignGuidance.content), false,
+        "The profile card is never shown as this diagram's guidance");
+      assert.deepEqual((await exportModel(page)).doc, before.doc, "Inspection is read-only");
+      assert.equal(await page.evaluate(key => localStorage.getItem(key), libraryKey), profile, "The profile library is untouched");
+    });
+  });
+
+  test("usability: authentication AI guidance inspector editing is keyboard reachable at narrow widths", async () => {
+    await getHarness().run("usability: authentication AI guidance keyboard and narrow layout", async ({ page }) => {
+      await upload(page.locator("#ps-file-open-input"), guidanceFlowFixture(), "auth-guidance-keyboard.tma");
+      await selectFlow(page);
+      const section = await openAuthenticationGuidance(page, "ApiKey");
+      const before = await readAutosave(page);
+      await page.setViewportSize({ width: 375, height: 700 });
+      const edit = section.getByRole("button", { name: guidanceTrigger, exact: true });
+      await edit.focus();
+      await page.keyboard.press("Enter");
+      await until(() => page.evaluate(() => !!document.activeElement?.closest(".ps-guidance-editor")),
+        "keyboard activation moves focus into the guidance editor");
+      await page.keyboard.press("Escape");
+      await until(() => edit.evaluate(element => element === document.activeElement), "Escape returns focus to the exact edit trigger");
+      assert.deepEqual((await readAutosave(page)).doc, before.doc);
+      for (const width of [375, 320]) {
+        await page.setViewportSize({ width, height: 700 });
+        await edit.scrollIntoViewIfNeeded();
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true,
+          `No page horizontal scroll at ${width}px`);
+        const box = await edit.boundingBox();
+        assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, `Edit action fits ${width}px`);
+      }
+      await edit.click();
+      const save = section.getByRole("button", { name: "Save guidance", exact: true });
+      await save.scrollIntoViewIfNeeded();
+      const box = await save.boundingBox();
+      assert.ok(box && box.x >= 0 && box.x + box.width <= 321, "Save guidance fits 320px");
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true,
+        "The open editor causes no horizontal scroll at 320px");
     });
   });
 }

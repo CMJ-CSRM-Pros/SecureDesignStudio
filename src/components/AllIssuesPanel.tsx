@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import { IssueRow } from "./IssueRow";
 import { AddThreatNote } from "./AddThreatNote";
+import { FindingsExportButton } from "./FindingsExportButton";
 import { ISSUE_NOT_EVALUATED_LABELS, type PsIssue } from "../types";
 
 type StatusFilter = "all" | "active" | "resolved";
@@ -142,6 +143,7 @@ export function AllIssuesPanel({ embedded = false }: { embedded?: boolean }) {
     <div className="ps-allcomments ps-allissues">
       <header className="ps-allcomments-header">
         <h3>All issues</h3>
+        <FindingsExportButton compact />
         {!embedded && (
           <button
             className="ps-allcomments-close"

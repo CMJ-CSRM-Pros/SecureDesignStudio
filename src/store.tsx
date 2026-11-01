@@ -16,7 +16,7 @@ import {
   type SetStateAction,
 } from "react";
 import type { ChangeItem, ChangeTarget } from "./diff";
-import type { AssistantFinding } from "./designAssistant";
+import type { AssistantAnalysisSnapshot, AssistantFinding } from "./designAssistant";
 import { propagateScenarioEdgeData } from "./dataPropagation";
 import { applyDesignerResult, buildDesignerContext, buildDesignPlanContext, designerDocumentKey, describeDesignerChanges, type DesignRequestSnapshot } from "./threatModelDesigner";
 import { loadAutosaveRaw, saveAutosave } from "./autosave";
@@ -128,7 +128,7 @@ import {
   isAuthenticationType, loadAuthenticationLibrary,
   mergeAuthenticationLibrary, normalizeAuthenticationValue, parseAuthenticationCatalog,
   persistAuthenticationLibrary, sameAuthenticationDefinition, validateAuthenticationDefinitions,
-  withAuthenticationDefinitions, UNKNOWN_AUTH_BEHAVIOR,
+  withAuthenticationDefinitions, withAuthenticationGuidance, UNKNOWN_AUTH_BEHAVIOR,
   type AuthTypeDef, type AuthenticationCompatibility,
 } from "./authentication";
 import {
@@ -569,7 +569,7 @@ export interface ImportPrivacyManagerSummary {
 interface StoreApi {
   doc: PsDocument;
   documentSessionId: number;
-  prepareThreatModelDesign: (scope?: readonly string[], protocolScope?: readonly string[]) => DesignRequestSnapshot;
+  prepareThreatModelDesign: (scope?: readonly string[], protocolScope?: readonly string[], authenticationScope?: readonly string[]) => DesignRequestSnapshot;
   prepareThreatModelDesignPlan: () => ReturnType<typeof buildDesignPlanContext>;
   applyThreatModelDesign: (result: unknown, expected: DesignRequestSnapshot) => { scenarioId: string | null; changed: boolean; summary: string; warning?: string; partial?: boolean };
   authenticationLibrary: readonly AuthTypeDef[];
@@ -594,7 +594,8 @@ interface StoreApi {
   classificationDeleteReason: (id: string) => string | null;
   deleteClassification: (id: string, expected: ClassificationLibrary) => void;
   useLibraryClassificationDefinition: (id: string, expected: ClassificationLibrary) => void;
-  saveAuthenticationMethod: (method: { id: string; label: string; description: string }) => void;
+  saveAuthenticationMethod: (method: { id: string; label: string; description: string; aiDesignGuidance?: AiDesignGuidance }) => void;
+  saveAuthenticationGuidance: (id: string, guidance: AiDesignGuidance | undefined, expectedDefinition?: AuthTypeDef) => void;
   setAuthenticationMethodDisabled: (id: string, disabled: boolean) => void;
   deleteAuthenticationMethod: (id: string) => void;
   resetAuthenticationMethod: (id: string) => void;
@@ -632,6 +633,8 @@ interface StoreApi {
   // results, and because the inspector tab badge counts them.
   assistantFindings: AssistantFinding[];
   setAssistantFindings: Dispatch<SetStateAction<AssistantFinding[]>>;
+  assistantAnalysis: AssistantAnalysisSnapshot | null;
+  setAssistantAnalysis: Dispatch<SetStateAction<AssistantAnalysisSnapshot | null>>;
   // Findings already accepted into Issues or Work Items. Kept beside the
   // findings themselves so a dismissed inspector cannot re-enable the accept
   // buttons and let the same finding be added twice.
@@ -1342,6 +1345,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [assistantFindings, setAssistantFindings] = useState<AssistantFinding[]>(
     []
   );
+  const [assistantAnalysis, setAssistantAnalysis] = useState<AssistantAnalysisSnapshot | null>(null);
   const [acceptedFindingIds, setAcceptedFindingIds] = useState<
     ReadonlySet<string>
   >(() => new Set<string>());
@@ -1510,17 +1514,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const designerCatalog = useCallback(() => {
     const current = docRef.current;
+    const resolved = authenticationCatalogFor(current, libraryRef.current, libraries.authentication);
     return {
       nodeTypes: libraryNodeTypes(current, libraries),
-      authentication: authenticationCatalogFor(current, libraryRef.current, libraries.authentication).filter(method =>
+      authentication: resolved.filter(method =>
         !method.disabled && !method.legacy && !method.unavailableReason &&
         libraryRef.current.some(item => item.id === method.id && !item.disabled)),
+      // Full saved-first catalog resolves guidance for methods already on flows.
+      authenticationDefinitions: resolved,
       classifications: classificationLibraryRef.current,
       protocols: protocolLibraryRef.current,
     };
   }, [libraries]);
 
-  const prepareThreatModelDesign = useCallback((scope?: readonly string[], protocolScope?: readonly string[]): DesignRequestSnapshot => {
+  const prepareThreatModelDesign = useCallback((
+    scope?: readonly string[], protocolScope?: readonly string[], authenticationScope?: readonly string[],
+  ): DesignRequestSnapshot => {
     const current = docRef.current;
     const scenarioId = current.scenarios.length ? activeScenarioIdRef.current : null;
     const catalog = designerCatalog();
@@ -1528,7 +1537,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       scenarioId, documentKey: designerDocumentKey(current), catalogKey: JSON.stringify(catalog),
       ...(scope ? { scope: [...scope] } : {}),
       ...(protocolScope ? { protocolScope: [...protocolScope] } : {}),
-      context: buildDesignerContext(current, scenarioId, catalog, scope, protocolScope),
+      ...(authenticationScope ? { authenticationScope: [...authenticationScope] } : {}),
+      context: buildDesignerContext(current, scenarioId, catalog, scope, protocolScope, authenticationScope),
     };
   }, [designerCatalog]);
 
@@ -1539,7 +1549,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [designerCatalog]);
 
   const applyThreatModelDesign = useCallback((result: unknown, expected: DesignRequestSnapshot) => {
-    const current = prepareThreatModelDesign(expected.scope, expected.protocolScope);
+    const current = prepareThreatModelDesign(expected.scope, expected.protocolScope, expected.authenticationScope);
     if (current.scenarioId !== expected.scenarioId || current.documentKey !== expected.documentKey ||
         current.catalogKey !== expected.catalogKey ||
         JSON.stringify(current.context) !== JSON.stringify(expected.context)) {
@@ -1547,7 +1557,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     const previous = docRef.current;
     const applied = applyDesignerResult(previous, current.scenarioId, result, designerCatalog(),
-      expected.scope, expected.protocolScope);
+      expected.scope, expected.protocolScope, expected.authenticationScope);
     const changed = applied.doc !== previous;
     if (changed) {
       const next = withCatalogDefinitions(
@@ -1683,6 +1693,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     snapshot();
     setDoc(emptyDocument());
     setDocumentSessionId(current => current + 1);
+    setAssistantFindings([]);
+    setAssistantAnalysis(null);
+    setAcceptedFindingIds(new Set());
     setDocumentRecoveryError(null);
     setActiveScenarioId(null);
     setSelection(null);
@@ -4108,7 +4121,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAuthenticationStorageError(null);
   }, [snapshot, libraryInitial.error]);
 
-  const saveAuthenticationMethod = useCallback((method: { id: string; label: string; description: string }) => {
+  const saveAuthenticationMethod = useCallback((method: { id: string; label: string; description: string; aiDesignGuidance?: AiDesignGuidance }) => {
     if (!isAuthenticationType(method.id)) throw new Error("Invalid authentication ID.");
     const existing = libraryRef.current.find(def => def.id === method.id);
     if (!existing && isPackageAuthenticationId(method.id) && !installedAuthentication(method.id, libraries.authentication)) {
@@ -4120,10 +4133,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         disabled: false, legacy: false, aliases: [],
       }),
       label: method.label, description: method.description,
-      shortLabel: method.label.trim().slice(0, 20),
+      shortLabel: existing?.label === method.label.trim() ? existing.shortLabel : method.label.trim().slice(0, 20),
     };
+    if (Object.prototype.hasOwnProperty.call(method, "aiDesignGuidance")) {
+      const guidance = validateAiDesignGuidance(method.aiDesignGuidance);
+      if (guidance) next.aiDesignGuidance = guidance;
+      else delete next.aiDesignGuidance;
+    }
+    if (existing && sameAuthenticationDefinition(existing, next)) return;
     commitAuthenticationLibrary(mergeAuthenticationLibrary(libraryRef.current, [next], libraries.authentication));
   }, [commitAuthenticationLibrary]);
+
+  const saveAuthenticationGuidance = useCallback((
+    id: string, guidance: AiDesignGuidance | undefined, expectedDefinition?: AuthTypeDef,
+  ) => {
+    const current = docRef.current;
+    const catalog = authenticationCatalogFor(current, libraryRef.current, libraries.authentication);
+    const definition = catalog.find(method => method.id === id);
+    if (expectedDefinition && (!definition || !sameAuthenticationDefinition(definition, expectedDefinition))) {
+      throw new Error("This authentication method changed while you were editing. Cancel and reopen the editor; no changes were applied.");
+    }
+    const next = withAuthenticationGuidance(current, catalog, id, guidance);
+    if (next === current) return;
+    snapshot();
+    setDoc(next);
+  }, [snapshot, libraries]);
 
   const setAuthenticationMethodDisabled = useCallback((id: string, disabled: boolean) => {
     if (!libraryRef.current.some(def => def.id === id)) throw new Error("Authentication method is not in your library.");
@@ -4201,6 +4235,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       snapshot();
       setDoc(newDoc);
       setDocumentSessionId(current => current + 1);
+      setAssistantFindings([]);
+      setAssistantAnalysis(null);
+      setAcceptedFindingIds(new Set());
       setDocumentRecoveryError(null);
 
       let nextActive: string | null = null;
@@ -4567,6 +4604,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deleteClassification,
     useLibraryClassificationDefinition,
     saveAuthenticationMethod,
+    saveAuthenticationGuidance,
     setAuthenticationMethodDisabled,
     deleteAuthenticationMethod,
     resetAuthenticationMethod,
@@ -4589,6 +4627,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEditingEdgeTitleValue,
     assistantFindings,
     setAssistantFindings,
+    assistantAnalysis,
+    setAssistantAnalysis,
     acceptedFindingIds,
     setAcceptedFindingIds,
     allCommentsViewOpen,

@@ -5,21 +5,25 @@ import { classificationDefinitionsForLibrary, isEnabledClassification, type Clas
 import { allowedAuthMethodsForNode } from "./policy";
 import { nodeRect, containsRect, boundaryRect, expandRectToContain, placeNodeOutsideBoundary, overlapRatio } from "./boundaryGeometry";
 import { resolveDfdRole, resolveNodeReviewScope } from "./dfdSemantics";
-import { buildAiGuidanceContext, effectiveGuidanceNodeTypes, resolveAiDesignGuidance } from "./aiDesignGuidance";
+import { buildAiGuidanceContext, buildAuthenticationGuidanceContext, effectiveGuidanceNodeTypes, resolveAiDesignGuidance, resolveAuthenticationGuidanceDefinition } from "./aiDesignGuidance";
 import { propagateScenarioEdgeData } from "./dataPropagation";
 import { catalogDefinitionsFor, resolveNodeTypeDef, uid, type NodeTypeRef, type PsDocument, type PsNode, type Scenario } from "./types";
 import {
   protocolDefinitionConflicts, resolveProtocolReference, validateProtocolReference, withProtocolDefinitions, type ProtocolTypeDef,
 } from "./protocols";
 import {
-  validateCommunicationGuidanceContext, type CommunicationGuidanceContextEntry,
+  validateCombinedAiGuidanceContext, type CommunicationGuidanceContextEntry,
 } from "../shared/aiDesignGuidance";
 
 export interface DesignerCatalog {
   nodeTypes: readonly NodeTypeRef[];
+  // Selectable methods offered to the design step.
   authentication: readonly AuthTypeDef[];
   classifications: ClassificationLibrary;
   protocols?: readonly ProtocolTypeDef[];
+  // Full saved-first catalog (including legacy, disabled and unresolved
+  // entries), used only to resolve guidance for methods already on flows.
+  authenticationDefinitions?: readonly AuthTypeDef[];
 }
 
 export interface DesignRequestSnapshot {
@@ -28,7 +32,17 @@ export interface DesignRequestSnapshot {
   catalogKey: string;
   scope?: readonly string[];
   protocolScope?: readonly string[];
+  authenticationScope?: readonly string[];
   context: ReturnType<typeof buildDesignerContext>;
+}
+
+function designerAuthenticationChoices(catalog: DesignerCatalog): AuthTypeDef[] {
+  return catalog.authentication.filter(method =>
+    !method.disabled && !method.legacy && !method.unavailableReason && !method.unresolved);
+}
+
+function unavailableSelection(kind: string, id: string): Error {
+  return new Error(`AI design selection references unavailable ${kind} "${id}"; it is no longer available in this catalog. No changes were applied; send your prompt again.`);
 }
 
 function selectedScenario(doc: PsDocument, scenarioId: string | null): Scenario | undefined {
@@ -41,15 +55,21 @@ function selectedScenario(doc: PsDocument, scenarioId: string | null): Scenario 
 
 // A planned scope narrows catalog entries and guidance to the selected types plus
 // every type already used in the scenario; it never hides model content.
+// Authentication guidance always covers methods on scenario flows plus the
+// methods in authenticationScope (the single-call path passes every offered
+// method; planning passes its selections). The compact method list stays complete.
+// Selected IDs that no longer resolve fail explicitly instead of being dropped.
 export function buildDesignerContext(
   doc: PsDocument, scenarioId: string | null, catalog: DesignerCatalog,
-  scope?: readonly string[], protocolScope?: readonly string[],
+  scope?: readonly string[], protocolScope?: readonly string[], authenticationScope?: readonly string[],
 ) {
   const protocols = catalog.protocols ?? [];
   catalog = { ...catalog, protocols, nodeTypes: effectiveGuidanceNodeTypes(doc.nodeTypes, catalog.nodeTypes) };
   const scenario = selectedScenario(doc, scenarioId);
   const nodes = doc.nodes.filter(item => scenario?.nodeIds.includes(item.id));
   const available = catalog.nodeTypes.filter(type => resolveNodeTypeDef(type.id, catalog.nodeTypes));
+  const unavailableType = scope?.find(id => !available.some(type => type.id === id));
+  if (unavailableType !== undefined) throw unavailableSelection("component type", unavailableType);
   const scopeIds = scope ? new Set([...scope, ...nodes.map(node => node.type)]) : undefined;
   const offered = scopeIds ? available.filter(type => scopeIds.has(type.id)) : available;
   const edgesById = new Map(doc.edges.map(edge => [edge.id, edge]));
@@ -65,6 +85,8 @@ export function buildDesignerContext(
     return resolution.status === "resolved" && resolution.selectable
       ? [{ profile: resolution.definition, definitionSource: resolution.definitionSource }] : [];
   });
+  const unavailableProtocol = protocolScope?.find(id => !protocolEntries.some(({ profile }) => profile.id === id));
+  if (unavailableProtocol !== undefined) throw unavailableSelection("communication protocol", unavailableProtocol);
   const protocolChoices = protocolEntries.map(({ profile }) => ({
     id: profile.id, label: profile.label, shortLabel: profile.shortLabel,
     description: profile.description, semantics: profile.semantics,
@@ -95,20 +117,30 @@ export function buildDesignerContext(
     });
   }
   const communicationGuidance = [...communicationGuidanceById.values()];
-  validateCommunicationGuidanceContext(communicationGuidance, { edges, offeredProtocols: protocolChoices });
   const dataIds = new Set([
     ...Object.values(scenario?.edgeRequestData ?? {}).flat(),
     ...Object.values(scenario?.edgeResponseData ?? {}).flat(),
     ...Object.values(scenario?.nodeData ?? {}).flatMap(Object.keys),
   ]);
-  const authentication = catalog.authentication.filter(method =>
-    !method.disabled && !method.legacy && !method.unavailableReason && !method.unresolved);
+  const authentication = designerAuthenticationChoices(catalog);
+  const unavailableMethod = authenticationScope?.find(id => !authentication.some(method => method.id === id));
+  if (unavailableMethod !== undefined) throw unavailableSelection("authentication method", unavailableMethod);
+  const authenticationDefinitions = catalog.authenticationDefinitions ?? catalog.authentication;
+  const { authenticationGuidance, authenticationGuidanceMissing } = buildAuthenticationGuidanceContext(
+    doc, authenticationDefinitions, edges, authenticationScope ?? []);
+  const suppliedAuthentication = new Set(authenticationGuidance.map(entry => entry.methodId));
+  const authenticationChoices = authentication.map(({ id, label, description }) => ({ id, label, description,
+    hasGuidance: Boolean(resolveAuthenticationGuidanceDefinition(id, doc, authenticationDefinitions)?.definition.aiDesignGuidance),
+    guidanceSupplied: suppliedAuthentication.has(id) }));
+  const aiDesignGuidance = buildAiGuidanceContext(doc, catalog.nodeTypes,
+    scopeIds ? catalog.nodeTypes.map(type => type.id).filter(id => scopeIds.has(id)) : catalog.nodeTypes.map(type => type.id),
+    nodes.filter(node => resolveNodeReviewScope(node, scenario, catalog.nodeTypes).includeInternals));
+  validateCombinedAiGuidanceContext(aiDesignGuidance, communicationGuidance, { edges, offeredProtocols: protocolChoices },
+    authenticationGuidance, { edges, offeredAuthentication: authenticationChoices });
   const sharedInOtherScenarios = (kind: "nodeIds" | "edgeIds" | "boundaryIds", id: string) =>
     doc.scenarios.some(other => other.id !== scenarioId && other[kind].includes(id));
   const context = {
-    aiDesignGuidance: buildAiGuidanceContext(doc, catalog.nodeTypes,
-      scopeIds ? catalog.nodeTypes.map(type => type.id).filter(id => scopeIds.has(id)) : catalog.nodeTypes.map(type => type.id),
-      nodes.filter(node => resolveNodeReviewScope(node, scenario, catalog.nodeTypes).includeInternals)),
+    aiDesignGuidance,
     scenario: scenario ? {
       id: scenario.id, name: scenario.name, description: scenario.description,
       nodeIds: scenario.nodeIds, edgeIds: scenario.edgeIds, boundaryIds: scenario.boundaryIds,
@@ -155,7 +187,7 @@ export function buildDesignerContext(
             id: "", type: type.id, title: "", description: "", serviceTreeId: "", endpointRegex: "", position: { x: 0, y: 0 },
           }, catalog.nodeTypes, authentication).filter(id => authentication.some(method => method.id === id)) };
       }),
-      authentication: authentication.map(({ id, label, description }) => ({ id, label, description })),
+      authentication: authenticationChoices,
       protocols: protocolChoices,
       classifications: catalogDefinitionsFor("classification", doc.catalogDefinitions,
         classificationDefinitionsForLibrary(catalog.classifications))
@@ -164,12 +196,15 @@ export function buildDesignerContext(
     },
     communicationGuidance,
     communicationGuidanceMissing,
+    authenticationGuidance,
+    authenticationGuidanceMissing,
     communicationProtocolConflicts: protocolDefinitionConflicts(doc.protocolDefinitions ?? [], protocols),
     ...(scopeIds ? { catalogScope: {
       nodeTypeIds: offered.map(type => type.id),
       protocolIds: protocolChoices.map(profile => profile.id),
+      ...(authenticationScope ? { authenticationIds: [...new Set(authenticationScope)] } : {}),
       availableNodeTypes: available.length,
-      note: "Planned subset of the component library; omitted types were not selected for this request.",
+      note: "Planned subset of the component library; omitted types were not selected for this request. Authentication guidance covers methods in use plus planned authenticationIds; catalog.authentication remains complete.",
     } } : {}),
   };
   return context;
@@ -182,12 +217,14 @@ export function buildDesignPlanContext(doc: PsDocument, scenarioId: string | nul
   const scenario = selectedScenario(doc, scenarioId);
   const guided = new Set(catalog.nodeTypes.map(type => type.id)
     .filter(id => resolveAiDesignGuidance(id, doc.nodeTypes, catalog.nodeTypes)));
+  const scenarioEdges = (scenario?.edgeIds ?? []).flatMap(id => doc.edges.filter(edge => edge.id === id));
+  const usedMethods = new Set(scenarioEdges.flatMap(edge => edge.authenticationTypes ?? []));
+  const authenticationDefinitions = catalog.authenticationDefinitions ?? catalog.authentication;
   return {
     scenario: scenario ? { id: scenario.id, name: scenario.name, description: scenario.description } : null,
     nodes: doc.nodes.filter(item => scenario?.nodeIds.includes(item.id)).map(node =>
       ({ id: node.id, title: node.title, type: node.type, dfdRole: resolveDfdRole(node, catalog.nodeTypes).role })),
-    edges: (scenario?.edgeIds ?? []).flatMap(id => doc.edges.filter(edge => edge.id === id))
-      .map(({ id, source, target, title }) => ({ id, source, target, title })),
+    edges: scenarioEdges.map(({ id, source, target, title }) => ({ id, source, target, title })),
     boundaries: doc.boundaries.filter(item => scenario?.boundaryIds.includes(item.id))
       .map(({ id, type, title }) => ({ id, type, title })),
     nodeTypeIndex: catalog.nodeTypes.flatMap(type => {
@@ -202,6 +239,10 @@ export function buildDesignPlanContext(doc: PsDocument, scenarioId: string | nul
           usedInScenario: (scenario?.edgeIds ?? []).some(id => doc.edges.find(edge => edge.id === id)?.protocolId === profile.id) }]
         : [];
     }),
+    // Same selectable methods as the design catalog; card bodies are never indexed.
+    authenticationIndex: designerAuthenticationChoices(catalog).map(({ id, label }) => ({ id, label,
+      hasGuidance: Boolean(resolveAuthenticationGuidanceDefinition(id, doc, authenticationDefinitions)?.definition.aiDesignGuidance),
+      usedInScenario: usedMethods.has(id) })),
   };
 }
 
@@ -249,11 +290,11 @@ export function describeDesignerChanges(before: PsDocument, after: PsDocument): 
 
 export function applyDesignerResult(
   doc: PsDocument, scenarioId: string | null, value: unknown, catalog: DesignerCatalog,
-  scope?: readonly string[], protocolScope?: readonly string[],
+  scope?: readonly string[], protocolScope?: readonly string[], authenticationScope?: readonly string[],
 ): { doc: PsDocument; scenarioId: string | null; warning?: string; partial?: boolean } {
   const result = parseDesignResult(value, { existingScenario: Boolean(selectedScenario(doc, scenarioId)) });
   const apply = (proposal: DesignResult, compact = false) =>
-    applyDesignerProposal(doc, scenarioId, proposal, catalog, scope, protocolScope, compact);
+    applyDesignerProposal(doc, scenarioId, proposal, catalog, scope, protocolScope, authenticationScope, compact);
   // Validate the entire proposal, including operations that might be deferred.
   let applied = apply(result);
   const design = result.design;
@@ -314,7 +355,7 @@ export function applyDesignerResult(
 
 function applyDesignerProposal(
   doc: PsDocument, scenarioId: string | null, result: DesignResult, catalog: DesignerCatalog,
-  scope?: readonly string[], protocolScope?: readonly string[], compact = false,
+  scope?: readonly string[], protocolScope?: readonly string[], authenticationScope?: readonly string[], compact = false,
 ): { doc: PsDocument; scenarioId: string | null; warning?: string; layoutIssues: string[] } {
   catalog = { ...catalog, nodeTypes: effectiveGuidanceNodeTypes(doc.nodeTypes, catalog.nodeTypes) };
   const scenario = selectedScenario(doc, scenarioId);
@@ -326,7 +367,7 @@ function applyDesignerProposal(
   if (name === undefined || description === undefined) {
     throw new Error("AI design requires a scenario name and description. No changes were applied.");
   }
-  const context = buildDesignerContext(doc, scenarioId, catalog, scope, protocolScope);
+  const context = buildDesignerContext(doc, scenarioId, catalog, scope, protocolScope, authenticationScope);
   const removal = design.remove ?? { nodeIds: [], edgeIds: [], boundaryIds: [] };
   const validateRemovals = (requested: string[], available: readonly { id: string }[]) => {
     for (const id of requested) {

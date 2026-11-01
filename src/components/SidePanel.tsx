@@ -8,7 +8,7 @@ import { BoundaryDetails } from "./BoundaryDetails";
 import { TextAnnotationDetails } from "./TextAnnotationDetails";
 import { ChangesPanel } from "./ChangesPanel";
 import { DataModal } from "./DataModal";
-import { DesignAssistantPanel } from "./DesignAssistantPanel";
+import { AssistantReviewSurface } from "./AssistantReviewSurface";
 import { EdgeDetails } from "./EdgeDetails";
 import { EdgeTable } from "./EdgeTable";
 import { NodeDetails } from "./NodeDetails";
@@ -71,10 +71,15 @@ export function SidePanel() {
   } = useUiShell();
   const previousSelectionRef = useRef<string | null | undefined>(undefined);
   const [inspectorExpanded, setInspectorExpanded] = useState(false);
+  const [assistantDock, setAssistantDock] = useState<HTMLElement | null>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const expandButtonFocusedRef = useRef(false);
   const tabsRef = useRef(new Map<InspectorTab, HTMLButtonElement | null>());
   tabsRef.current = new Map();
+
+  useEffect(() => {
+    if (inspectorActiveTab === "assistant" && window.innerWidth <= 640) setInspectorExpanded(true);
+  }, [inspectorActiveTab]);
 
   const selectionKey = selection
     ? selection.kind === "waypoint"
@@ -166,6 +171,8 @@ export function SidePanel() {
             tabsRef.current.get(inspectorActiveTab)?.focus({ preventScroll: true }),
           );
         }
+      } else if (inspectorActiveTab === "assistant") {
+        setInspectorExpanded(true);
       }
     };
     window.addEventListener("resize", onResize);
@@ -322,11 +329,12 @@ export function SidePanel() {
     document.body.classList.add("ps-resizing-h");
   };
 
-  if (!inspectorVisible) return null;
-
   return (
+    <>
+    <AssistantReviewSurface dockTarget={assistantDock} dockVisible={inspectorVisible && inspectorActiveTab === "assistant"} />
+    {inspectorVisible && (
     <aside
-      className={`ps-side ps-inspector${inspectorExpanded ? " ps-inspector-expanded" : ""}`}
+      className={`ps-side ps-inspector${inspectorExpanded ? " ps-inspector-expanded" : ""}${inspectorActiveTab === "assistant" ? " ps-inspector-assistant" : ""}`}
       aria-labelledby="ps-inspector-title"
       style={
         {
@@ -417,7 +425,7 @@ export function SidePanel() {
           className="ps-inspector-icon"
           aria-label="Close inspector"
           title="Close inspector (Escape)"
-          onClick={closeInspector}
+          onClick={() => closeInspector()}
         >
           ×
         </button>
@@ -481,12 +489,12 @@ export function SidePanel() {
         </section>
         <section
           id="ps-inspector-panel-assistant"
+          ref={setAssistantDock}
           role="tabpanel"
           aria-labelledby="ps-inspector-tab-assistant"
           tabIndex={0}
           hidden={inspectorActiveTab !== "assistant"}
         >
-          <DesignAssistantPanel />
         </section>
         <section
           id="ps-inspector-panel-comments"
@@ -534,5 +542,7 @@ export function SidePanel() {
         </section>
       </div>
     </aside>
+    )}
+    </>
   );
 }

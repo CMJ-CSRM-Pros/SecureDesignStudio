@@ -37,6 +37,7 @@ import { LibraryMetadataFields } from "./LibraryMetadataFields";
 import { useRemoveFromScenarioWithConfirm } from "./useRemoveFromScenarioWithConfirm";
 import { useLibraries } from "../libraries/LibraryProvider";
 import { resolveProtocolReference } from "../protocols";
+import { AuthenticationGuidance } from "./AuthenticationGuidance";
 
 export function EdgeDetails({ edge }: { edge: PsEdge }) {
   const rightsId = useId();
@@ -389,6 +390,9 @@ export function EdgeDetails({ edge }: { edge: PsEdge }) {
                 )}
             </div>
           )}
+
+          {[...new Set(authTypes)].map(methodId =>
+            <AuthenticationGuidance key={methodId} methodId={methodId} />)}
 
           {visibleAuthTypes.length === 0 && authTypes.length === 0 && (
             <p className="ps-empty" style={{ padding: 0, fontSize: 12 }}>
