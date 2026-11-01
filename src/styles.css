@@ -5464,7 +5464,7 @@ select {
   flex: 0 0 auto;
   display: grid;
   gap: 6px;
-  margin: 0 -12px -12px;
+  margin: 0;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--ps-border);
   background: var(--ps-bg-elev);
@@ -5542,14 +5542,144 @@ select {
   align-content: start;
 }
 
+.ps-assistant.is-analysis {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ps-assistant.is-analysis > * {
+  flex-shrink: 0;
+}
+.ps-assistant.is-analysis .ps-assistant-analysis {
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+.ps-assistant-analysis-summary {
+  padding: 10px 12px;
+  border: 1px solid var(--ps-border);
+  border-radius: 6px;
+}
+.ps-assistant-analysis-summary summary { cursor: pointer; }
+.ps-assistant-surface-slot {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.ps-assistant-floating-layer { flex: 0 0 0; width: 0; min-width: 0; }
+.ps-assistant-surface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ps-bg-elev);
+  color: inherit;
+}
+.ps-assistant-surface.is-floating {
+  position: fixed;
+  z-index: 40;
+  left: var(--ps-assistant-left);
+  top: var(--ps-assistant-top);
+  width: var(--ps-assistant-width);
+  height: var(--ps-assistant-height);
+  border: 1px solid var(--ps-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px #0004;
+}
+.ps-assistant-popup-shell { height: 100dvh; overflow: hidden; }
+.ps-assistant-popup-shell > .ps-assistant-surface-slot { flex: 1; }
+.ps-assistant-surface-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--ps-border);
+}
+.is-floating > .ps-assistant-surface-bar { cursor: move; touch-action: none; }
+.ps-assistant-window-actions { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.ps-assistant-surface-title { font-size: 13px; }
+.ps-assistant-window-actions select {
+  width: 160px;
+  max-width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  background: var(--ps-control, var(--ps-bg-elev));
+  color: inherit;
+  font: inherit;
+}
+.ps-assistant-surface-bar button,
+.ps-findings-export button,
+.ps-assistant-jump,
+.ps-assistant-undocked-notice button {
+  max-width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--ps-border);
+  border-radius: 4px;
+  background: var(--ps-control, var(--ps-bg-elev));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ps-assistant-surface button:disabled { opacity: .5; cursor: not-allowed; }
+.ps-assistant-surface-bar:focus-visible,
+.ps-assistant-surface button:focus-visible,
+.ps-findings-export button:focus-visible {
+  outline: 2px solid var(--ps-fluent-focus);
+  outline-offset: -2px;
+}
+.ps-assistant-surface-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  container: ps-assistant-panel / size;
+}
+.ps-assistant-surface.is-floating .ps-assistant-surface-body { padding: 10px 12px 24px; }
+.ps-assistant-surface.is-window .ps-assistant-surface-body { padding: 12px; }
+.ps-assistant-jump { align-self: flex-start; }
+.ps-findings-export { min-width: 0; max-width: 100%; }
+.ps-allissues .ps-allcomments-header { flex-wrap: wrap; gap: 8px; }
+.ps-assistant-undocked-notice { padding: 12px; }
+.ps-assistant-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px 0 6px 0;
+  background: var(--ps-bg-elev);
+  color: inherit;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+@media (max-width: 640px) {
+  .ps-inspector-assistant .ps-inspector-header { min-height: 40px; padding: 4px 8px; }
+  .ps-inspector-assistant .ps-inspector-header p { display: none; }
+  .ps-inspector-assistant .ps-inspector-icon { width: 32px; height: 32px; }
+  .ps-inspector-assistant .ps-inspector-tabs button { height: 32px; }
+  .ps-inspector-assistant .ps-inspector-panel { padding: 4px; }
+  .ps-inspector-assistant .ps-assistant-surface-bar { padding: 4px; }
+}
+
 /* When headers and a composer would crowd out results, use one outer scroller. */
 @container ps-assistant-panel (max-height: 440px) {
   #ps-inspector-panel-assistant {
     overflow-y: auto;
   }
   .ps-assistant {
-    height: auto;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
   }
   .ps-assistant-analysis,
   .ps-assistant-conversation {

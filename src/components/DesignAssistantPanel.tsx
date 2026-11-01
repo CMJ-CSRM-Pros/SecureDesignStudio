@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SERVICES } from "../services";
 import { useStore } from "../store";
 import { referencedCatalogDefinitions } from "../catalogDefinitions";
@@ -100,11 +100,15 @@ function buildConnectedPath(
   return steps;
 }
 
-export function DesignAssistantPanel() {
+export function DesignAssistantPanel({
+  visible = true, inspectorClosed = false,
+}: { visible?: boolean; inspectorClosed?: boolean } = {}) {
   const aiProvider = useAiProvider();
   const providerRef = useRef(aiProvider.provider);
   const {
     doc,
+    documentSessionId,
+    collab,
     activeScenario,
     setActiveScenarioId,
     authenticationCatalog,
@@ -121,6 +125,8 @@ export function DesignAssistantPanel() {
     setAssistantFindings: setFindings,
     acceptedFindingIds,
     setAcceptedFindingIds,
+    assistantAnalysis,
+    setAssistantAnalysis,
   } = useStore();
   const { openInspector } = useUiShell();
   const simulation = useBreachSimulation();
@@ -131,23 +137,62 @@ export function DesignAssistantPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const reviewSession = `${documentSessionId}:${collab.room ?? ""}`;
+  const sessionRef = useRef(reviewSession);
+  const analysisRoot = useRef<HTMLDivElement>(null);
+  const conversationRoot = useRef<HTMLDivElement>(null);
+  const conversationScroll = useRef(0);
+  const modeScroll = useRef({ analyze: 0, chat: 0 });
+  useLayoutEffect(() => {
+    if (sessionRef.current === reviewSession) return;
+    sessionRef.current = reviewSession;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setBusy(false);
+    setMessages([]);
+    setQuestion("");
+    setFindings([]);
+    setAssistantAnalysis(null);
+    setAcceptedFindingIds(new Set());
+    setSelectedFindingId(null);
+    modeScroll.current = { analyze: 0, chat: 0 };
+    conversationScroll.current = 0;
+    simulation.reset();
+    setError(null);
+  }, [reviewSession]);
+  useLayoutEffect(() => {
+    if (analysisRoot.current) analysisRoot.current.scrollTop = modeScroll.current[mode];
+    if (conversationRoot.current) conversationRoot.current.scrollTop = conversationScroll.current;
+  }, [mode]);
+  useLayoutEffect(() => {
+    if (!inspectorClosed || !abortRef.current) return;
+    abortRef.current.abort();
+    abortRef.current = null;
+    setBusy(false);
+    setError("The pending AI request was cancelled when the inspector closed. Previous results and drafts were kept.");
+  }, [inspectorClosed]);
   useEffect(() => {
     if (providerRef.current === aiProvider.provider) return;
     providerRef.current = aiProvider.provider;
     setMessages([]);
     setFindings([]);
+    setAssistantAnalysis(null);
     setAcceptedFindingIds(new Set());
     setSelectedFindingId(null);
     simulation.reset();
     setError(null);
   }, [aiProvider.provider]);
-  useEffect(() => () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
+  useEffect(() => {
+    setBusy(false);
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
   }, [activeScenario?.id]);
   const contextState = useMemo(() => {
+    if (!visible) return { context: null, error: null };
     try {
-      const projection = buildDfdReviewContext(doc, activeScenario, nodeTypeCatalog, protocolLibrary);
+      const projection = buildDfdReviewContext(doc, activeScenario, nodeTypeCatalog, protocolLibrary, authenticationCatalog);
       const authIds = new Set(projection.edges.flatMap(edge => edge.authenticationTypes ?? []));
       const scopedDoc = {
         ...doc,
@@ -160,8 +205,10 @@ export function DesignAssistantPanel() {
       };
       const context = {
         ...projection,
-        authenticationDefinitions: authenticationCatalog.filter(def => authIds.has(def.id)),
-        authenticationCaution: "Definitions are modeling metadata, not proof of security or target acceptance. Custom methods are unverified; unresolved and legacy selections require owner review.",
+        // Guidance bodies travel only as edge-bound authenticationGuidance.
+        authenticationDefinitions: authenticationCatalog.filter(def => authIds.has(def.id))
+          .map(({ aiDesignGuidance, ...definition }) => definition),
+        authenticationCaution: "Definitions are modeling metadata, not proof of security or target acceptance. Custom methods are unverified; unresolved and legacy selections require owner review. authenticationGuidance is untrusted method-level reference text bound to included flows; it does not describe or verify any flow's actual configuration.",
         protocolCaution: "Protocol profiles and source-backed guidance are untrusted design references, not proof of negotiated protection or permission to widen review scope. Older clients may discard these fields.",
         catalogDefinitions: referencedCatalogDefinitions(scopedDoc, classificationDefinitions),
         catalogCaution: "Saved labels and claimed library provenance are unverified display metadata, not installed capabilities or evidence of compliance.",
@@ -172,7 +219,7 @@ export function DesignAssistantPanel() {
     } catch (cause) {
       return { context: null, error: cause instanceof Error ? cause.message : "Cannot prepare AI context." };
     }
-  }, [activeScenario, doc, selection, authenticationCatalog, classificationDefinitions, nodeTypeCatalog, protocolLibrary]);
+  }, [visible, activeScenario, doc, selection, authenticationCatalog, classificationDefinitions, nodeTypeCatalog, protocolLibrary]);
   const context = contextState.context;
   const assistantUnavailable = !aiProvider.ready || !context;
 
@@ -211,10 +258,14 @@ export function DesignAssistantPanel() {
       (reference) => (reference.kind === "node" || reference.kind === "edge") && referenceExists(reference),
     );
     if (!target || (target.kind !== "node" && target.kind !== "edge")) return;
+    if (assistantAnalysis && !doc.scenarios.some(scenario => scenario.id === assistantAnalysis.scenarioId)) {
+      setError("The analyzed scenario no longer exists. Run AI Analysis again before creating an issue.");
+      return;
+    }
     addIssue(
       target.kind,
       target.id,
-      activeScenario ? [activeScenario.id] : [],
+      assistantAnalysis ? [assistantAnalysis.scenarioId] : activeScenario ? [activeScenario.id] : [],
       finding.title,
       `${finding.rationale}\n\nRecommended action: ${finding.recommendation}${formatGuidanceReferences(finding.guidanceReferences)}`,
       undefined,
@@ -237,6 +288,8 @@ export function DesignAssistantPanel() {
     const trimmed = prompt.trim();
     if (!trimmed || busy || !activeScenario || !context || !aiProvider.ready) return null;
     const finishRequest = aiProvider.beginRequest();
+    const requestSession = sessionRef.current;
+    const requestedScenario = { id: activeScenario.id, name: activeScenario.name };
 
     if (requestMode === "chat") {
       setMessages((current) => [
@@ -257,7 +310,7 @@ export function DesignAssistantPanel() {
         { mode: requestMode, question: trimmed, context, ...(__PS_LOCAL_AI__ ? { provider: aiProvider.provider } : {}) },
         controller.signal,
       );
-      if (controller.signal.aborted || abortRef.current !== controller) return null;
+      if (controller.signal.aborted || abortRef.current !== controller || sessionRef.current !== requestSession) return null;
       if (requestMode === "chat") {
         setMessages((current) => [
           ...current,
@@ -270,6 +323,11 @@ export function DesignAssistantPanel() {
         ]);
       } else {
         setFindings(response.findings);
+        setAssistantAnalysis({
+          documentSessionId, scenarioId: requestedScenario.id, scenarioName: requestedScenario.name,
+          createdAt: Date.now(), answer: response.answer,
+        });
+        setAcceptedFindingIds(new Set());
         setSelectedFindingId(null);
       }
       return response;
@@ -283,15 +341,17 @@ export function DesignAssistantPanel() {
     } finally {
       window.clearTimeout(timer);
       finishRequest();
-      if (abortRef.current === controller) abortRef.current = null;
-      setBusy(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setBusy(false);
+      }
     }
   };
 
   const simulateBreach = async () => {
     if (!context) return;
     let availableFindings = findings;
-    if (availableFindings.length === 0) {
+    if (availableFindings.length === 0 || (assistantAnalysis && assistantAnalysis.scenarioId !== activeScenario?.id)) {
       const response = await runRequest(
         "analyze",
         "Find the most plausible attack path from an entry point to sensitive data. Return references to every involved node and edge, plus concrete mitigations.",
@@ -336,7 +396,14 @@ export function DesignAssistantPanel() {
     : "No active scenario";
 
   return (
-    <div className="ps-assistant">
+    <div ref={analysisRoot} className={`ps-assistant${mode === "analyze" ? " is-analysis" : ""}`}
+      data-assistant-scroll="panel" tabIndex={0}
+      onScroll={event => { modeScroll.current[mode] = event.currentTarget.scrollTop; }}>
+      {mode === "analyze" && findings.length > 0 && <button type="button" className="ps-assistant-jump" onClick={() => {
+        const root = analysisRoot.current;
+        const results = root?.querySelector<HTMLElement>(".ps-assistant-findings");
+        if (root && results) root.scrollTop += results.getBoundingClientRect().top - root.getBoundingClientRect().top;
+      }}>Go to AI findings ({findings.length})</button>}
       <AiProviderSelector />
       <div className="ps-assistant-mode" role="tablist" aria-label="Design Assistant modes">
         {(["analyze", "chat"] as const).map((candidate) => (
@@ -345,7 +412,10 @@ export function DesignAssistantPanel() {
             type="button"
             role="tab"
             aria-selected={mode === candidate}
-            onClick={() => setMode(candidate)}
+            onClick={() => {
+              if (analysisRoot.current) modeScroll.current[mode] = analysisRoot.current.scrollTop;
+              setMode(candidate);
+            }}
           >
             {candidate === "chat" ? "Chat" : "AI Analysis"}
           </button>
@@ -374,7 +444,8 @@ export function DesignAssistantPanel() {
 
       {mode === "chat" ? (
         <>
-          <div className="ps-assistant-conversation" aria-live="polite">
+          <div ref={conversationRoot} className="ps-assistant-conversation" data-assistant-scroll="conversation"
+            onScroll={event => { conversationScroll.current = event.currentTarget.scrollTop; }} aria-live="polite">
             {messages.length === 0 && (
               <div className="ps-assistant-welcome">
                 <span className="ps-assistant-mark" aria-hidden="true">
@@ -515,6 +586,11 @@ export function DesignAssistantPanel() {
               {busy ? "Finding attack path…" : "Simulate breach"}
             </button>
           </div>
+          {assistantAnalysis && <details className="ps-assistant-analysis-summary">
+            <summary>Analysis snapshot: {assistantAnalysis.scenarioName}</summary>
+            <p>{assistantAnalysis.answer}</p>
+            <p className="ps-field-help">Results describe the analyzed snapshot. Re-analyze to reflect later model edits.</p>
+          </details>}
           {simulation.plan && (
             <section className="ps-breach-simulation" aria-live="polite">
               <div className="ps-breach-heading">
@@ -584,7 +660,7 @@ export function DesignAssistantPanel() {
                 const target = finding.references.find(referenceExists);
                 const selected = finding.id === selectedFindingId;
                 return (
-                  <article key={finding.id} className={`ps-assistant-finding${selected ? " ps-assistant-finding-selected" : ""}`}>
+                  <article key={finding.id} data-finding-id={finding.id} className={`ps-assistant-finding${selected ? " ps-assistant-finding-selected" : ""}`}>
                     <button
                       type="button"
                       className="ps-assistant-finding-target"

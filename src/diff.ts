@@ -223,7 +223,7 @@ export function diffDocuments(
     if (!before || !after || !sameAuthenticationDefinition(before, after)) {
       changes.push({
         id: nextId(), category: "authentication",
-        description: `${!before ? "Added" : !after ? "Removed" : "Changed"} authentication definition "${after?.label ?? before?.label}" (${id})${before && after ? `: Method, Description, availability or explicit behavior metadata differs` : ""}`,
+        description: `${!before ? "Added" : !after ? "Removed" : "Changed"} authentication definition "${after?.label ?? before?.label}" (${id})${before && after ? `: Method, Description, AI design guidance, availability or explicit behavior metadata differs` : ""}`,
       });
     }
   }

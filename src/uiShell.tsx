@@ -34,7 +34,7 @@ interface UiShellApi extends UiPreferences {
   documentFileName: string;
   setDocumentFileName: (documentFileName: string) => void;
   openInspector: (tab?: InspectorTab, trigger?: HTMLElement | null) => void;
-  closeInspector: () => void;
+  closeInspector: (options?: { restoreFocus?: boolean }) => void;
   toggleInspector: (trigger?: HTMLElement | null) => void;
   setInspectorWidth: (width: number) => void;
   setInspectorPinned: (pinned: boolean) => void;
@@ -190,12 +190,13 @@ export function UiShellProvider({ children }: { children: ReactNode }) {
         }));
         focusInspectorTab(tab);
       },
-      closeInspector: () => {
+      closeInspector: (options) => {
         setPreferences((current) => ({
           ...current,
           inspectorVisible: false,
         }));
-        restoreAfterClose();
+        if (options?.restoreFocus === false) setReopenFocusRequest(0);
+        else restoreAfterClose();
       },
       toggleInspector: (trigger) => {
         if (preferences.inspectorVisible) {

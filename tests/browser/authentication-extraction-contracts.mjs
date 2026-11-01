@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { modelFixture, autosaveKey } from "./fixture.mjs";
-import { historicalAuthenticationDefinitions, PACKAGE_METHOD_IDS } from "../authentication/catalog-fixtures.mjs";
+import { historicalAuthenticationDefinitions, PROMOTED_METHOD_IDS } from "../authentication/catalog-fixtures.mjs";
 
 const guid = "11111111-1111-4111-8111-111111111111";
 const methodId = "EntraApplicationOnlyWithCdt";
@@ -11,31 +11,33 @@ async function selectFlow(page, title = "Request payload") {
   await page.getByRole("tab", { name: /^Properties/ }).click();
 }
 const selector = page => page.getByRole("combobox", { name: /^Authentication method/ });
+// The four owner-specific methods are built in for both builds; a selected library controls tenants, not them.
+async function assertPromotedChoices(page) {
+  for (const id of PROMOTED_METHOD_IDS) {
+    assert.equal(await selector(page).locator(`option[value="${id}"]`).count(), 1, `${id}: promoted core method is offered`);
+  }
+}
 
 export function registerAuthenticationExtractionContracts({ getHarness, exportModel, configured = false }) {
   test(`regression: ${configured ? "selected" : "absent"} authentication library controls authoring, not cached identity data`, async () => {
     await getHarness().run(`regression: authentication extraction ${configured ? "selected" : "absent"}`, async ({ page }) => {
       await selectFlow(page);
-      for (const id of PACKAGE_METHOD_IDS) {
-        assert.equal(await selector(page).locator(`option[value="${id}"]`).count(), configured ? 1 : 0);
-      }
+      await assertPromotedChoices(page);
       await selector(page).selectOption("EntraApplicationOnlyAccess");
       const callerApplicationId = page.getByRole("textbox", { name: "Application ID (GUID)", exact: true });
       await callerApplicationId.fill(guid);
-      const preferences = await page.evaluate(async history => {
+      const preferences = await page.evaluate(async () => {
         const { AUTH_TYPE_DEFS, exportAuthenticationCatalog, AUTHENTICATION_STORAGE_KEY } = await import("/src/authentication.ts");
-        const methods = [...AUTH_TYPE_DEFS, ...history].map(method =>
+        const methods = AUTH_TYPE_DEFS.map(method =>
           method.id === "EntraApplicationOnlyWithCdt" ? { ...method, label: "Personal CDT name" } : method);
         const raw = exportAuthenticationCatalog(methods);
         localStorage.setItem(AUTHENTICATION_STORAGE_KEY, raw);
         return raw;
-      }, historicalAuthenticationDefinitions());
+      });
       await page.reload();
       await selectFlow(page);
       assert.equal(await page.evaluate(() => localStorage.getItem("secure-design-studio:authentication-library:v1")), preferences);
-      for (const id of PACKAGE_METHOD_IDS) {
-        assert.equal(await selector(page).locator(`option[value="${id}"]`).count(), configured ? 1 : 0);
-      }
+      await assertPromotedChoices(page);
       const input = modelFixture();
       input.doc.edges[0] = {
         ...input.doc.edges[0], authenticationTypes: [methodId],
@@ -56,11 +58,13 @@ export function registerAuthenticationExtractionContracts({ getHarness, exportMo
       await page.getByLabel("Document status").getByText("historical-auth.tma", { exact: true }).waitFor();
       await selectFlow(page);
       assert.equal(await selector(page).inputValue(), methodId);
-      assert.equal(await selector(page).locator(`option[value="${methodId}"]`).evaluate(option => option.disabled), !configured);
+      assert.equal(await selector(page).locator(`option[value="${methodId}"]`).evaluate(option => option.disabled), false,
+        "A historical saved snapshot of a promoted method resolves against core authority");
       assert.equal(await page.getByRole("combobox", { name: "Tenant", exact: true }).count(), 0);
       assert.equal(await page.getByRole("textbox", { name: "Audience", exact: true }).inputValue(), "Retained audience");
       assert.equal(await page.getByRole("textbox", { name: "Constraints (CDT)", exact: true }).inputValue(), "Retained constraints");
-      if (!configured) await page.locator(".ps-auth-selection-warning").filter({ hasText: "Required authentication library is unavailable" }).waitFor();
+      assert.equal(await page.locator(".ps-auth-selection-warning").filter({ hasText: "Required authentication library is unavailable" }).count(), 0,
+        "Promotion: no companion library is required");
       const identityEvidence = page.locator("details").filter({ hasText: "Retained identity evidence" });
       await identityEvidence.locator("summary").click();
       await identityEvidence.getByText(/Saved tenant label/).waitFor();
@@ -97,7 +101,7 @@ export function registerAuthenticationExtractionContracts({ getHarness, exportMo
       assert.equal(await page.getByRole("textbox", { name: "Application ID (GUID)", exact: true }).inputValue(),
         "22222222-2222-4222-8222-222222222222");
       await selectFlow(page, "Parallel flow");
-      for (const id of PACKAGE_METHOD_IDS) assert.equal(await selector(page).locator(`option[value="${id}"]`).count(), configured ? 1 : 0);
+      await assertPromotedChoices(page);
     });
   });
 

@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   UNKNOWN_BEHAVIOR, LEGACY_LABELS, EXPECTED_PROFILES, IDS,
   definition, documentFixture, withFlow, withPolicy, tm7Fixture,
-  PACKAGE_METHOD_IDS, historicalAuthenticationDefinitions,
+  PROMOTED_METHOD_IDS,
 } from "./catalog-fixtures.mjs";
 
 const [auth, types, store, policy, analyzer, diff, tm7Import, tm7Export, report, embedded, links, richText] =
@@ -48,7 +48,7 @@ const reviewIssue = (doc) => edgeIssues(doc).find((issue) => issue.kind === "Edg
 const reportFor = (doc) => report.buildReviewReportHtml({
   doc, scenario: doc.scenarios[0], documentFileName: "catalog-test.tma", appVersion: "test",
 });
-const installedHistory = [...auth.AUTH_TYPE_DEFS, ...historicalAuthenticationDefinitions()];
+const installedHistory = auth.AUTH_TYPE_DEFS;
 
 describe("authentication catalog: immutable compatibility contracts", () => {
   test("legacy files retain authentication when protocol is absent, null or unresolved", () => {
@@ -63,10 +63,10 @@ describe("authentication catalog: immutable compatibility contracts", () => {
     }
   });
 
-  test("core ships 14 stable IDs, with 13 modern choices and one legacy certificate", () => {
-    assert.equal(auth.AUTH_TYPE_DEFS.length, 14);
-    assert.deepEqual(sorted(auth.AUTH_TYPES), sorted(Object.keys(EXPECTED_PROFILES).filter(id => !PACKAGE_METHOD_IDS.includes(id))));
-    assert.equal(auth.AUTH_TYPE_DEFS.filter((entry) => !entry.legacy).length, 13);
+  test("core ships 18 stable IDs, with 17 modern choices and one legacy certificate", () => {
+    assert.equal(auth.AUTH_TYPE_DEFS.length, 18);
+    assert.deepEqual(sorted(auth.AUTH_TYPES), sorted(Object.keys(EXPECTED_PROFILES)));
+    assert.equal(auth.AUTH_TYPE_DEFS.filter((entry) => !entry.legacy).length, 17);
     assert.deepEqual(auth.AUTH_TYPE_DEFS.filter((entry) => entry.legacy).map((entry) => entry.id), ["CertificateAuthentication"]);
     assert.ok(auth.AUTH_TYPE_DEFS.every((entry) => !entry.disabled && !entry.unresolved));
     assert.strictEqual(types.AUTH_TYPE_DEFS, auth.AUTH_TYPE_DEFS);
@@ -75,10 +75,25 @@ describe("authentication catalog: immutable compatibility contracts", () => {
     assert.deepEqual(types.emptyDocument().authenticationDefinitions, []);
   });
 
+  test("promoted compatibility identities are built in without changing their identity or protected contract", () => {
+    assert.deepEqual(auth.AUTH_TYPE_DEFS.slice(-4).map(entry => entry.id), PROMOTED_METHOD_IDS, "Promoted methods follow the original core order");
+    for (const id of PROMOTED_METHOD_IDS) {
+      const entry = auth.builtInAuthentication(id);
+      assert.ok(entry, `${id} is built in`);
+      assert.equal(auth.isPackageAuthenticationId(id), true, `${id} keeps its historical import identity`);
+      assert.equal(auth.isKnownInstalledAuthentication(id), true);
+      assert.deepEqual(entry.aliases, [LEGACY_LABELS[id]], `${id} keeps its exact compatibility alias`);
+      assert.equal(entry.legacy, false);
+      assert.equal(auth.authenticationUnavailableReason(entry), undefined, `${id} needs no companion library`);
+      assert.equal(auth.authTypeLabel(id), entry.label);
+    }
+    assert.equal(auth.LEGACY_AUTHENTICATION_IDS.size, 11, "Compatibility minimum-version classes are unchanged");
+  });
+
   for (const [id, expected] of Object.entries(EXPECTED_PROFILES)) {
     test(`${id} preserves its exact explicit behavior profile`, () => {
       const [productionIdentity, audience, constraints, anonymous, managedIdentity] = expected;
-      const catalog = PACKAGE_METHOD_IDS.includes(id) ? installedHistory : auth.AUTH_TYPE_DEFS;
+      const catalog = auth.AUTH_TYPE_DEFS;
       const entry = find(catalog, id);
       assert.ok(entry);
       assert.deepEqual(entry.behavior, { productionIdentity, audience, constraints, anonymous, managedIdentity });
@@ -99,7 +114,8 @@ describe("authentication catalog: immutable compatibility contracts", () => {
     assert.deepEqual(sorted(Object.keys(LEGACY_LABELS).filter(id => auth.edgeRequiresProductionIdentity([id], installedHistory))), sorted(expected));
     assert.deepEqual(sorted(auth.AUTH_TYPES_REQUIRING_PRODUCTION_IDENTITY), sorted([
       "EntraDelegatedUserAccess", "EntraApplicationOnlyAccess", "EntraOnBehalfOf", "EntraFederatedWorkloadIdentity",
-    ]));
+      "EntraApplicationOnlyWithCdt", "ProtectedForwardedAccessToken", "PopWithProtectedForwardedToken",
+    ]), "Promoted methods keep their caller Application ID requirement without a companion library");
     assert.equal(auth.edgeRequiresProductionIdentity(["ApiKey", "EntraOnBehalfOf"]), true);
     assert.equal(auth.edgeRequiresApplicationId(["EntraManagedIdentity"]), false);
     assert.equal(auth.edgeRequiresProductionIdentity([]), false);
@@ -116,7 +132,7 @@ describe("authentication catalog: immutable compatibility contracts", () => {
     });
   }
 
-  test("core descriptions preserve public protocol distinctions without supplying private descriptions", () => {
+  test("core descriptions preserve public protocol distinctions and the promoted owner-specific caveats", () => {
     const description = (id) => auth.authTypeDescription(id);
     assert.match(description("SharedAccessSignature"), /user.delegation.*service.*account SAS/i);
     assert.match(description("SharedAccessSignature"), /not assumed.*user delegation/i);
@@ -127,7 +143,11 @@ describe("authentication catalog: immutable compatibility contracts", () => {
     assert.match(description("InternalProcessCall"), /no particular authentication/i);
     assert.match(description("CertificateAuthentication"), /unspecified/i);
     assert.match(description("CertificateAuthentication"), /not assume.*mTLS.*Entra/i);
-    for (const id of PACKAGE_METHOD_IDS) assert.equal(description(id), undefined);
+    // By user decision the four former companion descriptions are public core text; their caveats must survive the move.
+    assert.match(description("EntraApplicationOnlyWithForwardedUserContext"), /not automatically.*on-behalf-of/i);
+    assert.match(description("EntraApplicationOnlyWithCdt"), /not inferred Kerberos/i);
+    assert.match(description("ProtectedForwardedAccessToken"), /owner.*contract/i);
+    assert.match(description("PopWithProtectedForwardedToken"), /not assume universal equivalence or guaranteed distinctness.*PFAT/i);
   });
 
   test("shipped definitions and their nested compatibility metadata cannot be mutated", () => {

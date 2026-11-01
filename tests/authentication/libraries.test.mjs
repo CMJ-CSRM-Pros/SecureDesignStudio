@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import * as Y from "yjs";
-import { documentFixture, IDS } from "./catalog-fixtures.mjs";
+import { documentFixture, IDS, PROMOTED_METHOD_IDS, historicalAuthenticationDefinitions } from "./catalog-fixtures.mjs";
 
 const { resolveLibraries, CORE_LIBRARIES } = await import("../../src/libraries/registry.ts");
 const { validateLibraryPackage, normalizeEntityMetadata } = await import("../../src/libraries/validation.ts");
@@ -25,10 +25,22 @@ test("libraries: empty configuration preserves public catalogs and fourteen core
   assert.ok(CORE_LIBRARIES.coreRuleIds.includes("Edge_missing_application_id"));
   assert.ok(CORE_LIBRARIES.coreRuleIds.includes("Edge_protocol_guidance_missing"));
   assert.equal(CORE_LIBRARIES.coreRuleIds.includes("Node_must_have_servicetree"), false);
-  assert.equal(CORE_LIBRARIES.authentication.length, 14);
+  assert.equal(CORE_LIBRARIES.authentication.length, 18, "The core ships all 18 authentication methods, including the four promoted identities");
   assert.equal(CORE_LIBRARIES.classifications.defaultId, "EUII");
   assert.equal(CORE_LIBRARIES.statuses.length, 0);
   assert.ok(Object.isFrozen(CORE_LIBRARIES.fields));
+});
+
+test("libraries: promoted core authentication is never silently re-contributed by an optional package", () => {
+  for (const id of PROMOTED_METHOD_IDS) {
+    assert.equal(CORE_LIBRARIES.provenance[`authentication/${id.toLowerCase()}`], "core", `${id} is core-owned`);
+  }
+  const input = candidate();
+  input.value.catalogs.authentication = [...(input.value.catalogs.authentication ?? []), ...historicalAuthenticationDefinitions()];
+  const registry = resolveLibraries([input]);
+  assert.equal(registry.statuses[0].state, "rejected", "A pre-promotion companion shape needs an explicit core override");
+  assert.match(registry.statuses[0].message, /explicit override of core: authentication\//);
+  assert.deepEqual(registry.authentication, CORE_LIBRARIES.authentication, "Rejected packages leave core authority unchanged");
 });
 
 test("libraries: all contribution categories activate atomically with immutable provenance", () => {

@@ -32,6 +32,7 @@ import {
 import { normalizeDoc } from "../store";
 import { catalogDefinitionKey, validateCatalogDefinitions, withCatalogDefinitions } from "../catalogDefinitions";
 import type { ProtocolTypeDef } from "../protocols";
+import { validatePortableAuthenticationDefinitions } from "../authentication";
 import { AUTHENTICATION_DEFINITIONS_VERSION, CATALOG_DEFINITIONS_VERSION, LOCAL_ORIGIN, type YShape } from "./yDoc";
 
 // Deep-equality good enough for our shapes: all leaves are primitives,
@@ -154,6 +155,7 @@ export function reconcileLocalToY(
 ): void {
   assertAuthenticationVersion(y);
   validateNodeTypeGuidanceEntries(doc.nodeTypes);
+  if (doc.authenticationDefinitions !== undefined) validatePortableAuthenticationDefinitions(doc.authenticationDefinitions);
   readCatalogDefinitions(y);
   // An absent optional field is not a deletion by a reader without catalog support.
   const definitions = doc.catalogDefinitions === undefined ? undefined

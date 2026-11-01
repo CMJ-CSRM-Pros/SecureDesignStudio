@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { requireFreePort, until, hasLocalReadyMessage } from "./harness.mjs";
@@ -35,6 +36,7 @@ test("AI providers: shared selection, readiness, request routing, persistence an
   const faults = [], posts = [];
   let readinessError = false;
   let designResponse = { answer: "Synthetic clarification.", assumptions: [], design: null };
+  let reviewFindings = [];
   let hold;
   try {
     await until(async () => {
@@ -57,10 +59,11 @@ test("AI providers: shared selection, readiness, request routing, persistence an
         if (hold) await hold;
         return route.fulfill({ status: 200, contentType: "application/json",
           body: JSON.stringify(payload.mode === "design-plan"
-            ? { nodeTypeIds: payload.context.nodeTypeIndex.slice(0, 1).map(type => type.id), protocolIds: [], rationale: "Synthetic plan." }
+            ? { nodeTypeIds: payload.context.nodeTypeIndex.slice(0, 1).map(type => type.id), protocolIds: [],
+              ...(payload.context.authenticationIndex ? { authenticationIds: [] } : {}), rationale: "Synthetic plan." }
             : payload.mode === "design"
             ? designResponse
-            : { answer: "Synthetic review.", references: [], findings: [] }) });
+            : { answer: "Synthetic review.", references: [], findings: reviewFindings }) });
       }
       if (url.origin === origin && !url.pathname.startsWith("/api/")) return route.continue();
       if (["data:", "blob:"].includes(url.protocol)) return route.continue();
@@ -212,6 +215,61 @@ test("AI providers: shared selection, readiness, request routing, persistence an
     assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).doc, autosaveKey), pending);
     await page.setViewportSize({ width: 320, height: 640 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+    await designer.getByRole("button", { name: "Close Threat Model Designer", exact: true }).click();
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Design Assistant", exact: true }).click();
+    capabilities.providers[0] = { id: "azure", label: "Azure OpenAI / Foundry", available: true,
+      message: "Synthetic Azure deployment is configured; no credentials or real inference are used in this test." };
+    await analysis.getByRole("button", { name: "Refresh providers", exact: true }).click();
+    await until(async () => await selection.locator('option[value="azure"]').isEnabled(), "synthetic Azure available");
+    await selection.selectOption("azure");
+    reviewFindings = Array.from({ length: 5 }, (_, index) => ({
+      id: `review_${index}`, title: `Small-screen finding ${index + 1}`, category: "Synthetic", severity: "high",
+      rationale: "This synthetic finding explains the authentication boundary and the information the owner must verify. ".repeat(3),
+      recommendation: "Confirm the receiver validation and record the missing evidence.",
+      references: [{ kind: "node", id: "n_api", label: "API" }],
+    }));
+    await analysis.getByRole("tab", { name: "AI Analysis", exact: true }).click();
+    await analysis.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => analysis.locator(".ps-assistant-finding").count().then(count => count === 5), "small-screen findings populated");
+    const requestCount = posts.length;
+    for (const viewport of [{ width: 900, height: 600 }, { width: 320, height: 480 }]) {
+      await page.setViewportSize(viewport);
+      await analysis.getByRole("button", { name: "Go to AI findings (5)", exact: true }).click();
+      const docked = await analysis.evaluate(root => {
+        const bounds = root.getBoundingClientRect();
+        const finding = root.querySelector(".ps-assistant-finding").getBoundingClientRect();
+        const inspector = root.closest(".ps-inspector");
+        return { height: bounds.height, firstVisible: finding.top < bounds.bottom && finding.bottom > bounds.top,
+          scrollable: root.scrollHeight > root.clientHeight,
+          expanded: inspector.classList.contains("ps-inspector-expanded"),
+          sizes: Object.fromEntries([".ps-main", ".ps-inspector", ".ps-inspector-header", ".ps-inspector-tabs",
+            ".ps-inspector-panel", ".ps-assistant-surface-bar"].map(selector =>
+            [selector, document.querySelector(selector)?.getBoundingClientRect().height])) };
+      });
+      if (docked.height < 60) {
+        const screenshot = resolve(tmpdir(), `sds-findings-docked-${viewport.width}x${viewport.height}-${Date.now()}.png`);
+        await page.screenshot({ path: screenshot });
+        console.log(`Cramped review evidence: ${screenshot}`);
+      }
+      assert.ok(docked.height >= 60 && docked.firstVisible && docked.scrollable,
+        `Provider controls must not leave a zero-height results strip: ${JSON.stringify(docked)}`);
+      await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("floating");
+      await page.getByRole("dialog", { name: "Design Assistant review", exact: true }).waitFor();
+      await analysis.getByRole("button", { name: "Go to AI findings (5)", exact: true }).click();
+      assert.ok(await analysis.evaluate(root => root.clientHeight >= 180), "Floating view reserves usable review space");
+      await analysis.evaluate(root => { root.scrollTop = root.scrollHeight; });
+      await until(async () => analysis.locator(".ps-assistant-finding").last().evaluate(row => {
+        const root = row.closest(".ps-assistant").getBoundingClientRect(), bounds = row.getBoundingClientRect();
+        return bounds.top < root.bottom && bounds.bottom <= root.bottom + 2;
+      }), "last finding reachable");
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      const screenshot = resolve(tmpdir(), `sds-findings-${viewport.width}x${viewport.height}-${Date.now()}.png`);
+      await page.screenshot({ path: screenshot });
+      console.log(`Findings review layout evidence: ${screenshot}`);
+      await page.getByRole("combobox", { name: "Assistant display", exact: true }).selectOption("docked");
+    }
+    assert.equal(posts.length, requestCount, "Moving and resizing findings does not run more AI requests");
     assert.deepEqual(faults, []);
   } finally {
     if (context) await context.close();
