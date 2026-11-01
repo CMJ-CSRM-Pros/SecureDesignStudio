@@ -10,13 +10,8 @@
     "start": "func start --port 7071 --cors http://localhost:5173"
   },
   "dependencies": {
-    "@azure/identity": "^4.5.0",
+    "@azure/identity": "^4.14.1",
     "@azure/web-pubsub": "^1.1.3"
-  },
-  "overrides": {
-    "@azure/identity": {
-      "@azure/msal-node": "7.1.0"
-    }
   },
   "devDependencies": {
     "@azure/functions": "^3.6.0",

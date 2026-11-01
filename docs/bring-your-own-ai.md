@@ -8,6 +8,11 @@ service account. `Start-SecureDesignStudio-WithAI.ps1` offers Azure
 OpenAI/Foundry, Claude Code, and Codex. Azure requires your authorized deployment;
 Claude and Codex use their official CLI with your eligible consumer subscription.
 
+Use **Node.js 24 LTS** for local development. The Azure API's Identity SDK
+requires Node 22 or later; `staticwebapp.config.json` selects the supported
+**Node 22** managed API runtime for Azure Static Web Apps. Node 18/20 cannot
+run this API dependency set. Updating this configuration does not deploy it.
+
 ## Choose a provider at startup or in SDS
 
 ```powershell
