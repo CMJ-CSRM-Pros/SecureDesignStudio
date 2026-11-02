@@ -5006,7 +5006,9 @@ export function normalizeDoc(
   const workItems: PsWorkItem[] = Array.isArray(workItemsRaw)
     ? (workItemsRaw as Array<Partial<PsWorkItem>>).map((w) => {
         const rawLink = typeof w.link === "string" ? w.link : "";
-        const link = DANGEROUS_SCHEME_RE.test(rawLink) ? "" : rawLink;
+        // The WHATWG URL parser drops tab/newline and leading C0 controls, so
+        // "java\tscript:" must be tested in that normalized form.
+        const link = DANGEROUS_SCHEME_RE.test(rawLink.replace(/[\u0000-\u0020]/g, "")) ? "" : rawLink;
         return {
           id: typeof w.id === "string" && w.id.trim() ? w.id : uid("wi"),
           description: typeof w.description === "string" ? w.description : "",
