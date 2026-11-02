@@ -1,0 +1,196 @@
+# Build OS-independent release artifacts from a version tag and stop at a
+# DRAFT release. A maintainer reviews the draft and publishes it by hand.
+# Nothing here is an OS executable, so no Apple or Microsoft signing identity
+# is involved; integrity comes from SHA256SUMS plus a Sigstore-backed GitHub
+# build-provenance attestation for every file.
+#
+# Artifacts (attached to the draft release):
+#   SecureDesignStudio-<ver>-standalone.html  the whole app in one HTML file
+#   SecureDesignStudio-<ver>-web.zip          multi-file dist/ for static hosting
+#   SecureDesignStudio-<ver>-sbom.cdx.json    CycloneDX SBOM of runtime dependencies
+#   SHA256SUMS                                checksums of the three files above
+#
+# How users check them: docs/release-verification.md
+#
+# Every `uses:` is pinned to a full commit SHA, with the release tag as a comment.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Two jobs, so that project code and third-party dependencies (npm ci, the
+# build, the tests, the SBOM tool) never run with a write-capable token or the
+# OIDC token-request variables:
+#   build    contents: read only. Checks the tag, installs, audits, builds,
+#            tests, checks the build receipts, packages into out/ and uploads
+#            out/ as a workflow artifact.
+#   release  write permissions. Does not check out or run project code; it
+#            downloads out/, verifies SHA256SUMS, attests every file and
+#            creates the draft release.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # Fail before doing any work if the tag and package.json disagree.
+      - name: Check tag matches package.json version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="v$(node -p 'require("./package.json").version')"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $expected"
+            exit 1
+          fi
+
+      # Install scripts stay disabled, as in ci.yml.
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Same gate as ci.yml: `npm run dev` is the end-user runtime for source
+      # installs, so devDependencies are audited too.
+      - name: Supply-chain audit
+        run: npm audit --audit-level=high
+
+      - name: Build (typecheck, multi-file and standalone)
+        run: npm run build
+
+      - name: Runtime tests
+        run: npm run test:runtime
+
+      # A public release must not carry baked-in collaboration or Assistant
+      # endpoints. The build writes a receipt next to each output; check that
+      # both say "no service configuration", match the tag, and that the
+      # standalone receipt's hash matches the file being shipped.
+      - name: Check build receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { createHash } from "node:crypto";
+            const version = process.env.GITHUB_REF_NAME.slice(1);
+            for (const [dir, single] of [["dist", false], ["dist-single", true]]) {
+              const r = JSON.parse(readFileSync(`${dir}/service-build.json`, "utf8"));
+              const fail = msg => { console.error(`::error::${dir}/service-build.json: ${msg}`); process.exit(1); };
+              if (r.applicationVersion !== version) fail(`applicationVersion ${r.applicationVersion} != ${version}`);
+              if (r.singleFile !== single) fail(`singleFile is ${r.singleFile}`);
+              if (r.configuration?.selection?.source !== "No service configuration") fail(`service configuration present: ${r.configuration?.selection?.source}`);
+            }
+            const single = JSON.parse(readFileSync("dist-single/service-build.json", "utf8"));
+            const actual = createHash("sha256").update(readFileSync("dist-single/index.html")).digest("hex");
+            if (single.files?.["index.html"] !== actual) { console.error("::error::dist-single/index.html hash differs from its receipt"); process.exit(1); }
+            console.log("Build receipts OK");
+          '
+
+      - name: Package
+        shell: bash
+        env:
+          # Do not run install scripts of the SBOM tool or its dependencies.
+          npm_config_ignore_scripts: "true"
+        run: |
+          set -euo pipefail
+          v="${GITHUB_REF_NAME#v}"
+          mkdir -p out
+          cp dist-single/index.html "out/SecureDesignStudio-${v}-standalone.html"
+          (cd dist && zip -qrX "../out/SecureDesignStudio-${v}-web.zip" .)
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.1 \
+            --omit dev --output-reproducible --output-format JSON \
+            --output-file "out/SecureDesignStudio-${v}-sbom.cdx.json"
+          (cd out && sha256sum -- *.html *.zip *.json > SHA256SUMS)
+          cat out/SHA256SUMS
+
+      # Hand out/ to the release job. Also keeps a copy on the workflow run in
+      # case the release job fails.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ github.ref_name }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write      # create the draft release
+      id-token: write      # Sigstore OIDC token for the attestation
+      attestations: write  # store the attestation on the repository
+    # No checkout and no project code in this job. `gh release create
+    # --verify-tag --repo` works without a checkout.
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-${{ github.ref_name }}
+          path: out
+
+      # Attest and publish only what the build job checksummed: every file
+      # must match SHA256SUMS and every file must be listed in it.
+      - name: Verify SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd out
+          sha256sum --check --strict SHA256SUMS
+          for f in *; do
+            [ "$f" = SHA256SUMS ] && continue
+            if ! awk -v f="$f" '$2 == f { found = 1 } END { exit !found }' SHA256SUMS; then
+              echo "::error::out/$f is not listed in SHA256SUMS"
+              exit 1
+            fi
+          done
+          ls -l
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: out/*
+
+      # Draft only. A maintainer reads the notes, checks the files and
+      # publishes the release from the GitHub UI.
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          Draft release built from tag \`${GITHUB_REF_NAME}\` by workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}.
+
+          ## Verify before you open anything
+
+          \`\`\`sh
+          sha256sum -c SHA256SUMS            # macOS: shasum -a 256 -c SHA256SUMS
+          gh attestation verify <file> --repo ${GITHUB_REPOSITORY}
+          \`\`\`
+
+          Windows and further details: [release verification](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/docs/release-verification.md).
+
+          **The standalone HTML file is the full application.** Opening it runs
+          its code in your browser. Only open a standalone file that came from a
+          verified release, and exchange untrusted models as \`.tma\` files, not
+          as standalone HTML.
+          EOF
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft --verify-tag \
+            --title "SecureDesignStudio $GITHUB_REF_NAME" \
+            --notes-file release-notes.md
