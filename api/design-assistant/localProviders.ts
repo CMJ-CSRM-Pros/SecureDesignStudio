@@ -129,13 +129,24 @@ export function parseCodexFeatures(output: string): Map<string, "true" | "false"
   return features;
 }
 
-export function childEnvironment(): NodeJS.ProcessEnv {
+export function childEnvironment(command?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   // No API keys, custom gateways, NODE_OPTIONS, proxy variables, provider
   // overrides, CLI config overrides, or repository instruction variables.
   for (const key of ["SystemRoot", "WINDIR", "USERPROFILE", "HOME", "HOMEDRIVE", "HOMEPATH",
     "APPDATA", "LOCALAPPDATA", "LANG"]) {
     if (process.env[key]) env[key] = process.env[key];
+  }
+  if (process.platform !== "win32") {
+    // npm-installed CLIs on macOS/Linux are `#!/usr/bin/env node` scripts, so
+    // the child needs a PATH. Expose only the running Node's directory (first,
+    // so `env node` finds it) and the resolved CLI's directory, never the
+    // caller's full PATH.
+    const dirs = [dirname(process.execPath), ...(command ? [dirname(command)] : [])];
+    env.PATH = [...new Set(dirs)].join(delimiter);
+    for (const key of ["TMPDIR", "USER", "LOGNAME"]) {
+      if (process.env[key]) env[key] = process.env[key];
+    }
   }
   return env;
 }
@@ -252,7 +263,7 @@ export async function resolveLocalExecutable(
 
 export function runProcess(
   command: string, args: readonly string[], cwd: string, input: string,
-  timeoutMs: number, env = childEnvironment(), includeStderr = false, acceptedExitCodes = [0],
+  timeoutMs: number, env = childEnvironment(command), includeStderr = false, acceptedExitCodes = [0],
   diagnostic?: ProviderDiagnostic,
 ): Promise<string> {
   return new Promise((resolveOutput, reject) => {
@@ -419,7 +430,7 @@ async function prepare(provider: "claude" | "codex", cwd: string, diagnostic?: P
     // does not run inference/tools; the actual exec ignores config separately.
     : ["-c", 'forced_login_method="chatgpt"', "-c", 'model_provider="openai"',
       "-c", 'cli_auth_credentials_store="file"', "login", "status"],
-    cwd, "", READINESS_TIMEOUT_MS, childEnvironment(), provider === "codex");
+    cwd, "", READINESS_TIMEOUT_MS, childEnvironment(command), provider === "codex");
   if (provider === "claude") {
     let auth: Record<string, unknown>;
     try { auth = JSON.parse(status); } catch { throw new LocalProviderError(503, "Claude subscription authentication could not be verified."); }
@@ -472,7 +483,7 @@ export async function runLocalProvider(
           ...CLAUDE_ISOLATION_ARGS, "-p", "--output-format", "json",
           "--no-session-persistence", "--system-prompt-file", instructions,
           "--json-schema", schemaText,
-        ], cwd, prompt, Math.max(1, deadline - Date.now()), childEnvironment(), false, [0], diagnostic);
+        ], cwd, prompt, Math.max(1, deadline - Date.now()), childEnvironment(command), false, [0], diagnostic);
         const response = JSON.parse(text);
         if (response.is_error || response.subtype !== "success" ||
             !response.structured_output || typeof response.structured_output !== "object") {
@@ -491,7 +502,7 @@ export async function runLocalProvider(
         "-c", `model_instructions_file=${JSON.stringify(instructions)}`,
         "--json", "--output-last-message", outputFile,
         "--output-schema", schemaFile, "-",
-      ], cwd, prompt, Math.max(1, deadline - Date.now()), childEnvironment(), false, [0], diagnostic);
+      ], cwd, prompt, Math.max(1, deadline - Date.now()), childEnvironment(command), false, [0], diagnostic);
       diagnostic?.("inference", `Codex process completed; event bytes=${Buffer.byteLength(events)}`);
       verifyCodexEvents(events, diagnostic);
       const output = await fs.readFile(outputFile, "utf8");
