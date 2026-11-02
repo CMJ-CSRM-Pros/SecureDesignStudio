@@ -1,0 +1,115 @@
+# Build and test on every supported desktop OS and architecture. The app is a
+# browser SPA with prebuilt per-platform toolchain binaries (rolldown,
+# lightningcss), so nothing is compiled natively; the matrix proves the
+# toolchain and the Node-side code (launcher, local-AI bridge, library loader,
+# tests) on each OS.
+#
+# Every `uses:` is pinned to a full commit SHA, with the release tag as a comment.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest      # x64
+            browser: msedge
+          - os: macos-latest        # arm64 (Apple silicon)
+            browser: chrome
+          - os: ubuntu-latest       # x64
+            browser: chrome
+          - os: ubuntu-24.04-arm    # arm64
+            browser: chrome
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      SDS_TEST_BROWSER_CHANNEL: ${{ matrix.browser }}
+    # Run every step under bash (Git Bash on Windows). The Windows default,
+    # pwsh, fails a multi-line step only when its LAST command fails, which
+    # would hide a failing command earlier in the step. GitHub runs bash as
+    # `bash --noprofile --norc -eo pipefail`, so any failing command fails the
+    # step. Keep `run:` scripts POSIX-compatible.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            api/package-lock.json
+
+      # Install scripts stay disabled. The only dependency with one is the
+      # optional macOS `fsevents`; Vite falls back to polling without it.
+      - name: Install (app)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install (api)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: api
+
+      # `npm run dev` (Vite) is the end-user runtime, so the app audit covers
+      # devDependencies too. The API audit covers what Azure Functions runs.
+      - name: Supply-chain audit
+        run: |
+          set -eu
+          npm audit --audit-level=high
+          npm --prefix api audit --omit=dev --audit-level=high
+
+      - name: Build (typecheck, multi-file and standalone)
+        run: npm run build
+
+      - name: Build API
+        run: npm --prefix api run build
+
+      - name: Runtime tests
+        run: npm run test:runtime
+
+      # Browser contract tests use an installed Edge/Chrome channel and never
+      # download a browser. Non-blocking until the first green run on every OS.
+      - name: Browser contract tests
+        run: npm run test:browser
+        continue-on-error: true
+
+      - name: POSIX launcher smoke test
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ./start-securedesignstudio.sh > launcher.log 2>&1 &
+          launcher=$!
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:5173/; then ok=1; break; fi
+            sleep 1
+          done
+          kill "$launcher" 2>/dev/null || true
+          cat launcher.log
+          test "$ok" = 1
+
+      - name: Upload standalone build
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: standalone-html
+          path: dist-single/index.html
+          retention-days: 7

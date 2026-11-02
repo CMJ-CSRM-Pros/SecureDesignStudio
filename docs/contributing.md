@@ -35,7 +35,9 @@ package, `test:authentication` is an alias for it. Companion integrations have
 their own test command and are not required to run shared runtime tests.
 There is no generic `npm test` or lint script.
 
-Build dependency overrides pin patched `shell-quote`. Standalone HTML uses
+There is no `overrides` block: the lockfile resolves a patched `shell-quote`
+(dev-only, through `concurrently`), and CI's `npm audit` fails on any new
+high-severity advisory. Standalone HTML uses
 the repository-owned `scripts/single-file-build.mjs` inliner rather than
 `vite-plugin-singlefile`, removing its unpatched `braces` dependency chain.
 The Vite 8 inliner embeds all emitted scripts/styles and fails if any emitted
