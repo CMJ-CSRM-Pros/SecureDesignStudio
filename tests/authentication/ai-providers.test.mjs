@@ -162,7 +162,7 @@ function harness(env = {}, options = {}) {
 }
 
 test("providers: strict shared capabilities validate complete unique provider identities", () => {
-  const contract = harness().load("shared\\aiProviders.ts");
+  const contract = harness().load(join("shared", "aiProviders.ts"));
   assert.deepEqual([...contract.AI_PROVIDER_IDS], ["azure", "claude", "codex"]);
   for (const invalid of [null, "", "Azure", "custom", {}, 0]) assert.equal(contract.isAiProviderId(invalid), false);
   const capabilities = {
@@ -364,7 +364,7 @@ test("providers: local GET checks subscription readiness without inference or cr
   const h = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "codex" });
   const response = await h.invoke(undefined, { method: "GET", origin: null });
   assert.equal(response.status, 200);
-  const contract = h.load("shared\\aiProviders.ts");
+  const contract = h.load(join("shared", "aiProviders.ts"));
   const capabilities = contract.parseAiProviderCapabilities(response.body);
   assert.equal(capabilities.defaultProvider, "codex");
   assert.equal(capabilities.providers[0].available, false);
@@ -483,7 +483,7 @@ test("providers: npm-only Codex installs resolve native x64/ARM64 binaries in cu
     for (const location of ["nested", "sibling", "bundled"]) {
       for (const layout of ["bin", "codex"]) {
         const { h, binary } = npmInstallation({ arch, location, layout });
-        const local = h.load("api\\design-assistant\\localProviders.ts");
+        const local = h.load(join("api", "design-assistant", "localProviders.ts"));
         const diagnostics = [];
         assert.equal(await local.resolveLocalExecutable("codex", (stage, message) => diagnostics.push({ stage, message })), binary);
         assert.equal(h.calls.length, 0, "Discovery does not execute wrappers, npm or inference");
@@ -507,7 +507,7 @@ test("providers: native PATH keeps precedence over npm without changing Claude d
   const { h } = npmInstallation();
   const codex = join(native, "codex.exe"), claude = join(native, "claude.exe");
   h.files.set(codex, "native"); h.files.set(claude, "native");
-  const local = h.load("api\\design-assistant\\localProviders.ts");
+  const local = h.load(join("api", "design-assistant", "localProviders.ts"));
   assert.equal(await local.resolveLocalExecutable("codex"), codex);
   assert.equal(await local.resolveLocalExecutable("claude"), claude);
   assert.equal(h.calls.length, 0);
@@ -527,7 +527,7 @@ test("providers: incomplete, incompatible and malformed npm installs fail withou
         name: variant === "wrong-name" ? "unrelated-package" : "@openai/codex",
         bin: { codex: variant === "wrong-bin" ? "untrusted.js" : "bin/codex.js" },
       }));
-    const local = h.load("api\\design-assistant\\localProviders.ts");
+    const local = h.load(join("api", "design-assistant", "localProviders.ts"));
     const diagnostics = [];
     await assert.rejects(local.resolveLocalExecutable("codex", (stage, message) => diagnostics.push({ stage, message })),
       /native executable was not found/);
@@ -561,7 +561,7 @@ test("providers: npm discovery rejects relative roots, repository installs and e
       const target = join(native, "unrelated.exe");
       realpaths.set(binary, target); h.files.set(target, "native");
     }
-    await assert.rejects(h.load("api\\design-assistant\\localProviders.ts").resolveLocalExecutable("codex"),
+    await assert.rejects(h.load(join("api", "design-assistant", "localProviders.ts")).resolveLocalExecutable("codex"),
       /native executable was not found/);
     assert.equal(h.calls.length, 0);
   }
@@ -570,7 +570,7 @@ test("providers: npm discovery rejects relative roots, repository installs and e
 test("providers: npm discovery does not waive unsupported isolation capabilities", async () => {
   const { h, binary } = npmInstallation({ oldCli: true });
   const diagnostics = [];
-  const status = await h.load("api\\design-assistant\\localProviders.ts").localProviderStatus("codex",
+  const status = await h.load(join("api", "design-assistant", "localProviders.ts")).localProviderStatus("codex",
     (stage, message) => diagnostics.push({ stage, message }));
   assert.equal(status.available, false);
   assert.match(status.message, /--ignore-user-config/);
@@ -604,7 +604,7 @@ test("providers: Codex policy-overridden safety features make readiness unavaila
 test("providers: Codex forced unified_exec is accepted only because shell_tool stays disabled", async () => {
   const h = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "codex" }, { unifiedExecForced: true });
   const diagnostics = [];
-  const status = await h.load("api\\design-assistant\\localProviders.ts").localProviderStatus("codex",
+  const status = await h.load(join("api", "design-assistant", "localProviders.ts")).localProviderStatus("codex",
     (stage, message) => diagnostics.push({ stage, message }));
   assert.equal(status.available, true, status.message);
   const text = diagnostics.map(entry => entry.message).join("\n");
@@ -614,7 +614,7 @@ test("providers: Codex forced unified_exec is accepted only because shell_tool s
   assert.ok(h.calls.every(call => !call.args.includes("--output-schema")));
 
   const both = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "codex" }, { unifiedExecForced: true, featureOverride: true });
-  const blocked = await both.load("api\\design-assistant\\localProviders.ts").localProviderStatus("codex");
+  const blocked = await both.load(join("api", "design-assistant", "localProviders.ts")).localProviderStatus("codex");
   assert.equal(blocked.available, false);
   assert.match(blocked.message, /shell_tool must be false/);
 });
@@ -622,7 +622,7 @@ test("providers: Codex forced unified_exec is accepted only because shell_tool s
 test("providers: Codex feature diagnostics report every mismatch and absent feature", async () => {
   const h = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "codex" }, { featureOverride: true, missingFeature: true });
   const diagnostics = [];
-  const status = await h.load("api\\design-assistant\\localProviders.ts").localProviderStatus("codex",
+  const status = await h.load(join("api", "design-assistant", "localProviders.ts")).localProviderStatus("codex",
     (stage, message) => diagnostics.push({ stage, message }));
   assert.equal(status.available, false);
   assert.match(status.message, /shell_tool must be false; hooks must be false\./);
@@ -633,7 +633,7 @@ test("providers: Codex feature diagnostics report every mismatch and absent feat
 });
 
 test("providers: Codex feature parser reads padded and CRLF rows only", () => {
-  const { parseCodexFeatures } = harness({}).load("api\\design-assistant\\localProviders.ts");
+  const { parseCodexFeatures } = harness({}).load(join("api", "design-assistant", "localProviders.ts"));
   const parsed = parseCodexFeatures("shell_tool    stable   false\r\nunified_exec  stable   true\r\nWARNING something true\r\nbroken\n");
   assert.equal(parsed.get("shell_tool"), "false");
   assert.equal(parsed.get("unified_exec"), "true");
@@ -686,7 +686,7 @@ test("providers: Codex answers are discarded after any tool item or incomplete t
 });
 
 test("providers: Codex error notifications and unknown items are not mislabeled as tool actions", () => {
-  const { verifyCodexEvents } = harness({}).load("api\\design-assistant\\localProviders.ts");
+  const { verifyCodexEvents } = harness({}).load(join("api", "design-assistant", "localProviders.ts"));
   const eventStream = item => JSON.stringify({ type: "item.completed", item }) + '\n{"type":"turn.completed"}';
   const diagnostics = [];
   const warning = JSON.stringify({ type: "item.completed", item: { type: "error",
@@ -741,7 +741,7 @@ test("providers: debug design responses preserve the strict client contract and 
     const response = await h.invoke({ mode: "design", question: "SYNTHETIC_DEBUG_PROMPT",
       context: { catalog }, history: [] });
     assert.equal(response.status, 200);
-    const contract = h.load("shared\\designContract.ts");
+    const contract = h.load(join("shared", "designContract.ts"));
     assert.doesNotThrow(() => contract.parseDesignResult(response.body));
     const records = h.logs.filter(entry => entry[0] === "AI interaction content");
     assert.equal(records.length, contentDebug === "1" ? 2 : 0);
@@ -752,9 +752,9 @@ test("providers: debug design responses preserve the strict client contract and 
   }
 });
 test("providers: route registration and dynamically loaded native helpers preserve Azure packaging", () => {
-  const definition = JSON.parse(source("api\\design-assistant\\function.json"));
+  const definition = JSON.parse(source(join("api", "design-assistant", "function.json")));
   assert.ok(definition.bindings[0].methods.includes("get"));
-  const index = source("api\\design-assistant\\index.ts");
+  const index = source(join("api", "design-assistant", "index.ts"));
   assert.ok(index.includes('await import("./localProviders")'));
   assert.ok(!/import .* from ["'](?:node:child_process|\.\/localProviders)/.test(index));
 });
