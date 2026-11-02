@@ -189,6 +189,33 @@ After an update that changes `package-lock.json`, stop your own server and run
 `node_modules` already exists. See the
 [safe update guidance](docs/user-guide.md#update-an-existing-clone-safely).
 
+## Get started on macOS or Linux
+
+Install Git and Node.js 24 LTS. A version manager such as
+[nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm)
+installs official Node builds. Clone the repository, then start the app from its
+folder:
+
+```sh
+./start-securedesignstudio.sh
+```
+
+The launcher makes the same checks as the Windows launcher: Node version, a free
+port 5173, and `npm ci` on first run. It then serves the app at
+`http://localhost:5173/`. `npm run start` does the same from any shell,
+Windows included. The checks are in `scripts/launch.mjs`.
+
+For the optional AI assistant (see the next section), run
+`./start-securedesignstudio-with-ai.sh --provider <azure|claude|codex>`, or
+`npm run start:ai -- --provider <name>`. Use `--help` to list the options. They
+match the PowerShell switches, for example `--diagnose-provider` for
+`-DiagnoseProvider`. Claude and Codex readiness needs a Node build with
+TypeScript type stripping. Some Linux distribution packages of Node (Debian,
+Ubuntu, Kali) are built without it, even on Node 24. In that case the launcher
+says so; install Node through a version manager instead.
+
+Browser tests on macOS and Linux need `SDS_TEST_BROWSER_CHANNEL=chrome`.
+
 ## Start with AI (optional)
 
 **Skip this section for normal local use.** The Design Assistant's Chat and AI
