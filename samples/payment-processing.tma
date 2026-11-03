@@ -866,6 +866,8 @@
     "workItems": [
       {
         "id": "wi_reference_controls",
+        "title": "Verify reference controls",
+        "decision": "pending",
         "description": "Verify charge against another order and forged or replayed callback controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
         "link": ""
       }

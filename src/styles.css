@@ -15,6 +15,29 @@
   --ps-privacy: #059669;
 }
 
+.ps-work-config, .ps-work-card, .ps-work-summary {
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid var(--ps-border);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.ps-work-config summary { cursor: pointer; font-weight: 600; }
+.ps-work-config fieldset, .ps-work-list, .ps-work-card { display: grid; gap: 10px; min-width: 0; }
+.ps-work-config fieldset { border: 0; padding: 0; margin: 0; }
+.ps-work-config label, .ps-work-card label { display: grid; gap: 4px; min-width: 0; font-weight: 600; }
+.ps-work-field { display: grid; gap: 4px; min-width: 0; }
+.ps-work-config input, .ps-work-config textarea, .ps-work-card input,
+.ps-work-card textarea, .ps-work-card select { width: 100%; min-width: 0; }
+.ps-work-config textarea, .ps-work-card textarea { resize: vertical; }
+.ps-work-config-json { font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.5; }
+.ps-work-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ps-work-export-feedback { margin: 8px 0; overflow-wrap: anywhere; }
+.ps-work-export-feedback:focus { outline: 2px solid var(--ps-fluent-focus); outline-offset: -2px; }
+.ps-assistant-work-classification summary { cursor: pointer; font-weight: 600; }
+.ps-assistant-work-classification fieldset { display: grid; gap: 8px; min-width: 0; margin: 8px 0; padding: 8px; }
+.ps-assistant-work-classification input, .ps-assistant-work-classification select { width: 100%; min-width: 0; }
+
 * {
   box-sizing: border-box;
 }

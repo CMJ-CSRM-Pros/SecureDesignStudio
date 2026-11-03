@@ -9,6 +9,7 @@ import { modelFixture } from "../browser/fixture.mjs";
 
 const contract = await import("../../shared/aiDesignGuidance.ts");
 const designContract = await import("../../shared/designContract.ts");
+const adoContract = await import("../../shared/adoContract.ts");
 const { normalizeDoc } = await import("../../src/store.tsx");
 const { buildDesignerContext, buildDesignPlanContext } = await import("../../src/threatModelDesigner.ts");
 const { buildDfdReviewContext } = await import("../../src/dfdReviewContext.ts");
@@ -381,12 +382,14 @@ test("AI guidance: real browser transport rejects oversize before fetch and repl
   const source = readFileSync(new URL("../../src/designAssistant.ts", import.meta.url), "utf8");
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} }, requests = [];
+  let classification = { workItemType: "Task", weaknessType: "Specific finding classification" };
   vm.runInNewContext(`(function(require,module,exports,fetch){${js}\n})`)(
     name => {
       if (name === "./services") return { SERVICES: { assistant: { enabled: true, endpoint: "/synthetic" } } };
       if (name === "../shared/designContract") return designContract;
       if (name === "../shared/aiDesignGuidance") return contract;
       if (name === "./aiDesignGuidance") return guidanceRuntime;
+      if (name === "../shared/adoContract") return adoContract;
       throw new Error(`Unexpected dependency ${name}`);
     }, module, module.exports, async (_url, init) => {
       const request = JSON.parse(init.body); requests.push(request);
@@ -396,10 +399,13 @@ test("AI guidance: real browser transport rejects oversize before fetch and repl
           id: "finding", title: "Owner check", category: "Synthetic", severity: "low", rationale: "Missing evidence",
           recommendation: "Verify", references: [{ kind: "edge", id: "e_request", label: "Request" }],
           guidanceReferences: [{ typeId: "Fabricated model citation", revision: 999 }],
+          ...classification,
         }] } };
     },
   );
   const response = await module.exports.askDesignAssistant({ mode: "analyze", question: "Review", context });
+  assert.equal(response.findings[0].workItemType, "Task");
+  assert.equal(response.findings[0].weaknessType, classification.weaknessType);
   assert.deepEqual(JSON.parse(JSON.stringify(response.findings[0].guidanceReferences)),
     guidanceReferencesForFinding(context, [{ kind: "edge", id: "e_request" }]));
   assert.deepEqual(requests[0].context.aiDesignGuidance, context.aiDesignGuidance);
@@ -415,4 +421,8 @@ test("AI guidance: real browser transport rejects oversize before fetch and repl
     mode: "design", question: "Advice", context: designContext, history: [{ role: "user", text: "x".repeat(500_000) }],
   }), /nothing was truncated/);
   assert.equal(requests.length, 2, "Oversized history is not silently dropped or sent");
+  for (const value of [{ workItemType: "Other" }, { workItemType: null }, { weaknessType: 3 }, { weaknessType: {} }]) {
+    classification = value;
+    await assert.rejects(module.exports.askDesignAssistant({ mode: "analyze", question: "Review", context }), /invalid response/);
+  }
 });
