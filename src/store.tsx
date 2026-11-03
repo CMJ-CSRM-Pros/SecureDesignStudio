@@ -1,4 +1,5 @@
 import { SERVICES } from "./services";
+import { normalizeWorkItem } from "./workItems";
 import { normalizeTextAnnotations, normalizeTextAnnotationIds } from "./textAnnotations";
 import type { PsTextAnnotation } from "./types";
 import { normalizeDfdValue, normalizeNodeScope, resolveNodeReviewScope } from "./dfdSemantics";
@@ -712,7 +713,8 @@ interface StoreApi {
   deleteData: (id: string) => void;
 
   // Security work items (free-standing catalog).
-  createWorkItem: () => PsWorkItem;
+  createWorkItem: (initial?: Pick<PsWorkItem, "title" | "description" | "severity" | "workItemType" | "weaknessType">) => PsWorkItem;
+  getCurrentWorkItem: (id: string) => PsWorkItem | undefined;
   updateWorkItem: (id: string, patch: Partial<PsWorkItem>) => void;
   deleteWorkItem: (id: string) => void;
 
@@ -1044,6 +1046,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }
           }
           if (saved && typeof saved === "object") validateThreatNotes(saved as Partial<PsDocument>);
+          if (saved && typeof saved === "object" && "workItems" in saved && Array.isArray(saved.workItems)) {
+            saved.workItems.forEach(normalizeWorkItem);
+          }
           if (saved && typeof saved === "object" && "edges" in saved && Array.isArray(saved.edges)) {
             for (const edge of saved.edges) {
               if (edge && typeof edge === "object") {
@@ -2362,28 +2367,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // -------- Work item ops --------
-  const createWorkItem = useCallback((): PsWorkItem => {
-    snapshot();
-    const item: PsWorkItem = {
+  const createWorkItem = useCallback((initial?: Pick<PsWorkItem, "title" | "description" | "severity" | "workItemType" | "weaknessType">): PsWorkItem => {
+    const item = normalizeWorkItem({
       id: uid("wi"),
-      description: "",
+      description: initial?.description ?? "",
       link: "",
-    };
+      title: initial?.title ?? "",
+      decision: "pending",
+      severity: initial?.severity,
+      workItemType: initial?.workItemType,
+      weaknessType: initial?.weaknessType,
+    });
+    snapshot();
     setDoc((d) => ({ ...d, workItems: [...d.workItems, item] }));
     return item;
   }, [snapshot]);
 
+  const getCurrentWorkItem = useCallback(
+    (id: string) => docRef.current.workItems.find(item => item.id === id),
+    [],
+  );
+
   const updateWorkItem = useCallback(
     (id: string, patch: Partial<PsWorkItem>) => {
+      const current = getCurrentWorkItem(id);
+      if (!current) return;
+      const updated = normalizeWorkItem({ ...current, ...patch, id });
       snapshot();
       setDoc((d) => ({
         ...d,
         workItems: d.workItems.map((x) =>
-          x.id === id ? { ...x, ...patch } : x
+          x.id === id ? updated : x
         ),
       }));
     },
-    [snapshot]
+    [snapshot, getCurrentWorkItem]
   );
 
   const deleteWorkItem = useCallback(
@@ -4665,6 +4683,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateData,
     deleteData,
     createWorkItem,
+    getCurrentWorkItem,
     updateWorkItem,
     deleteWorkItem,
     attachDataToNode,
@@ -4994,25 +5013,11 @@ export function normalizeDoc(
     sample: d.sample ?? "",
   }));
 
-  // Carry over work items. Both fields default to empty strings so the
-  // shape is always consistent for the modal's controlled inputs. We strip
-  // links whose scheme is on a known-dangerous list (`javascript:`,
-  // `data:`, `vbscript:`, `file:`) so a malicious imported .tma cannot
-  // round-trip an XSS payload through autosave; benign partial URLs the
-  // user is still editing (e.g. "example.com/foo") are preserved as-is
-  // and only blocked at render time.
-  const DANGEROUS_SCHEME_RE = /^\s*(javascript|data|vbscript|file)\s*:/i;
+  // Recover legacy description/link values, but reject malformed review/receipt
+  // fields before replacing the document. Never truncate authored work.
   const workItemsRaw = (doc as { workItems?: unknown }).workItems;
   const workItems: PsWorkItem[] = Array.isArray(workItemsRaw)
-    ? (workItemsRaw as Array<Partial<PsWorkItem>>).map((w) => {
-        const rawLink = typeof w.link === "string" ? w.link : "";
-        const link = DANGEROUS_SCHEME_RE.test(rawLink) ? "" : rawLink;
-        return {
-          id: typeof w.id === "string" && w.id.trim() ? w.id : uid("wi"),
-          description: typeof w.description === "string" ? w.description : "",
-          link,
-        };
-      })
+    ? workItemsRaw.map(normalizeWorkItem)
     : [];
 
   const rawEdges = doc.edges ?? [];

@@ -12,6 +12,11 @@
       "route": "/api/design-assistant",
       "methods": ["POST", "OPTIONS"],
       "allowedRoles": ["authenticated"]
+    },
+    {
+      "route": "/api/ado-work-items",
+      "methods": ["POST"],
+      "allowedRoles": ["anonymous"]
     }
   ],
   "navigationFallback": {

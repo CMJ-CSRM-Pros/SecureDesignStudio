@@ -12,6 +12,7 @@ import {
 } from "../shared/aiDesignGuidance";
 import { guidanceReferencesForFinding } from "./aiDesignGuidance";
 import type { AiProviderId } from "../shared/aiProviders";
+import { isWorkItemType, type WorkItemType } from "../shared/adoContract";
 
 export type AssistantMode = "chat" | "analyze";
 
@@ -30,6 +31,8 @@ export interface AssistantFinding {
   rationale: string;
   recommendation: string;
   references: AssistantReference[];
+  workItemType?: WorkItemType;
+  weaknessType?: string;
 }
 
 export interface AssistantResponse {
@@ -75,6 +78,8 @@ function isFinding(value: unknown): value is AssistantFinding {
     typeof candidate.title === "string" &&
     typeof candidate.rationale === "string" &&
     typeof candidate.recommendation === "string" &&
+    (candidate.workItemType === undefined || isWorkItemType(candidate.workItemType)) &&
+    (candidate.weaknessType === undefined || typeof candidate.weaknessType === "string") &&
     Array.isArray(candidate.references) &&
     candidate.references.every(isReference)
   );
