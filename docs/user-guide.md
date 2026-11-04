@@ -1,6 +1,6 @@
 # SecureDesignStudio user guide
 
-*Updated: 2026-09-22 - Start from the root launcher scripts.*
+*Updated: 2026-11-04 - Documented Simulate breach in AI Analysis.*
 
 **Contents**
 
@@ -669,6 +669,41 @@ provider information cannot trap findings in a thin strip. **Go to AI findings**
 jumps past those controls. Chat keeps its own scrolling area and composer when
 space permits; in short panels its content scrolls together. Scroll or Tab
 through finding actions to reach the final result.
+
+#### Simulate a breach path
+
+**Simulate breach**, beside **Analyze model** in AI Analysis, plays a
+suggested attack path across the active scenario's diagram to help explain a
+finding. Like AI Analysis, it needs a selected scenario and a configured
+provider, and it sends active-scenario context to that provider.
+
+- If AI Analysis already has findings for the active scenario, the simulation
+  reuses them. Otherwise it sends one AI Analysis request that asks for the
+  most plausible path from an entry point to sensitive data.
+- It takes the finding with the highest suggested severity and builds the path
+  in the browser. Starting from a flow the finding references (or else a flow
+  touching a referenced node, or else the scenario's first flow), it follows
+  connected flows upstream and downstream, up to five flows. The path is a
+  chain of declared flows near the finding, not necessarily the exact path the
+  AI described. If the scenario has no flows, only referenced nodes are shown.
+  If nothing can be shown, the panel asks you to add a connected flow.
+- The canvas zooms to the path and highlights each node and flow in turn,
+  about once a second. The panel lists the steps; select one to focus it on
+  the canvas. A step whose element has since been removed is unavailable. Use
+  **Pause**, **Resume**, **Restart** or **Close** to control playback.
+- When playback finishes, the panel names the last step under **Target
+  reached** and lists up to four **Recommended protections**, taken from the
+  recommendations of all current AI findings in severity order. **Create
+  *N* work items** adds one Pending review work item per protection with only
+  its Description filled in, closes the simulation and opens Work. Add a Name,
+  type and severity before accepting them.
+
+The score beside the title, such as 76/100, is a fixed value for the finding's
+suggested severity (critical 92, high 76, medium 54, low 28), not a calculated
+risk score. Labels such as **Live attack path** and **Target reached** describe
+the animation. The path is an AI-assisted hypothesis over declared flows, not
+an observed attack, a tested exploit or proof that the target is reachable.
+The simulation is not saved with the model; only the work items you create are.
 
 #### Move the whole inspector
 
