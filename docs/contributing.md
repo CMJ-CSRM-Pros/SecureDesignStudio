@@ -12,6 +12,10 @@ collaboration. Do not stop another user's listener or silently choose a new
 port. The optional AI workflow is separate; see
 [advanced configuration](advanced-configuration.md).
 
+For an overview of the components, data model and design decisions, start
+with [architecture and design](architecture.md); [use cases](use-cases.md)
+maps each workflow to its source and tests.
+
 Before changing behavior, inspect the current source and existing tests.
 Preserve stable IDs, scenario ownership, saved definitions, old-file
 compatibility and one-step Undo. Keep private data, credentials and real

@@ -216,6 +216,7 @@ enable services or grant access**.
 ## References
 
 - [User guide](docs/user-guide.md) and [sample models](samples/README.md)
+- [Use cases](docs/use-cases.md) and [architecture and design](docs/architecture.md)
 - [Authentication Library](docs/authentication-library.md) and
   [Classification Library](docs/classification-library.md)
 - [Custom Libraries](docs/custom-libraries.md) and
