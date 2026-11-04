@@ -316,7 +316,7 @@ flowchart LR
   1. With **File > Design with AI**, the author describes a system in prose. SDS proposes a diagram, and the author applies it as one undoable change.
   2. In the Design Assistant, the reviewer asks questions (Chat) or runs **AI Analysis**, which returns findings with suggested severities.
   3. The reviewer turns accepted findings into issues or work items.
-- **Alternatives:** **Simulate breach** asks for the most plausible attack path in the scenario and animates it step by step across the canvas, with suggested mitigations. Without a connected flow it reports that it cannot run.
+- **Alternatives:** **Simulate breach** takes the highest-severity AI finding (requesting an analysis first if needed), builds a path of up to five connected flows near it, and animates that path step by step across the canvas with suggested mitigations. The path is assembled locally from declared flows, so it may differ from the path the AI described. Without a connected flow it reports that it cannot run.
 - **Outcome:** Drafts and suggestions that a person accepts or rejects.
 - **Does not establish:** AI output is not approval, evidence or a vulnerability scan. Each request sends the active scenario's context to the selected provider.
 
