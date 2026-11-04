@@ -1,6 +1,6 @@
 # SecureDesignStudio user guide
 
-*Updated: 2026-09-22 - Start from the root launcher scripts.*
+*Updated: 2026-11-04 - Described Claude Code and Codex alongside Azure as Design Assistant providers.*
 
 **Contents**
 
@@ -74,11 +74,14 @@ If you prefer to run the underlying steps yourself, `npm ci` followed by
 ### Start with the optional AI assistant
 
 The AI Design Assistant is **bring your own AI**. No model service ships with
-SecureDesignStudio and none is provided for you: you supply an Azure OpenAI
-resource you are authorized to use. Everything in this guide except Chat and AI
-Analysis works without it.
+SecureDesignStudio and none is provided for you. Choose one provider: an Azure
+OpenAI/Foundry deployment you are authorized to use, or the official Claude Code
+or Codex CLI signed in with your own eligible subscription. Everything in this
+guide except Chat, AI Analysis, Simulate breach and Design with AI works
+without it.
 
-That mode needs three things beyond the setup above:
+Beyond the setup above, every provider needs a provider choice; the other
+requirements apply only to Azure:
 
 | Requirement | Notes |
 |---|---|
@@ -91,14 +94,20 @@ That mode needs three things beyond the setup above:
 $env:AZURE_OPENAI_ENDPOINT = "https://<your-resource>.openai.azure.com"
 $env:MODEL_DEPLOYMENT_NAME = "<your-model-deployment-name>"
 az login
-.\Start-SecureDesignStudio-WithAI.ps1
+.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure
 ```
 
-Add `-VerifyEndpoint` to probe the deployment before starting, which reports a
-missing role, a blocked IP, or a wrong deployment name as a clear message
-rather than an opaque failure in the browser.
+For Azure, add `-VerifyEndpoint` to probe the deployment before starting, which
+reports a missing role, a blocked IP, or a wrong deployment name as a clear
+message rather than an opaque failure in the browser.
 
-To create that Azure OpenAI instance and secure it properly — disabling key
+For Claude or Codex, install and sign in to its CLI (`claude auth login` or
+`codex login`), then start with `-Provider Claude` or `-Provider Codex`. No
+Azure resource, Azure CLI or Functions Core Tools is needed. Add
+`-DiagnoseProvider` to check CLI readiness without starting servers. Omit
+`-Provider` for an interactive menu.
+
+To create an Azure OpenAI instance and secure it properly — disabling key
 authentication, restricting network access, and assigning the data-plane role —
 follow [Bring your own AI](bring-your-own-ai.md). For what the assistant sends,
 see [advanced configuration](advanced-configuration.md).
@@ -637,9 +646,11 @@ compatible peers. Rooms share diagrams, not profile library preferences.
 An optional Copilot CLI participant can inspect and make authorized edits.
 
 **Review > Design Assistant** provides optional network-backed Chat/AI Analysis,
-not local Analyze. It is **bring your own AI**: it calls an Azure OpenAI
-deployment you supply, and is unavailable until you configure one. See
-[bring your own AI](bring-your-own-ai.md) to create and secure that instance,
+not local Analyze. It is **bring your own AI**: it calls the provider you
+choose, either an Azure OpenAI deployment you supply or a Claude Code or Codex
+CLI signed in with your own subscription, and is unavailable until one is
+configured. Hosted deployments use Azure only. See
+[bring your own AI](bring-your-own-ai.md) to set up a provider,
 and [start with the optional AI assistant](#start-with-the-optional-ai-assistant)
 to run it. Requests include active-scenario context, not just selected
 or filtered objects. [Advanced configuration](advanced-configuration.md) covers
@@ -1283,7 +1294,7 @@ models take precedence when reopened. See
 | Port 5173 is occupied | The launcher reports the owning process and stops. Stop only your own server in its terminal; coordinate with other owners. Do not change ports or kill unknown processes. Inspect with `Get-NetTCPConnection -LocalPort 5173 -State Listen`. |
 | Clone denied / Node version error | Obtain private GitHub access; Azure credentials are unrelated. The launcher checks Node, names the fix, and offers to install Node 24 LTS for you. |
 | Script blocked by execution policy | PowerShell may refuse an unsigned local script. Run `Unblock-File .\Start-SecureDesignStudio.ps1`, or start it with `powershell -ExecutionPolicy Bypass -File .\Start-SecureDesignStudio.ps1`. |
-| Design Assistant missing or failing | It is bring your own AI and needs your own configured Azure OpenAI deployment. Run `.\Start-SecureDesignStudio-WithAI.ps1 -VerifyEndpoint`, then see [bring your own AI](bring-your-own-ai.md). |
+| Design Assistant missing or failing | It is bring your own AI and needs a configured provider. For Azure, run `.\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure -VerifyEndpoint`. For Claude or Codex, run `.\Start-SecureDesignStudio-WithAI.ps1 -Provider Claude -DiagnoseProvider` (or `-Provider Codex`). Then see [bring your own AI](bring-your-own-ai.md). |
 | Missing node, flow, or sequence participant | Check the active scenario, use Show all in Diagram if needed, and Filter > Clear all. Sequence requires a scenario and only shows nodes with visible flows. |
 | Cannot create nodes or boundaries | Create/select a scenario first. Show all is not an authoring scenario. |
 | Cannot attach a data item | Check its classification, request/response direction, and receiver policy. Do not weaken policy just to remove a warning. |
