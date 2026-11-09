@@ -1,0 +1,16 @@
+# Line endings must not depend on each contributor's core.autocrlf. Store text
+# as LF; keep PowerShell scripts CRLF in the working tree for Windows
+# PowerShell 5.1; shell scripts must stay LF or they fail on macOS/Linux.
+* text=auto eol=lf
+
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
+*.sh    text eol=lf
+
+# Model and binary formats: never touch bytes.
+*.tma   -text
+*.tm7   -text
+*.vsdx  binary
+*.png   binary
+*.ico   binary
+*.svg   text eol=lf
