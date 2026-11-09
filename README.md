@@ -253,6 +253,8 @@ enable services or grant access**.
   [portable catalog definitions](docs/catalog-snapshots.md)
 - [Bring your own AI](docs/bring-your-own-ai.md) and
   [advanced configuration](docs/advanced-configuration.md)
+- [Verifying a release download](docs/release-verification.md)
+- [Threat model of SecureDesignStudio itself](docs/tool-threat-model.md) and the [changelog](CHANGELOG.md)
 
 ## Contributing
 

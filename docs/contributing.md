@@ -4,6 +4,9 @@ SecureDesignStudio uses TypeScript, React, Vite and Node's built-in test runner.
 Use Node 24 LTS (`.nvmrc`), npm and an installed Microsoft Edge or Google Chrome
 browser for browser tests. They use Edge by default; on macOS and Linux set
 `SDS_TEST_BROWSER_CHANNEL=chrome`. The tests never download a browser.
+CI runs blocking browser checks on Windows, macOS and Linux x64. Linux ARM's
+hosted image has no supported preinstalled Chrome/Edge channel; its required
+build, runtime and launcher checks do not establish browser coverage.
 Ordinary editing/building requires no cloud credentials or agent tooling.
 
 ## Development
@@ -37,7 +40,9 @@ package, `test:authentication` is an alias for it. Companion integrations have
 their own test command and are not required to run shared runtime tests.
 There is no generic `npm test` or lint script.
 
-Build dependency overrides pin patched `shell-quote`. Standalone HTML uses
+There is no `overrides` block: the lockfile resolves a patched `shell-quote`
+(dev-only, through `concurrently`), and CI's `npm audit` fails on any new
+high-severity advisory. Standalone HTML uses
 the repository-owned `scripts/single-file-build.mjs` inliner rather than
 `vite-plugin-singlefile`, removing its unpatched `braces` dependency chain.
 The Vite 8 inliner embeds all emitted scripts/styles and fails if any emitted
