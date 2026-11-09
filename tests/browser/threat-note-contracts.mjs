@@ -294,6 +294,8 @@ export function registerThreatNoteContracts({ getHarness, exportModel }) {
       await editor.getByRole("button", { name: "Add threat note", exact: true }).click();
       await editor.getByLabel("Title", { exact: true }).press("Escape");
       await editor.getByRole("button", { name: "Add threat note", exact: true }).waitFor({ state: "visible" });
+      await page.waitForFunction(() =>
+        document.querySelector("#ps-inspector-panel-properties .ps-threat-note-editor button") === document.activeElement);
       assert.equal(await editor.getByRole("button", { name: "Add threat note", exact: true }).evaluate(el => el === document.activeElement), true);
       assert.deepEqual((await exportModel(page)).doc, doc, "Cancelled note authoring does not mutate the model");
     });
