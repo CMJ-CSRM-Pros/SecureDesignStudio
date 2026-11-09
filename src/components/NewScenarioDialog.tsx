@@ -75,6 +75,20 @@ export function NewScenarioDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="ps-new-scenario-title"
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)",
+          )).filter((element) => element.offsetParent !== null);
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          const boundary = event.shiftKey ? first : last;
+          const destination = event.shiftKey ? last : first;
+          if (destination && document.activeElement === boundary) {
+            event.preventDefault();
+            destination.focus();
+          }
+        }}
       >
         <header className="ps-modal-header">
           <div>

@@ -1,6 +1,6 @@
 # SecureDesignStudio user guide
 
-*Updated: 2026-11-09 - Open or import existing work from the first-run dialog.*
+*Updated: 2026-11-09 - Documented first-run open/import and Simulate breach.*
 
 **Contents**
 
@@ -237,7 +237,9 @@ assumptions, not service policy recommendations.
 1. **Start a scenario.** In a blank app, name it in **Create your first
    scenario** and choose **Create**. To continue existing work instead, use
    **Open model (.tma)…**, **Import TM7…** or **Import JSON…** in the same
-   dialog; no placeholder scenario is created. Otherwise save your existing
+   dialog; no placeholder scenario is created. Cancelling a picker or declining
+   an import keeps the dialog and draft available. A failed import reports its
+   error without replacing the model. Otherwise save your existing
    work before **File > New**, or use **Model > New scenario** to add a workflow without
    replacing it. Select `Submit a support case` in the top bar.
 2. **Add three nodes.** Right-click blank canvas and choose **New Node**.
@@ -642,9 +644,9 @@ compatible peers. Rooms share diagrams, not profile library preferences.
 An optional Copilot CLI participant can inspect and make authorized edits.
 
 **Review > Design Assistant** provides optional network-backed Chat/AI Analysis,
-not local Analyze. It is **bring your own AI**: it calls an Azure OpenAI
-deployment you supply, and is unavailable until you configure one. See
-[bring your own AI](bring-your-own-ai.md) to create and secure that instance,
+not local Analyze. It is **bring your own AI**: configure your Azure OpenAI
+deployment, or explicitly launch with your Claude Code or Codex CLI provider.
+See [bring your own AI](bring-your-own-ai.md) for provider setup,
 and [start with the optional AI assistant](#start-with-the-optional-ai-assistant)
 to run it. Requests include active-scenario context, not just selected
 or filtered objects. [Advanced configuration](advanced-configuration.md) covers
@@ -671,6 +673,43 @@ provider information cannot trap findings in a thin strip. **Go to AI findings**
 jumps past those controls. Chat keeps its own scrolling area and composer when
 space permits; in short panels its content scrolls together. Scroll or Tab
 through finding actions to reach the final result.
+
+#### Simulate a breach path
+
+**Simulate breach**, beside **Analyze model** in AI Analysis, plays a
+suggested attack path across the active scenario's diagram to help explain a
+finding. Like AI Analysis, it needs a selected scenario and a configured
+provider. A new AI Analysis request sends active-scenario context to that
+provider; replaying existing findings does not.
+
+- If AI Analysis already has findings for the active scenario, the simulation
+  reuses them. Otherwise it sends one AI Analysis request that asks for the
+  most plausible path from an entry point to sensitive data.
+- It takes the finding with the highest suggested severity and builds the path
+  in the browser. Starting from a flow the finding references (or else a flow
+  touching a referenced node, or else the scenario's first flow), it follows
+  connected flows upstream and downstream, up to five flows. The path is a
+  chain of declared flows near the finding, not necessarily the exact path the
+  AI described. If the scenario has no flows, only referenced nodes are shown.
+  If nothing can be shown, the panel asks you to add a connected flow.
+- The canvas zooms to the path and highlights each node and flow in turn,
+  about once a second. The panel lists the steps; select one to focus it on
+  the canvas. A step whose element has since been removed is unavailable. Use
+  **Pause**, **Resume**, **Restart** or **Close** to control playback.
+- When playback finishes, the panel names the last step under **Target
+  reached** and lists up to four **Recommended protections**, taken from the
+  recommendations of all current AI findings in severity order. **Create
+  *N* work items** adds one Pending review work item per protection with only
+  its Description filled in, closes the simulation and opens Work. Add a Name,
+  type and severity before accepting them.
+
+The score beside the title, such as 76/100, is a fixed value for the finding's
+suggested severity (critical 92, high 76, medium 54, low 28), not a calculated
+risk score. Labels such as **Live attack path** and **Target reached** describe
+the animation. The path is an AI-assisted hypothesis over declared flows, not
+an observed attack, a tested exploit or proof that the target is reachable.
+The animation and playback state are not saved with the model. Work items you
+create from its protections are saved normally.
 
 #### Move the whole inspector
 

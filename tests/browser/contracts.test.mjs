@@ -1394,6 +1394,47 @@ test("usability: File menu keyboard navigation and focus return", async () => {
   });
 });
 
+test("usability: File > New keeps focus inside the first-run dialog and returns it to File when cancelled", async () => {
+  await harness.run("usability: New focus", async ({ page }) => {
+    const answerConfirm = answer => page.evaluate(answer => {
+      const original = window.confirm;
+      window.confirm = message => {
+        window.confirm = original;
+        if (message !== "Create a brand-new document? The current diagram will be cleared. You can use Undo (Ctrl+Z) to recover it.") {
+          throw new Error("Unexpected confirmation in synthetic New");
+        }
+        return answer;
+      };
+    }, answer);
+    const trigger = fileMenu(page);
+    const chooseNew = async () => {
+      await trigger.focus();
+      await page.keyboard.press("ArrowDown");
+      await until(() => page.locator(":focus").innerText().then(text => /New/.test(text)), "New menu item focus");
+      await page.keyboard.press("Enter");
+    };
+
+    await answerConfirm(false);
+    await chooseNew();
+    await until(() => trigger.evaluate(element => element === document.activeElement), "cancelled New returns focus to File");
+    assert.equal(await page.locator(".react-flow__node-process").count(), 2, "Cancelled New keeps the model");
+
+    await answerConfirm(true);
+    await chooseNew();
+    const dialog = page.getByRole("dialog", { name: "Create your first scenario", exact: true });
+    await dialog.waitFor();
+    const title = dialog.getByRole("textbox", { name: "Title", exact: true });
+    await until(() => title.evaluate(element => element === document.activeElement), "first-run dialog Title focus");
+    // Focus restoration is scheduled; confirm nothing moves focus out afterwards.
+    await page.waitForTimeout(250);
+    assert.equal(await title.evaluate(element => element === document.activeElement), true,
+      "Focus stays inside the first-run dialog");
+    await page.keyboard.type("Keyboard scenario");
+    await page.keyboard.press("Enter");
+    await dialog.waitFor({ state: "hidden" });
+  });
+});
+
 test("usability: filters stage changes, cancel, apply with Enter, and clear immediately", async () => {
   await harness.run("usability: staged filters", async ({ page }) => {
     const trigger = page.getByRole("button", { name: /^Filter,/ });
