@@ -976,6 +976,8 @@
     "workItems": [
       {
         "id": "wi_reference_controls",
+        "title": "Verify reference controls",
+        "decision": "pending",
         "description": "Verify pooled connection tenant bleed and excessive support disclosure controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
         "link": ""
       }

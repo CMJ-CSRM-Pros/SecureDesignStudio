@@ -65,13 +65,23 @@ jobs:
       - name: Install
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Install API
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: api
+
       # Same gate as ci.yml: `npm run dev` is the end-user runtime for source
       # installs, so devDependencies are audited too.
       - name: Supply-chain audit
-        run: npm audit --audit-level=high
+        run: |
+          set -eu
+          npm audit --audit-level=high
+          npm --prefix api audit --omit=dev --audit-level=high
 
       - name: Build (typecheck, multi-file and standalone)
         run: npm run build
+
+      - name: Build API
+        run: npm --prefix api run build
 
       - name: Runtime tests
         run: npm run test:runtime

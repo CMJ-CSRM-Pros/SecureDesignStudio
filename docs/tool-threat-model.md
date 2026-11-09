@@ -4,7 +4,8 @@
 
 This page models the tool, not the systems you model with it. It is meant for
 maintainers and for anyone who deploys or hosts SecureDesignStudio (SDS).
-Finding IDs such as **S1** refer to the audit report (`audit/REPORT.md`, §6).
+Review IDs such as **S1** are local references defined in the open-items table
+below; this repository does not include the originating audit report.
 Report vulnerabilities through [SECURITY.md](../SECURITY.md), not through issues.
 
 ## System at a glance
@@ -18,12 +19,15 @@ three ways:
   in browser storage only.
 - **Standalone:** one self-contained HTML file (`dist-single/index.html`, or a
   model exported as application HTML) opened from disk.
-- **Hosted (optional):** an Azure Static Web App (SWA) with two Azure Functions,
-  `api/collab-token` and `api/design-assistant`.
+- **Hosted (optional):** an Azure Static Web App (SWA) with three Azure Functions:
+  `api/collab-token`, `api/design-assistant` and `api/ado-work-items`.
 
-Two features are off by default and need explicit configuration:
+Connected features are off by default and need explicit configuration:
 collaboration (Yjs over Azure Web PubSub) and the AI Design Assistant (Azure
-OpenAI when hosted; Azure, Claude Code or Codex CLI when local).
+OpenAI when hosted; Azure, Claude Code or Codex CLI when local), plus Azure
+DevOps work-item submission. Local ADO uses the separate `npm run dev:ado`
+mode with an administrator-supplied SPA registration; ordinary local startup
+does not enable the ADO relay, AI or collaboration.
 
 ## Assets
 
@@ -32,6 +36,7 @@ OpenAI when hosted; Azure, Claude Code or Codex CLI when local).
 | Threat models (`.tma` and autosave) | Describe a system's architecture, weaknesses and open issues. Disclosure helps an attacker; tampering hides risk |
 | Collaboration room key | Anyone holding the `#key=` URL fragment can read and edit the shared model |
 | User's AI subscription or Azure deployment | Paid capacity; misuse costs money and sends model content to a provider |
+| Caller ADO access token and work items | A confirmed submission writes reviewed model content to the user's chosen ADO project |
 | The user's machine (files, shell, credentials) | Reachable only if the local AI bridge or a CLI escapes its isolation |
 | Integrity of exported artifacts | Reports and TM7/VSDX files are shared with reviewers who trust them |
 | Hosted Azure resources and identities | Web PubSub, Azure OpenAI and the SWA managed identity |
@@ -60,6 +65,7 @@ OpenAI when hosted; Azure, Claude Code or Codex CLI when local).
 | CLI stdout and event stream | TB3 | The provider's model response |
 | `GET /api/collab-token` | TB4 | Anyone on the internet (anonymous) |
 | `POST /api/design-assistant` (hosted) | TB4 | SWA-authenticated users |
+| `POST /api/ado-work-items` (explicit local ADO or hosted mode) | TB3, TB4 | Same-origin callers presenting their own ADO bearer token |
 | Exported HTML report, standalone HTML, `.tm7`, `.vsdx`, PNG | TB5 | Recipients opening them |
 | `npm ci` and the CI workflow | TB6 | Package registry and Actions marketplace |
 
@@ -114,10 +120,11 @@ the selected CLI through `api/design-assistant/localProviders.ts`.
 | STRIDE | Threat | Mitigation in place | Residual |
 |---|---|---|---|
 | Spoofing, EoP | Anyone uses the hosted assistant | SWA route allows only the `authenticated` role. The function calls Azure OpenAI with `DefaultAzureCredential`, so no key reaches the browser. Hosted requests may use only the `azure` provider | Function `authLevel` is `anonymous`; protection relies on the SWA route rule |
+| Spoofing, Tampering, Info disclosure | A caller submits work to ADO or sends its token to another host | The hosted relay is default-off, requires same-origin HTTPS and a caller bearer token, validates destinations and drafts, and forwards only to the fixed ADO Services host with redirects rejected. Local ADO additionally requires exact loopback Host, Origin and socket checks; no service identity or retry is used | SWA permits anonymous routing; ADO authorizes the caller token. Local non-browser processes can forge Origin. Reconcile ambiguous creation results before retrying |
 | Spoofing, DoS | Anyone gets a collaboration token | Room IDs must match `^[A-Za-z0-9_-]{6,64}$`; tokens grant join and send for one group and expire after 60 minutes | Anonymous, CORS `*`, no rate limit, `err.message` returned to the caller (S8) |
 | Tampering, Info disclosure | Clickjacking, MIME sniffing, injected script on the hosted app | `staticwebapp.config.json` sends a CSP (`script-src 'self'`, `frame-ancestors 'none'`, `object-src`/`base-uri 'none'`), `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The standalone build carries a meta CSP that pins its inline script by SHA-256 | `connect-src` allows any `https:`/`wss:` because endpoints are configured per deployment. The Vite dev server used by `npm run dev` has no CSP (S6 fixed for hosted and standalone) |
 | EoP | Vulnerable API dependency | `@azure/identity` 4.14.1 (#24) brings a fixed `@azure/msal-node` (GHSA-xcx6-jx8p-x3h5). CI audits API production dependencies | None known (S3 fixed) |
-| Info disclosure | Secrets committed | `api/local.settings.json` and `.env*` are ignored; only a template is tracked. The audit's gitleaks scan of all refs found nothing | None known |
+| Info disclosure | Secrets committed | `api/local.settings.json` and `.env*` are ignored; only a template is tracked | Ignore rules do not scan history or prevent deliberate secret commits; maintainers must review committed material |
 
 ### TB5: exported artifacts
 
@@ -136,7 +143,7 @@ the selected CLI through `api/design-assistant/localProviders.ts`.
 | Tampering | A malicious or vulnerable npm package | Exact lockfile; CI runs `npm ci --ignore-scripts` and fails on high-severity advisories in all app dependencies (dev dependencies are runtime here) and in API production dependencies. The standalone inliner is repository code, not a plugin | The launchers run plain `npm ci` on users' machines, so install scripts run there |
 | Tampering | A compromised GitHub Action | Every `uses:` is pinned to a commit SHA; the token has `contents: read`; checkout does not persist credentials | SHA pins need deliberate updates |
 | Spoofing, Tampering | A user downloads a modified build | The release workflow builds from the version tag, publishes `SHA256SUMS`, a CycloneDX SBOM and a GitHub build-provenance attestation, and stops at a draft a maintainer reviews. [Verifying a release download](release-verification.md) explains the checks | Protects only users who run the checks. The workflow has not produced a release yet |
-| Tampering | Line endings break shell scripts | `.gitattributes` keeps `*.sh` LF | None |
+| Tampering | Line endings break shell scripts | The LF checkout policy is supplied by the separate line-ending PR #30 | Until that PR is merged, check shell-script line endings before running a Windows-origin checkout on POSIX |
 
 ## Assumptions and out of scope
 

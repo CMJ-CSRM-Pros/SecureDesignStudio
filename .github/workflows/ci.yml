@@ -86,10 +86,9 @@ jobs:
         run: npm run test:runtime
 
       # Browser contract tests use an installed Edge/Chrome channel and never
-      # download a browser. Non-blocking until the first green run on every OS.
+      # download a browser. A failed or unavailable browser gate blocks CI.
       - name: Browser contract tests
         run: npm run test:browser
-        continue-on-error: true
 
       - name: POSIX launcher smoke test
         if: runner.os != 'Windows'

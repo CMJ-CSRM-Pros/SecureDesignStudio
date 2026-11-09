@@ -46,7 +46,7 @@ already fixed on `main`: Vite 8.3.5 (#22) and `@azure/identity` 4.14.1 (#24).
   PowerShell launchers and accept matching options (`--provider`,
   `--diagnose-provider`, `--help`).
 - `scripts/launch.mjs` holds the shared checks (Node version, free port 5173,
-  first-run `npm ci`, AI provider readiness) and uses only Node built-ins. Run
+  direct-dependency checks and `npm ci` repair, AI provider readiness) and uses only Node built-ins. Run
   it on any OS with `npm run start`, or `npm run start:ai` for the AI
   assistant.
 - Stopping the launcher with `SIGTERM` or closing its terminal (`SIGHUP`) now
@@ -62,8 +62,9 @@ already fixed on `main`: Vite 8.3.5 (#22) and `@azure/identity` 4.14.1 (#24).
   and `.nvmrc` selects Node 24 for version managers and CI.
 - `docs/custom-libraries.md` shows the macOS/Linux form of
   `SDS_LIBRARY_PATHS` (forward slashes).
-- `.gitattributes` stores text as LF, keeps PowerShell scripts CRLF and shell
-  scripts LF, and leaves `.tma`/`.tm7` bytes untouched.
+- The separate line-ending PR #30 proposes `.gitattributes` to store text as LF,
+  keep PowerShell scripts CRLF and shell scripts LF, and leave `.tma`/`.tm7`
+  bytes untouched; those changes are not part of this CI/documentation update.
 
 ### Build and test
 
@@ -72,7 +73,7 @@ already fixed on `main`: Vite 8.3.5 (#22) and `@azure/identity` 4.14.1 (#24).
 - New GitHub Actions workflow (`.github/workflows/ci.yml`) on Windows x64,
   macOS arm64, Linux x64 and Linux arm64: install without install scripts,
   `npm audit` at high severity, build, API build, runtime tests, browser tests
-  (non-blocking for now) and a launcher smoke test on macOS and Linux. Actions
+  (blocking) and a launcher smoke test on macOS and Linux. Actions
   are pinned to commit SHAs, the token is read-only, and every step runs in
   bash so a failing command can't be masked on Windows.
 - New release workflow (`.github/workflows/release.yml`) for `v*.*.*` tags.

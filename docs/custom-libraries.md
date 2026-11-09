@@ -29,6 +29,13 @@ $env:SDS_LIBRARY_PATHS = '["examples\\custom-libraries\\example"]'
 npm run dev
 ```
 
+On macOS and Linux, use forward slashes. A backslash is part of a file name
+there, not a separator:
+
+```sh
+SDS_LIBRARY_PATHS='["examples/custom-libraries/example"]' npm run dev
+```
+
 Use the same environment variable for `npm run build`. Remove it for an
 unconfigured build:
 
@@ -36,6 +43,9 @@ unconfigured build:
 Remove-Item Env:SDS_LIBRARY_PATHS -ErrorAction SilentlyContinue
 npm run build
 ```
+
+On macOS and Linux, `unset SDS_LIBRARY_PATHS` before `npm run build`. The
+one-line form above sets it only for that command.
 
 The example is synthetic and selected only explicitly. Keep confidential
 packages out of version control and deployment artifacts. Git ignore rules are

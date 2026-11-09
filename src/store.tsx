@@ -1,4 +1,5 @@
 import { SERVICES } from "./services";
+import { normalizeWorkItem } from "./workItems";
 import { normalizeTextAnnotations, normalizeTextAnnotationIds } from "./textAnnotations";
 import type { PsTextAnnotation } from "./types";
 import { normalizeDfdValue, normalizeNodeScope, resolveNodeReviewScope } from "./dfdSemantics";
@@ -712,7 +713,8 @@ interface StoreApi {
   deleteData: (id: string) => void;
 
   // Security work items (free-standing catalog).
-  createWorkItem: () => PsWorkItem;
+  createWorkItem: (initial?: Pick<PsWorkItem, "title" | "description" | "severity" | "workItemType" | "weaknessType">) => PsWorkItem;
+  getCurrentWorkItem: (id: string) => PsWorkItem | undefined;
   updateWorkItem: (id: string, patch: Partial<PsWorkItem>) => void;
   deleteWorkItem: (id: string) => void;
 
@@ -1044,6 +1046,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }
           }
           if (saved && typeof saved === "object") validateThreatNotes(saved as Partial<PsDocument>);
+          if (saved && typeof saved === "object" && "workItems" in saved && Array.isArray(saved.workItems)) {
+            saved.workItems.forEach(normalizeWorkItem);
+          }
           if (saved && typeof saved === "object" && "edges" in saved && Array.isArray(saved.edges)) {
             for (const edge of saved.edges) {
               if (edge && typeof edge === "object") {
@@ -2362,28 +2367,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // -------- Work item ops --------
-  const createWorkItem = useCallback((): PsWorkItem => {
-    snapshot();
-    const item: PsWorkItem = {
+  const createWorkItem = useCallback((initial?: Pick<PsWorkItem, "title" | "description" | "severity" | "workItemType" | "weaknessType">): PsWorkItem => {
+    const item = normalizeWorkItem({
       id: uid("wi"),
-      description: "",
+      description: initial?.description ?? "",
       link: "",
-    };
+      title: initial?.title ?? "",
+      decision: "pending",
+      severity: initial?.severity,
+      workItemType: initial?.workItemType,
+      weaknessType: initial?.weaknessType,
+    });
+    snapshot();
     setDoc((d) => ({ ...d, workItems: [...d.workItems, item] }));
     return item;
   }, [snapshot]);
 
+  const getCurrentWorkItem = useCallback(
+    (id: string) => docRef.current.workItems.find(item => item.id === id),
+    [],
+  );
+
   const updateWorkItem = useCallback(
     (id: string, patch: Partial<PsWorkItem>) => {
+      const current = getCurrentWorkItem(id);
+      if (!current) return;
+      const updated = normalizeWorkItem({ ...current, ...patch, id });
       snapshot();
       setDoc((d) => ({
         ...d,
         workItems: d.workItems.map((x) =>
-          x.id === id ? { ...x, ...patch } : x
+          x.id === id ? updated : x
         ),
       }));
     },
-    [snapshot]
+    [snapshot, getCurrentWorkItem]
   );
 
   const deleteWorkItem = useCallback(
@@ -4665,6 +4683,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateData,
     deleteData,
     createWorkItem,
+    getCurrentWorkItem,
     updateWorkItem,
     deleteWorkItem,
     attachDataToNode,
@@ -4898,6 +4917,32 @@ function normalizeDeviationSampleCalls(value: unknown): DeviationSampleCall[] {
   return calls;
 }
 
+// Imported files and collaboration peers can put any JSON value anywhere.
+// Fields the UI renders as text must be strings, and coordinates must be
+// finite numbers, or a single crafted model crashes React (audit S4).
+function textOr(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function positionOr(value: unknown): { x: number; y: number } {
+  const point = value as { x?: unknown; y?: unknown } | null | undefined;
+  return { x: finiteOr(point?.x, 0), y: finiteOr(point?.y, 0) };
+}
+
+function sizeOr(value: unknown, fallback: { width: number; height: number }): { width: number; height: number } {
+  const size = value as { width?: unknown; height?: unknown } | null | undefined;
+  const side = (v: unknown, d: number) => typeof v === "number" && Number.isFinite(v) && v > 0 ? v : d;
+  return { width: side(size?.width, fallback.width), height: side(size?.height, fallback.height) };
+}
+
 export function normalizeDoc(
   doc: Partial<PsDocument> & {
     edges?: Array<
@@ -4987,32 +5032,18 @@ export function normalizeDoc(
   // Carry over existing data items first.
   const dataItems: PsData[] = (doc.data ?? []).map((d) => ({
     id: d.id ?? uid("d"),
-    name: d.name ?? "Data",
+    name: textOr(d.name, "Data"),
     classification: (isCatalogReferenceId(d.classification)
       ? d.classification
       : "EUII"),
-    sample: d.sample ?? "",
+    sample: textOr(d.sample),
   }));
 
-  // Carry over work items. Both fields default to empty strings so the
-  // shape is always consistent for the modal's controlled inputs. We strip
-  // links whose scheme is on a known-dangerous list (`javascript:`,
-  // `data:`, `vbscript:`, `file:`) so a malicious imported .tma cannot
-  // round-trip an XSS payload through autosave; benign partial URLs the
-  // user is still editing (e.g. "example.com/foo") are preserved as-is
-  // and only blocked at render time.
-  const DANGEROUS_SCHEME_RE = /^\s*(javascript|data|vbscript|file)\s*:/i;
+  // Recover legacy description/link values, but reject malformed review/receipt
+  // fields before replacing the document. Never truncate authored work.
   const workItemsRaw = (doc as { workItems?: unknown }).workItems;
   const workItems: PsWorkItem[] = Array.isArray(workItemsRaw)
-    ? (workItemsRaw as Array<Partial<PsWorkItem>>).map((w) => {
-        const rawLink = typeof w.link === "string" ? w.link : "";
-        const link = DANGEROUS_SCHEME_RE.test(rawLink) ? "" : rawLink;
-        return {
-          id: typeof w.id === "string" && w.id.trim() ? w.id : uid("wi"),
-          description: typeof w.description === "string" ? w.description : "",
-          link,
-        };
-      })
+    ? workItemsRaw.map(normalizeWorkItem)
     : [];
 
   const rawEdges = doc.edges ?? [];
@@ -5086,13 +5117,14 @@ export function normalizeDoc(
     return {
       id: s.id ?? uid("s"),
       ...normalizeNodeScope(s, new Set((doc.nodes ?? []).map(node => node.id))),
-      name: s.name ?? "Scenario",
-      description: s.description ?? "",
+      name: textOr(s.name, "Scenario"),
+      description: textOr(s.description),
       nodeIds: (s.nodeIds ?? []).filter(
         (id): id is string => typeof id === "string"
       ),
       edgeIds,
-      edgeNumbers: { ...fallbackNumbers, ...(s.edgeNumbers ?? {}) },
+      edgeNumbers: { ...fallbackNumbers, ...Object.fromEntries(
+        Object.entries(s.edgeNumbers ?? {}).filter(([, n]) => typeof n === "number" && Number.isFinite(n))) },
       boundaryIds,
       ...normalizeTextAnnotationIds(s, textAnnotations ?? []),
       nodeData,
@@ -5120,12 +5152,12 @@ export function normalizeDoc(
           && "definition" in type && type.definition !== null && typeof type.definition === "object"
           && "defaultDfdRole" in type.definition && type.definition.defaultDfdRole !== undefined),
       ...normalizeEntityMetadata(n, "node"),
-      title: n.title ?? "",
-      description: n.description ?? "",
-      type: n.type ?? "",
-      serviceTreeId: n.serviceTreeId ?? "",
-      endpointRegex: n.endpointRegex ?? "",
-      position: n.position ?? { x: 0, y: 0 },
+      title: textOr(n.title),
+      description: textOr(n.description),
+      type: textOr(n.type),
+      serviceTreeId: textOr(n.serviceTreeId),
+      endpointRegex: textOr(n.endpointRegex),
+      position: positionOr(n.position),
       size: {
         width:
           rawSize && Number.isFinite(rawSize.width) && rawSize.width > 0
@@ -5179,9 +5211,9 @@ export function normalizeDoc(
       title:
         b.title === "Security Boundary" || b.title === "Privacy Boundary"
           ? ""
-          : (b.title ?? ""),
-      position: b.position ?? { x: 0, y: 0 },
-      size: b.size ?? { width: 200, height: 200 },
+          : (textOr(b.title)),
+      position: positionOr(b.position),
+      size: sizeOr(b.size, { width: 200, height: 200 }),
       nodeIds: Array.isArray(rawNodeIds)
         ? Array.from(
             new Set(
@@ -5240,24 +5272,23 @@ export function normalizeDoc(
       return {
         id: e.id ?? uid("e"),
         ...normalizeEntityMetadata(e, "edge"),
-        source: e.source ?? "",
-        target: e.target ?? "",
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        title: e.title ?? "",
-        description: e.description ?? "",
+        source: textOr(e.source),
+        target: textOr(e.target),
+        sourceHandle: optionalText(e.sourceHandle),
+        targetHandle: optionalText(e.targetHandle),
+        title: textOr(e.title),
+        description: textOr(e.description),
         ...(protocolId ? { protocolId } : {}),
         ...(applicationId !== undefined ? { applicationId } : {}),
         requiredAccessRights: normalizeRequiredAccessRights(e.requiredAccessRights, e.id),
         authenticationTypes,
         productionIdentity,
-        audience: e.audience,
-        constraints: e.constraints,
+        audience: optionalText(e.audience),
+        constraints: optionalText(e.constraints),
         problem: e.problem === true ? true : undefined,
         waypoints: (e.waypoints ?? []).map((w) => ({
           id: w?.id ?? uid("w"),
-          x: w?.x ?? 0,
-          y: w?.y ?? 0,
+          ...positionOr(w),
         })),
       };
     }),
@@ -5268,7 +5299,7 @@ export function normalizeDoc(
       .map((c) => {
         const targetKind: "node" | "edge" =
           c.targetKind === "edge" ? "edge" : "node";
-        const targetId = c.targetId ?? "";
+        const targetId = textOr(c.targetId);
         // Resolve scenarioId. If absent (legacy), assign to the first scenario
         // that contains this target. If none does, drop the comment.
         let scenarioId = typeof c.scenarioId === "string" ? c.scenarioId : "";
@@ -5293,16 +5324,14 @@ export function normalizeDoc(
           scenarioId,
           targetKind,
           targetId,
-          text: c.text ?? "",
+          text: textOr(c.text),
           status:
             c.status === "Resolved" ? "Resolved" : ("Active" as CommentStatus),
-          createdAt:
-            typeof c.createdAt === "number" ? c.createdAt : Date.now(),
+          createdAt: finiteOr(c.createdAt, Date.now()),
           replies: (c.replies ?? []).map((r) => ({
             id: r?.id ?? uid("r"),
-            text: r?.text ?? "",
-            createdAt:
-              typeof r?.createdAt === "number" ? r.createdAt : Date.now(),
+            text: textOr(r?.text),
+            createdAt: finiteOr(r?.createdAt, Date.now()),
           })),
         };
       })
@@ -5312,7 +5341,7 @@ export function normalizeDoc(
       .map((i) => {
         const targetKind: "node" | "edge" =
           i.targetKind === "edge" ? "edge" : "node";
-        const targetId = i.targetId ?? "";
+        const targetId = textOr(i.targetId);
         const resolutionLink = safeNavigationHref(i.resolutionLink);
         // Validate scenarioIds — keep only ids of real scenarios.
         const validScenarioIds = (i.scenarioIds ?? []).filter(
@@ -5331,17 +5360,15 @@ export function normalizeDoc(
           targetKind,
           targetId,
           scenarioIds: Array.from(new Set(validScenarioIds)),
-          title: i.title ?? "",
-          description: i.description ?? "",
+          title: textOr(i.title),
+          description: textOr(i.description),
           status:
             i.status === "Resolved" ? "Resolved" : ("Active" as IssueStatus),
-          createdAt:
-            typeof i.createdAt === "number" ? i.createdAt : Date.now(),
+          createdAt: finiteOr(i.createdAt, Date.now()),
           replies: (i.replies ?? []).map((r) => ({
             id: r?.id ?? uid("ir"),
-            text: r?.text ?? "",
-            createdAt:
-              typeof r?.createdAt === "number" ? r.createdAt : Date.now(),
+            text: textOr(r?.text),
+            createdAt: finiteOr(r?.createdAt, Date.now()),
           })),
         };
       })
@@ -5355,10 +5382,7 @@ export function normalizeDoc(
     deviations: (
       (doc as { deviations?: Array<Partial<PsDeviation>> }).deviations ?? []
     ).map((deviation) => {
-      const createdAt =
-        typeof deviation.createdAt === "number"
-          ? deviation.createdAt
-          : Date.now();
+      const createdAt = finiteOr(deviation.createdAt, Date.now());
       const targetKind =
         deviation.targetKind === "node" || deviation.targetKind === "edge"
           ? deviation.targetKind
@@ -5417,10 +5441,7 @@ export function normalizeDoc(
           )
         ),
         createdAt,
-        updatedAt:
-          typeof deviation.updatedAt === "number"
-            ? deviation.updatedAt
-            : createdAt,
+        updatedAt: finiteOr(deviation.updatedAt, createdAt),
       };
     }),
     workItems,
