@@ -858,6 +858,7 @@ export function registerDfdContracts({ getHarness, exportModel }) {
         assert.equal(await reason.inputValue(), value);
         assert.equal(await scenario.inputValue(), "s_primary");
         assert.match(await selectedNode.getAttribute("class"), /\bselected\b/);
+        await page.waitForFunction(() => document.activeElement?.id === "ps-inspector-tab-properties");
       };
       const before = await exportModel(page);
       const expectedWithReason = value => {
