@@ -1927,6 +1927,7 @@ body.ps-resizing-h * {
 .ps-scenario-splash .ps-modal-body {
   min-height: 0;
   overflow-y: auto;
+  scroll-padding-block: 4px;
   padding: 16px 24px;
 }
 .ps-scenario-splash-intro {

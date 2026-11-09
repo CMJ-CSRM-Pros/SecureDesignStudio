@@ -81,12 +81,12 @@ export function registerFirstRunContracts({ getHarness }) {
         .evaluate(element => element === document.activeElement), "first-launch Title focus");
       await dialog.getByRole("button", { name: "Create", exact: true }).focus();
       await page.keyboard.press("Tab");
-      assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true,
-        "Tab from the last action stays inside the modal");
+      assert.equal(await dialog.getByRole("button", { name: "Open model (.tma)…", exact: true })
+        .evaluate(element => element === document.activeElement), true, "Tab wraps to the first action");
       await dialog.getByRole("button", { name: "Open model (.tma)…", exact: true }).focus();
       await page.keyboard.press("Shift+Tab");
-      assert.equal(await dialog.evaluate(element => element.contains(document.activeElement)), true,
-        "Shift+Tab from the first action stays inside the modal");
+      assert.equal(await dialog.getByRole("button", { name: "Create", exact: true })
+        .evaluate(element => element === document.activeElement), true, "Shift+Tab wraps to the last action");
     });
   });
 
@@ -185,6 +185,13 @@ export function registerFirstRunContracts({ getHarness }) {
       const dialog = page.getByRole("dialog", { name: "New scenario", exact: true });
       await dialog.waitFor();
       assert.equal(await dialog.getByRole("region", { name: "Already have a model?", exact: true }).count(), 0);
+      await dialog.getByRole("button", { name: "Create", exact: true }).focus();
+      await page.keyboard.press("Tab");
+      assert.equal(await dialog.getByRole("button", { name: "Close", exact: true })
+        .evaluate(element => element === document.activeElement), true);
+      await page.keyboard.press("Shift+Tab");
+      assert.equal(await dialog.getByRole("button", { name: "Create", exact: true })
+        .evaluate(element => element === document.activeElement), true);
       await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
       await dialog.waitFor({ state: "hidden" });
     });
@@ -209,6 +216,12 @@ export function registerFirstRunContracts({ getHarness }) {
           const box = await control.boundingBox();
           assert.ok(box && box.x >= 0 && box.x + box.width <= 320 &&
             box.y >= 0 && box.y + box.height <= 480, "Every first-run control can be reached in the viewport");
+          const body = await control.evaluate(element => {
+            const rect = element.closest(".ps-modal-body")?.getBoundingClientRect();
+            return rect ? { top: rect.top, bottom: rect.bottom } : null;
+          });
+          if (body) assert.ok(box.y >= body.top && box.y + box.height <= body.bottom,
+            `The scrollable dialog body does not clip the focused control: ${JSON.stringify({ box, body })}`);
         }
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
       });
