@@ -72,8 +72,9 @@ function harness(env = {}, options = {}) {
           "ERROR: The system was unable to find the specified registry key or value.";
       } else if (args.includes("--help")) {
         stdout = options.oldCli ? "--help --print" :
-          "--restricted --safe-mode --json-schema --no-session-persistence --system-prompt-file --tools --setting-sources " +
+          "--restricted --safe-mode --json-schema --no-session-persistence --system-prompt --tools --setting-sources " +
           "--ignore-user-config --ignore-rules --strict-config --disable --enable --ephemeral --output-schema --sandbox --json --output-last-message";
+        if (options.missingSystemPrompt) stdout = stdout.replace("--system-prompt ", "--system-prompt-file ");
       } else if (args.includes("--version")) {
         stdout = "codex-cli 0.162.1\r\n";
       } else if (args.includes("list")) {
@@ -112,6 +113,7 @@ function harness(env = {}, options = {}) {
       child.stderr.write(stderr);
       child.stdout.end(); child.stderr.end();
       child.emit("close", args.includes("query") && !options.registryManaged ? 1 :
+        options.unsupportedIsolation && args.includes("status") ? 1 :
         options.failure && args.includes("-p") ? 1 : 0);
     }));
     return child;
@@ -357,6 +359,44 @@ test("providers: local Claude and Codex planning use the same validated plan sch
     const invalid = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: provider },
       { output: { nodeTypeIds: ["invented"], rationale: "x" } });
     assert.notEqual((await invalid.invoke({ mode: "design-plan", question: "Synthetic", context: planContext, history: [] })).status, 200);
+  }
+});
+
+test("providers: Claude uses the public system prompt flag rather than the hidden file flag", async () => {
+  const h = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "claude" });
+  const response = await h.invoke({ mode: "chat", question: "Synthetic", context: {} });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  const call = h.calls.find(call => call.args.includes("-p"));
+  assert.ok(call);
+  assert.match(call.args[call.args.indexOf("--system-prompt") + 1], /tool-free structured-response request/);
+  assert.equal(call.args.includes("--system-prompt-file"), false);
+  for (const flag of ["--restricted", "--safe-mode"]) {
+    assert.ok(call.args.includes(flag));
+    assert.ok(h.calls.find(call => call.args.includes("status")).args.includes(flag));
+  }
+  const unsupported = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "claude" }, { unsupportedIsolation: true });
+  const status = await unsupported.load("api\\design-assistant\\localProviders.ts").localProviderStatus("claude");
+  assert.equal(status.available, false);
+  assert.equal(unsupported.calls.some(call => call.args.includes("-p")), false);
+  const missing = harness({}, { missingSystemPrompt: true });
+  const missingStatus = await missing.load("api\\design-assistant\\localProviders.ts").localProviderStatus("claude");
+  assert.equal(missingStatus.available, false);
+  assert.match(missingStatus.message, /--system-prompt/);
+  assert.equal(missing.calls.some(call => call.args.includes("status") || call.args.includes("-p")), false);
+});
+
+test("providers: Claude bounds the combined Windows system prompt and schema arguments before inference", async () => {
+  for (const size of [10_000, 31_000]) {
+    const h = harness();
+    const request = h.load("api\\design-assistant\\localProviders.ts")
+      .runLocalProvider("claude", "x".repeat(size), "Synthetic", { type: "object" });
+    if (size === 10_000) {
+      assert.deepEqual(JSON.parse(await request), result);
+    } else {
+      await assert.rejects(request, error => error.status === 413 && /argument limit/.test(error.message));
+      assert.equal(h.calls.some(call => call.args.includes("-p")), false);
+    }
+    assert.ok(h.removed.length > 0);
   }
 });
 

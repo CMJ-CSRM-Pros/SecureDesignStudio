@@ -114,8 +114,10 @@ git pull --ff-only
 .\Start-SecureDesignStudio.ps1
 ```
 
-The launcher reinstalls dependencies only when `node_modules` is absent. After
-a lockfile change, run `npm ci` once yourself. Resolve Git conflicts or
+The launcher checks installed direct dependencies and runs `npm ci` when
+`node_modules` is absent or packages are missing or incompatible. For a
+lockfile-only update to otherwise compatible packages, run `npm ci` yourself
+to restore the exact locked versions. Resolve Git conflicts or
 non-fast-forward updates with the branch owner; do not discard edits or switch
 a shared preview branch.
 
