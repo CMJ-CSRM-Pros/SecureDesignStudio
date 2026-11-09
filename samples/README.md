@@ -5,7 +5,8 @@ correct DFD roles, operation-scoped authorization and classified privacy data.
 They describe recommended controls, **not observed deployments or security,
 privacy, clinical-safety or compliance certification**.
 
-Open a `.tma` through **File > Open**. Start with the first Reference scenario;
+Open a `.tma` through **File > Open**, or **Open model (.tma)…** in the
+first-run dialog of a blank app. Start with the first Reference scenario;
 use **Fit model to view** and close the inspector for a presentation view.
 Orange rectangular **External Interactors** are users or separately controlled
 providers. Blue **Processes** perform authorization and computation. Green

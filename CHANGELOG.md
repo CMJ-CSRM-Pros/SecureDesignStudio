@@ -66,6 +66,15 @@ already fixed on `main`: Vite 8.3.5 (#22) and `@azure/identity` 4.14.1 (#24).
   keep PowerShell scripts CRLF and shell scripts LF, and leave `.tma`/`.tm7`
   bytes untouched; those changes are not part of this CI/documentation update.
 
+### User experience
+
+- The first-run **Create your first scenario** dialog now offers **Open model
+  (.tma)…**, **Import TM7…** and **Import JSON…**. The dialog blocks the menu
+  bar and file shortcuts, so before, opening existing work meant creating a
+  throwaway scenario first. The actions reuse the File menu commands, so
+  open and import behavior is unchanged. A browser test covers the actions,
+  cancelled pickers and the 320px layout.
+
 ### Build and test
 
 - Runtime tests build file paths with `path.join`, so the suite passes on

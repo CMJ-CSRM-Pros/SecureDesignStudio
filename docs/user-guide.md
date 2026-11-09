@@ -1,6 +1,6 @@
 # SecureDesignStudio user guide
 
-*Updated: 2026-09-22 - Start from the root launcher scripts.*
+*Updated: 2026-11-09 - Open or import existing work from the first-run dialog.*
 
 **Contents**
 
@@ -235,8 +235,10 @@ that writes to Dataverse. Authentication and retention below are practice
 assumptions, not service policy recommendations.
 
 1. **Start a scenario.** In a blank app, name it in **Create your first
-   scenario** and choose **Create**. Otherwise save your existing work before
-   **File > New**, or use **Model > New scenario** to add a workflow without
+   scenario** and choose **Create**. To continue existing work instead, use
+   **Open model (.tma)…**, **Import TM7…** or **Import JSON…** in the same
+   dialog; no placeholder scenario is created. Otherwise save your existing
+   work before **File > New**, or use **Model > New scenario** to add a workflow without
    replacing it. Select `Submit a support case` in the top bar.
 2. **Add three nodes.** Right-click blank canvas and choose **New Node**.
    In **Properties > General / Security**, set titles `Support web`,

@@ -145,7 +145,8 @@ Try a small, synthetic **Submit a support case** workflow:
    through calls in order.
 
 For a ready-made starting point, open a [synthetic sample model](samples/README.md)
-with **File > Open**. The [user guide](docs/user-guide.md#3-simple-how-to)
+with **Open model (.tma)…** in the first-run dialog, or **File > Open** later.
+The same dialog can import a TM7 or scenario/DFD JSON file. The [user guide](docs/user-guide.md#3-simple-how-to)
 extends this example with boundaries, retention, comments, and follow-up.
 
 **Autosave is recovery, not backup.** Save `.tma` files regularly and before

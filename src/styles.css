@@ -1932,6 +1932,35 @@ body.ps-resizing-h * {
   font-size: 14px;
   line-height: 1.5;
 }
+.ps-scenario-splash-existing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ps-border);
+}
+.ps-scenario-splash-existing h3,
+.ps-scenario-splash-new-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ps-scenario-splash-existing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ps-scenario-splash-existing-actions button {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid var(--ps-border);
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ps-scenario-splash-existing-actions button:hover {
+  background: #f1f5f9;
+}
 .ps-modal-footer.ps-scenario-splash-footer {
   justify-content: flex-end;
   padding: 14px 24px 20px;
@@ -4226,6 +4255,7 @@ select {
 .ps-details button,
 .ps-row-actions button,
 .ps-modal-footer button,
+.ps-scenario-splash-existing-actions button,
 .ps-endpoints-query-header button,
 .ps-data-actions .ps-danger,
 .ps-edge-data-detach,
@@ -4245,6 +4275,7 @@ select {
 .ps-details button:hover,
 .ps-row-actions button:hover,
 .ps-modal-footer button:hover,
+.ps-scenario-splash-existing-actions button:hover,
 .ps-endpoints-query-header button:hover,
 .ps-comment-actions button:hover,
 .ps-reply-actions button:hover,

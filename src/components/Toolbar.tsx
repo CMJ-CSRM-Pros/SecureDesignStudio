@@ -3268,6 +3268,11 @@ export function Toolbar() {
         defaultName={`Scenario ${doc.scenarios.length + 1}`}
         sourceOptions={doc.scenarios.map((s) => ({ id: s.id, name: s.name }))}
         required={doc.scenarios.length === 0}
+        existingWork={doc.scenarios.length === 0 ? {
+          open: () => executeCommand("file.open"),
+          importTm7: () => executeCommand("file.importTm7"),
+          importJson: () => executeCommand("file.importTmc"),
+        } : undefined}
         onCancel={() => {
           setNewScenarioOpen(false);
           restoreCommandFocus();
