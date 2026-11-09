@@ -30,6 +30,7 @@ customer/service exports out of fixtures.
 
 | Surface | Command |
 |---|---|
+| Documentation only | Check links, anchors, examples and implementation claims; parse changed Mermaid diagrams. No unrelated runtime build is needed. |
 | Frontend runtime, dependencies or build configuration | `npm run build` (typecheck, normal and standalone output) |
 | Model, import/export, catalogs or pure helpers | `npm run test:runtime` |
 | UI and current application behavior | `npm run test:browser` (regression and automated usability union) |
@@ -92,3 +93,4 @@ Thank you to our contributors
 - Krishnan Shankar (MSFT)
 - Aman Khabanda (MSFT)
 - Abhinav Chawla (MSFT)
+- Christopher Jeffords ([@CMJ-CSRM-Pros](https://github.com/CMJ-CSRM-Pros)) - architecture, use cases and breach-simulation documentation

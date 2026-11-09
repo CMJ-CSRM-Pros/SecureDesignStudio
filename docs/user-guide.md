@@ -1,6 +1,6 @@
 # SecureDesignStudio user guide
 
-*Updated: 2026-11-04 - Documented Simulate breach in AI Analysis.*
+*Updated: 2026-11-09 - Documented Simulate breach and clarified when it sends an AI request.*
 
 **Contents**
 
@@ -640,9 +640,9 @@ compatible peers. Rooms share diagrams, not profile library preferences.
 An optional Copilot CLI participant can inspect and make authorized edits.
 
 **Review > Design Assistant** provides optional network-backed Chat/AI Analysis,
-not local Analyze. It is **bring your own AI**: it calls an Azure OpenAI
-deployment you supply, and is unavailable until you configure one. See
-[bring your own AI](bring-your-own-ai.md) to create and secure that instance,
+not local Analyze. It is **bring your own AI**: configure your Azure OpenAI
+deployment, or explicitly launch with your Claude Code or Codex CLI provider.
+See [bring your own AI](bring-your-own-ai.md) for provider setup,
 and [start with the optional AI assistant](#start-with-the-optional-ai-assistant)
 to run it. Requests include active-scenario context, not just selected
 or filtered objects. [Advanced configuration](advanced-configuration.md) covers
@@ -675,7 +675,8 @@ through finding actions to reach the final result.
 **Simulate breach**, beside **Analyze model** in AI Analysis, plays a
 suggested attack path across the active scenario's diagram to help explain a
 finding. Like AI Analysis, it needs a selected scenario and a configured
-provider, and it sends active-scenario context to that provider.
+provider. A new AI Analysis request sends active-scenario context to that
+provider; replaying existing findings does not.
 
 - If AI Analysis already has findings for the active scenario, the simulation
   reuses them. Otherwise it sends one AI Analysis request that asks for the
@@ -703,7 +704,8 @@ suggested severity (critical 92, high 76, medium 54, low 28), not a calculated
 risk score. Labels such as **Live attack path** and **Target reached** describe
 the animation. The path is an AI-assisted hypothesis over declared flows, not
 an observed attack, a tested exploit or proof that the target is reachable.
-The simulation is not saved with the model; only the work items you create are.
+The animation and playback state are not saved with the model. Work items you
+create from its protections are saved normally.
 
 #### Move the whole inspector
 

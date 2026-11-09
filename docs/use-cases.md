@@ -1,6 +1,6 @@
 # SecureDesignStudio use cases
 
-*Updated: 2026-11-04 - First version: actors, use-case catalog, detailed use cases and traceability.*
+*Updated: 2026-11-09 - Reviewed workflows, persistence limits and optional services against the current implementation.*
 
 This page describes who uses SecureDesignStudio (SDS) and what they use it
 for. It is meant for new users deciding whether SDS fits their review process,
@@ -9,10 +9,9 @@ maintainers planning features. For how the app is built, see
 [architecture and design](architecture.md). For exact menu steps, see the
 [user guide](user-guide.md).
 
-Each use case is written in a lightweight structured format (goal, actors,
-preconditions, main flow, alternatives, outcome). Each one also states what
-the use case does **not** establish, because SDS records design intent and
-review decisions; it does not verify deployed systems.
+The workflow summaries complement the user guide rather than replace it.
+Each also states what it does **not** establish: SDS records design intent
+and review decisions; it does not verify deployed systems.
 
 ## 1. Actors
 
@@ -21,7 +20,7 @@ review decisions; it does not verify deployed systems.
 | **Design author** | An engineer or service owner describing a system | Describe services, flows, data and boundaries quickly, reuse what already exists, and get early feedback before a formal review. |
 | **Security or privacy reviewer** | The person assessing the design | See the same model as the author, find missing or inconsistent information, record findings and decisions, and compare revisions. |
 | **Report recipient** | A stakeholder who receives an output but may not run SDS | Read a diagram, report or work list in a familiar format. |
-| **Collaboration peer** | Another author or reviewer editing the same model live | Edit concurrently without overwriting each other. Needs a hosted, collaboration-enabled build. |
+| **Collaboration peer** | Another author or reviewer editing the same model live | Merge concurrent edits in a collaboration-enabled hosted or standalone build. Concurrent conflicting edits still need review. |
 | **Deployer or library maintainer** | A team that builds and hosts SDS for an organization | Add organization-specific catalogs, metadata and checks; choose which optional services exist. |
 
 | Secondary system | Role |
@@ -205,7 +204,7 @@ flowchart LR
 ### UC-09 Analyze the model and triage findings
 
 - **Goal:** Focus review effort on missing information and inconsistencies.
-- **Preconditions:** A model with at least one flow.
+- **Preconditions:** A model with nodes or flows to review.
 - **Main flow:**
   1. The reviewer chooses **Review > Analyze**. Local rules run across the whole document, not only the visible scenario.
   2. **Review > Issues** lists findings. The reviewer opens one to jump to its node or flow.
@@ -218,7 +217,7 @@ flowchart LR
 ### UC-10 Record discussion and authored threat notes
 
 - **Goal:** Keep review conversation and identified threats with the model.
-- **Preconditions:** A node or flow is selected.
+- **Preconditions:** A scenario is active and a node or flow is selected.
 - **Main flow:**
   1. The reviewer adds a comment, which belongs to the current scenario, and others reply.
   2. For a threat the reviewer wants to track, they choose **Add threat note** with an optional justification. It is stored as an issue that Analyze never alters.
@@ -240,13 +239,13 @@ flowchart LR
 
 ### UC-12 Track follow-up work and hand it to Azure DevOps
 
-- **Goal:** Turn review outcomes into tracked work without creating duplicates.
+- **Goal:** Turn review outcomes into reviewed, tracked work.
 - **Preconditions:** Findings or review decisions to act on.
 - **Main flow:**
   1. The reviewer creates a work item, by hand or with **Create work item** from an AI finding.
   2. The reviewer sets name, description, type (Bug or Task), severity and optional weakness type, then chooses **Accept**.
   3. The reviewer exports **ADO CSV** or the **ADO Excel template** for bulk import.
-- **Alternatives:** In an ADO-enabled build, the reviewer signs in and explicitly submits accepted items. A durable browser journal and the item's Link prevent creating the same item twice.
+- **Alternatives:** In an ADO-enabled build, the reviewer signs in and explicitly submits accepted items. The browser journal and item's Link block unsafe resubmission. An ambiguous creation result needs reconciliation before retrying; the journal is not a duplicate guarantee across browsers or cleared storage.
 - **Outcome:** A reviewed work list, exported or submitted.
 - **Does not establish:** Export does not mean anything was created in ADO. Undo cannot reverse an external submission.
 
@@ -265,8 +264,8 @@ flowchart LR
 - **Goal:** Keep work safe and portable.
 - **Main flow:**
   1. The author saves through **File > Save as > SecureDesignStudio model (.tma)**.
-  2. Later, the author reopens it with **File > Open** on any machine. Saved definitions travel with the file, so labels and meaning are preserved.
-- **Alternatives:** The browser tab closed unexpectedly; autosave restores the model and its Undo history on reload. The model references definitions this build does not have; they are kept and shown as unresolved.
+  2. Later, the author reopens it with **File > Open** in a compatible build. Saved definitions travel with the file to preserve labels and meaning.
+- **Alternatives:** If browser storage is available, a reload can recover the latest autosaved state and bounded Undo history. Edits not yet saved may be lost, and an embedded standalone model takes precedence over autosave. Unavailable definitions without saved copies remain unresolved rather than being guessed.
 - **Outcome:** A durable `.tma` file and browser recovery.
 - **Does not establish:** Autosave is recovery, not backup. Clearing browser data removes it.
 
@@ -283,7 +282,7 @@ flowchart LR
      - **Standalone HTML** for a self-contained app with the model embedded.
   2. The reviewer keeps the native `.tma` as the editable source.
 - **Outcome:** An artifact suited to the recipient.
-- **Does not establish:** Exports are lossy and are not round-trip formats. Recipients should open standalone HTML files only from trusted sources, because opening one runs its code. Review model contents before sharing.
+- **Does not establish:** TM7, Visio, reports, images and workbooks do not replace the editable native model and can omit information. Standalone HTML embeds the native model, but recipients should open it only from trusted sources because opening it runs code. Review model contents before sharing.
 
 ### UC-16 Customize authentication, classification and communication libraries
 
@@ -292,8 +291,8 @@ flowchart LR
   1. The author opens **Model > Customize authentication**, **Customize classifications** or **Communication Library**.
   2. The author adds, edits, disables or imports definitions.
   3. New choices appear when authoring.
-- **Alternatives:** A definition is referenced by the model; deletion is blocked and its saved meaning is preserved.
-- **Outcome:** Per-browser-profile libraries, with changes undoable.
+- **Alternatives:** Referenced Authentication and Classification entries cannot be deleted; disable them instead. Saved diagram definitions preserve the model's meaning independently of the profile.
+- **Outcome:** Per-browser-profile authoring libraries. Authentication and Classification edits participate in Undo/Redo; Communication Library profile edits do not. Explicitly adopting a communication definition in the diagram is undoable.
 - **Does not establish:** Profile libraries never silently reclassify or rewrite an open model.
 
 ### UC-17 Deploy SDS with organization Custom Libraries
@@ -311,19 +310,19 @@ flowchart LR
 ### UC-18 Design and review with AI (optional)
 
 - **Goal:** Get suggestions that speed up drafting and reviewing.
-- **Preconditions:** An AI-enabled launch (Azure, Claude or Codex) or a configured hosted build, and an active scenario. See [bring your own AI](bring-your-own-ai.md).
+- **Preconditions:** An AI-enabled launch (Azure, Claude or Codex) or a build with an explicitly configured Assistant endpoint. Chat and AI Analysis need an active scenario; **Design with AI** can also start a model when no scenarios exist. See [bring your own AI](bring-your-own-ai.md).
 - **Main flow:**
   1. With **File > Design with AI**, the author describes a system in prose. SDS proposes a diagram, and the author applies it as one undoable change.
   2. In the Design Assistant, the reviewer asks questions (Chat) or runs **AI Analysis**, which returns findings with suggested severities.
   3. The reviewer turns accepted findings into issues or work items.
-- **Alternatives:** **Simulate breach** takes the highest-severity AI finding (requesting an analysis first if needed), builds a path of up to five connected flows near it, and animates that path step by step across the canvas with suggested mitigations. The path is assembled locally from declared flows, so it may differ from the path the AI described. Without a connected flow it reports that it cannot run.
+- **Alternatives:** **Simulate breach** takes the highest-severity AI finding (requesting an analysis first if needed), builds a path of up to five connected flows near it, and animates that path with suggested mitigations. The path is assembled locally, so it may differ from the AI description. With no flows, referenced nodes can still be shown; with no displayable steps, it asks for a connected flow. See [Simulate a breach path](user-guide.md#simulate-a-breach-path).
 - **Outcome:** Drafts and suggestions that a person accepts or rejects.
-- **Does not establish:** AI output is not approval, evidence or a vulnerability scan. Each request sends the active scenario's context to the selected provider.
+- **Does not establish:** AI output is not approval, evidence or a vulnerability scan. Review requests send scenario context to the selected provider; design requests also send the prompt, recent conversation and available catalog choices. Starting a simulation from existing findings does not send another request.
 
 ### UC-19 Collaborate live on one model (optional)
 
 - **Goal:** Edit the same model together in real time.
-- **Preconditions:** A hosted build with collaboration configured. Normal local mode does not offer it.
+- **Preconditions:** A hosted or standalone build with collaboration configured, including a hosted share destination for standalone recipients. Normal local mode does not offer it.
 - **Main flow:**
   1. A peer starts a room and shares the link. The link carries the room ID and an encryption key in the URL fragment.
   2. Other peers open the link and join. Edits merge automatically.
@@ -353,7 +352,9 @@ flowchart LR
 | UC-18 | [`designAssistant.ts`](../src/designAssistant.ts), [`threatModelDesigner.ts`](../src/threatModelDesigner.ts), [`breachSimulation.tsx`](../src/breachSimulation.tsx), [`api/design-assistant`](../api/design-assistant) | `threat-model-designer.test.mjs`, `test:ai:local`, `test:assistant:production` |
 | UC-19 | [`collab/`](../src/collab), [`api/collab-token`](../api/collab-token) | Synthetic Yjs peer cases in `test:browser` |
 
-The [browser test guide](../tests/browser/README.md) lists exact coverage.
+These are related source and test entry points, not proof that every step of
+each workflow has automated coverage. The
+[browser test guide](../tests/browser/README.md) lists exact coverage.
 Automated coverage does not substitute for the human usability protocol it
 describes.
 

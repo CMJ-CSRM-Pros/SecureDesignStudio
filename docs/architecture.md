@@ -1,6 +1,6 @@
 # SecureDesignStudio architecture and design
 
-*Updated: 2026-11-09 - Added the error boundary, model field-type checks and content security policies from the security hardening in #39.*
+*Updated: 2026-11-09 - Reviewed runtime modes, state ownership and recovery against the current implementation.*
 
 This page explains how SecureDesignStudio (SDS) is built. It is meant for
 contributors, maintainers, deployers and reviewers who need to understand the
@@ -11,13 +11,11 @@ the app, see [use cases](use-cases.md). For step-by-step instructions, see the
 This is a design description, not a feature contract. When this page and a
 feature contract (for example the [Authentication Library](authentication-library.md)
 or [Custom Libraries](custom-libraries.md)) disagree, the contract and the
-source are authoritative. Report vulnerabilities through
+source are authoritative. For trust boundaries and residual risks, see the
+[threat model of SDS itself](tool-threat-model.md). Report vulnerabilities through
 [SECURITY.md](../SECURITY.md), not through issues.
 
-The structure follows common architecture-description practice: context,
-containers, components, data, runtime behavior, cross-cutting concepts and
-recorded decisions (similar to the C4 model and arc42). The diagrams use
-Mermaid, which GitHub renders in place.
+The diagrams use Mermaid, which GitHub renders in place.
 
 ## 1. Goals and constraints
 
@@ -27,8 +25,8 @@ Mermaid, which GitHub renders in place.
 | **Offline after first load** | Once dependencies are installed and the page has loaded, editing, Analyze, autosave and local files keep working without a network. |
 | **Opt-in services that fail closed** | Collaboration, the Design Assistant and Azure DevOps (ADO) submission are off unless a build or launcher explicitly configures them. Invalid configuration disables the service instead of falling back to a default. |
 | **Durable, portable models** | The native `.tma` file is the editable source of truth. Saved definitions travel with the model so it reopens with the same meaning on another machine or build. |
-| **Backward compatibility** | Older native files, legacy format names and unfamiliar catalog identifiers remain readable. Stable IDs are never regenerated on open or save. |
-| **One-step Undo** | Every user-visible operation, including bulk imports and AI-applied designs, is a single undoable step. |
+| **Backward compatibility** | Supported older native files, legacy format names and unfamiliar catalog identifiers remain readable. Existing valid IDs are preserved on open and save. |
+| **One-step Undo for compound model edits** | Imports, scenario deletion and AI-applied designs are grouped into single undoable changes. View changes and external writes are not model Undo operations. |
 | **Bounded claims** | The app records design intent and review decisions. It does not inspect deployments, enforce boundaries or certify security or privacy compliance. User-facing text avoids implying otherwise. |
 
 ## 2. System context
@@ -55,7 +53,7 @@ flowchart LR
   sds <--> storage
   sds <--> files
   sds <-. encrypted Yjs updates .-> pubsub
-  sds -. active-scenario context .-> ai
+  sds -. scenario context or design request .-> ai
   sds -. accepted work items .-> ado
   sds -- TM7, VSDX, HTML, XLSX, PNG --> tools
   tools --> recipient
@@ -74,10 +72,15 @@ profile preference or URL cannot change it.
 | Mode | Started by | Backend pieces | Services available |
 |---|---|---|---|
 | Local | `npm run dev` or `Start-SecureDesignStudio.ps1` | Vite dev server on `http://localhost:5173` only (`strictPort`) | None |
-| Local AI | `npm run dev:ai` or `Start-SecureDesignStudio-WithAI.ps1` | Vite plus a local `/api/design-assistant` bridge ([`scripts/local-ai-vite.mjs`](../scripts/local-ai-vite.mjs)). Azure uses the Functions host; Claude and Codex use their CLIs through [`localProviders.ts`](../api/design-assistant/localProviders.ts) | Design Assistant only |
-| Local ADO | `npm run dev:ado` | Vite plus a localhost ADO relay ([`scripts/local-ado-vite.mjs`](../scripts/local-ado-vite.mjs)) | ADO submission only |
+| Local AI with Claude or Codex | `npm run dev:ai:local` after provider setup, or the AI launcher with that provider | Vite plus a local `/api/design-assistant` bridge ([`scripts/local-ai-vite.mjs`](../scripts/local-ai-vite.mjs)); CLIs run through [`localProviders.ts`](../api/design-assistant/localProviders.ts) | Design Assistant only |
+| Local AI with Azure | `npm run dev:ai` or the AI launcher with Azure selected | Vite proxies `/api/design-assistant` to local Azure Functions on port 7071; Functions calls the selected Azure deployment | Design Assistant only |
+| Local ADO | `npm run dev:ado` with an explicitly configured SPA registration | Vite plus a localhost ADO relay ([`scripts/local-ado-vite.mjs`](../scripts/local-ado-vite.mjs)) | ADO submission only |
 | Hosted | `npm run build` (`dist/`) deployed as an Azure Static Web App with [`api/`](../api) Functions | `collab-token`, `design-assistant`, `ado-work-items` Functions | Whatever the selected service configuration enables |
-| Standalone | `npm run build` (`dist-single/index.html`) | None; one self-contained HTML file, which can also embed a model | Collaboration only if a hosted app URL and token endpoint were configured at build time |
+| Standalone | `npm run build` (`dist-single/index.html`) | None; one self-contained HTML file, which can also embed a model | Explicitly configured collaboration and Assistant endpoints may use the network; collaboration also requires a hosted share destination |
+
+The [advanced configuration runtime table](advanced-configuration.md#runtime-modes)
+lists the launcher equivalents and setup requirements. The root launchers
+support Windows, macOS and Linux; the npm scripts remain available directly.
 
 ```mermaid
 flowchart TB
@@ -145,7 +148,7 @@ flowchart TB
 |---|---|---|
 | Bootstrap | Captures the parsed HTML for standalone export before React mounts, loads build-selected Custom Libraries, mounts the app in `StrictMode` inside an error boundary. | [`main.tsx`](../src/main.tsx), [`libraries/bootstrap.ts`](../src/libraries/bootstrap.ts), [`AppErrorBoundary.tsx`](../src/components/AppErrorBoundary.tsx) |
 | Shell and UI state | Layout, theme, inspector placement, autosave interval and other per-browser presentation settings. | [`App.tsx`](../src/App.tsx), [`uiShell.tsx`](../src/uiShell.tsx) |
-| Store | The only owner of the working document, selection, filters, active scenario, Undo/Redo history, profile libraries, collaboration session and every mutating operation. | [`store.tsx`](../src/store.tsx) |
+| Store | Owns the working document, selection, filters, active scenario and Undo/Redo history; coordinates profile libraries, collaboration and document mutations. | [`store.tsx`](../src/store.tsx) |
 | Views | React components that read from the store and call its operations. Graph editing uses `@xyflow/react`; the sequence view renders the same scenario as a call timeline. Switching views never changes the document. | [`components/`](../src/components) |
 | Domain logic | Pure functions and classes: model types and catalog lookups, node policy, deterministic analysis, DFD role and scope resolution, data propagation and semantic diff. | [`types.ts`](../src/types.ts), [`policy.ts`](../src/policy.ts), [`IssueManager.ts`](../src/IssueManager.ts), [`dfdSemantics.ts`](../src/dfdSemantics.ts), [`dataPropagation.ts`](../src/dataPropagation.ts), [`diff.ts`](../src/diff.ts) |
 | Libraries and catalogs | Shipped JSON catalogs plus profile-editable Authentication, Classification and Communication libraries, and build-selected Custom Libraries. | [`src/data/`](../src/data), [`authentication.ts`](../src/authentication.ts), [`classificationLibrary.ts`](../src/classificationLibrary.ts), [`protocols.ts`](../src/protocols.ts), [`libraries/`](../src/libraries) |
@@ -153,7 +156,7 @@ flowchart TB
 | Persistence | Browser autosave, native file wrapper, and standalone HTML self-embedding. | [`autosave.ts`](../src/autosave.ts), [`documentFormat.ts`](../src/documentFormat.ts), [`embeddedDoc.ts`](../src/embeddedDoc.ts) |
 | Collaboration | Mirrors the document into a Yjs document, encrypts updates with a room key, and relays them through Web PubSub. | [`collab/`](../src/collab), [`api/collab-token`](../api/collab-token) |
 | Design Assistant | Builds a bounded, scenario-scoped request; validates responses against strict schemas; applies AI designs as one undoable change; animates an attack path built from connected flows near the top AI finding. | [`designAssistant.ts`](../src/designAssistant.ts), [`threatModelDesigner.ts`](../src/threatModelDesigner.ts), [`breachSimulation.tsx`](../src/breachSimulation.tsx), [`api/design-assistant`](../api/design-assistant), [`shared/`](../shared) |
-| Work submission | Local work-item queue, CSV and Excel templates, and explicit ADO submission with a durable browser journal that prevents duplicate creation. | [`workItems.ts`](../src/workItems.ts), [`workSubmission.ts`](../src/workSubmission.ts), [`adoClient.ts`](../src/adoClient.ts), [`adoExport.ts`](../src/adoExport.ts), [`shared/adoContract.ts`](../shared/adoContract.ts), [`api/ado-work-items`](../api/ado-work-items) |
+| Work submission | Local work-item queue, CSV and Excel templates, and explicit ADO submission with a durable browser journal that blocks unsafe retries, including ambiguous creation results. It is not a cross-browser duplicate guarantee. | [`workItems.ts`](../src/workItems.ts), [`workSubmission.ts`](../src/workSubmission.ts), [`adoClient.ts`](../src/adoClient.ts), [`adoExport.ts`](../src/adoExport.ts), [`shared/adoContract.ts`](../shared/adoContract.ts), [`api/ado-work-items`](../api/ado-work-items) |
 
 ## 5. Data model
 
@@ -210,9 +213,12 @@ saved-definition rules.
 
 ## 6. State, history and persistence
 
-- **Single store.** `StoreProvider` owns the document in React state and
-  exposes typed operations (`createNode`, `attachDataToEdge`, `analyze`,
-  `importJson` and so on). Components never mutate the document directly.
+- **Single store.** `StoreProvider` keeps the document and its history in one
+  immutable state cell. A ref applies transitions in action order before
+  publishing React render snapshots, so batched renders do not lose queued
+  edits. Typed operations (`createNode`, `attachDataToEdge`, `analyze`,
+  `importJson` and so on) own mutations; components do not mutate the document
+  directly.
 - **Snapshot-based Undo.** A mutating operation records the previous full
   document before it changes anything. Compound operations (imports, scenario
   deletion, AI-applied designs, Analyze) compute the new document first and
@@ -222,18 +228,20 @@ saved-definition rules.
   collaboration peers) passes through `normalizeDoc` in
   [`store.tsx`](../src/store.tsx). It validates shapes, keeps unfamiliar but
   valid identifiers, and rejects or repairs malformed values without
-  regenerating stable IDs. Fields the UI renders as text must be strings, and
-  positions, sizes and flow numbers must be finite numbers; any other value
-  is replaced with a default, so one crafted field cannot crash rendering.
+  regenerating valid IDs. Text and numeric checks default malformed values
+  in the fields they cover; strict collections reject invalid input before
+  replacing the working document. These checks are not a guarantee that every
+  possible rendering failure has been eliminated.
 - **Render failure recovery.** If rendering still fails, `AppErrorBoundary`
   replaces the blank page with a recovery screen: reload, download the
-  autosaved model, or discard it after confirmation. A damaged autosave would
+  autosave, or discard it after confirmation. A damaged autosave would
   otherwise crash every reload. The screen never shows the error text, and the
   boundary does not log it, because either can contain model content.
 - **Autosave.** The document, Undo/Redo stacks and view are written to
   `localStorage` (`secure-design-studio:autosave:v1`) on a debounce the user
-  can set (0.5 to 15 seconds). On quota errors, saving retries with shorter
-  history (25, 10, 5, then 0 entries). Autosave is recovery, not a backup.
+  can set (0.5 to 15 seconds). Persistence starts with at most 25 entries in
+  each history stack, then retries with 10, 5 and 0 if saving fails. Unavailable
+  or full browser storage can prevent recovery; autosave is not a backup.
 - **Profile libraries.** Authentication, Classification and Communication
   libraries, the AI provider choice and ADO configuration are per-browser
   profile settings in separate `localStorage` keys. They supply authoring
@@ -305,8 +313,8 @@ sequenceDiagram
   participant Panel as Design Assistant panel
   participant API as design-assistant endpoint
   participant LLM as Selected AI provider
-  User->>Panel: Ask, AI Analysis, Design with AI or Simulate breach
-  Panel->>Panel: build active-scenario context, enforce size budget
+  User->>Panel: Ask, AI Analysis or Design with AI
+  Panel->>Panel: build scenario context or initial design request, enforce size budget
   Panel->>API: POST mode, question, context
   API->>API: validate request, wrap context as untrusted data
   API->>LLM: system prompt + bounded context
@@ -322,7 +330,8 @@ sequenceDiagram
 
 | Adapter | Direction | Notes |
 |---|---|---|
-| Native `.tma` and node catalog JSON | Open, save | Lossless editable source of truth. |
+| Native `.tma` | Open, save | Editable source of truth; preserves the supported document and view. |
+| Node catalog JSON | Import, export | Portable document-local node-type definitions, not a complete model. |
 | Microsoft Threat Modeling Tool `.tm7` | Import, export | Each TMT tab maps to a scenario. Elements are deduplicated by TMT GUID. XML with a `DOCTYPE` or entity declaration is rejected before parsing. Lossy; see [TM7 compatibility](tm7-compatibility.md). |
 | Scenario/DFD JSON (`scenarios`, `dfds`) | Import, replaces the model | IDs derive from source GUIDs so reimports stay stable. [`tmcImport.ts`](../src/tmcImport.ts). |
 | Privacy Manager inventory `.pmexp` | Import, merges into an existing scenario | Map, create or ignore each inventory service; one Undo step. [`privacyManagerImport.ts`](../src/privacyManagerImport.ts). |
@@ -396,7 +405,7 @@ See [Custom Libraries](custom-libraries.md) for the package contract.
   requires a same-origin HTTPS request carrying the user's own ADO bearer
   token. The collaboration token route is anonymous and issues 60-minute
   tokens scoped to one room ([`staticwebapp.config.json`](../staticwebapp.config.json)).
-- **Content security policy on every HTML surface.** The hosted app sends a
+- **Content security policy on production HTML surfaces.** The hosted app sends a
   content security policy that allows scripts only from its own origin and
   forbids framing, plus `X-Content-Type-Options: nosniff` and
   `Referrer-Policy: no-referrer` ([`staticwebapp.config.json`](../staticwebapp.config.json)).
@@ -404,9 +413,12 @@ See [Custom Libraries](custom-libraries.md) for the package contract.
   by SHA-256 hash ([`single-file-build.mjs`](../scripts/single-file-build.mjs)),
   and the build fails if it cannot place that tag before the first script.
   Exported review reports allow no scripts or outside resources at all.
-- **Explicit external effects.** Nothing contacts a service implicitly. Joining
-  a room, sending an AI request and submitting to ADO are separate user
-  actions, and Undo cannot reverse an external write.
+  The local Vite development page has no CSP; see the
+  [tool threat model](tool-threat-model.md) for the remaining trust boundaries.
+- **Explicit external effects.** Optional services require configuration.
+  Opening a room link joins that configured room; sending an AI request and
+  submitting to ADO are separate user actions. Normal local mode enables none
+  of these services, and Undo cannot reverse an external write.
 - **Accessibility and layout.** Controls are keyboard reachable with visible
   focus, and automated checks cover 320 to 1366 CSS-pixel widths in light and
   dark themes. Human usability and screen-reader passes are separate,
@@ -418,10 +430,10 @@ See [Custom Libraries](custom-libraries.md) for the package contract.
 
 | Decision | Rationale | Consequences |
 |---|---|---|
-| Browser-only app with no required backend | Reviews often involve sensitive designs; local use needs no account, tenant or data egress. | All logic is client-side. Optional services are added at the edges and stay off by default. |
+| Browser-only app with no required backend | Reviews often involve sensitive designs; local use needs no account, tenant or data egress. | Core modeling runs in the browser. Optional server-side services stay off by default. |
 | Shared entities with per-scenario membership | A service appears in many workflows; renaming it once must update all of them. | Call order, data attachments, retention and comments live on scenarios. Deleting a scenario must not delete shared members still used elsewhere. |
-| Full-document snapshots for Undo | Simple, correct one-step Undo for any compound change, including imports and AI designs. | Memory and autosave size grow with model size. History is capped at 100 entries, and persisted history is trimmed on quota errors. |
-| One `normalizeDoc` gate for every inbound document | Files, autosave and collaboration peers are equally untrusted, so one gate keeps their validation identical. | New fields must be added to normalization, or they are dropped or rejected on load. |
+| Full-document snapshots for Undo | Supports grouped Undo for compound model changes, including imports and AI designs. | Memory and autosave size grow with model size. In-memory history is capped at 100 entries per stack; autosave keeps at most 25 and retries with less if saving fails. |
+| One `normalizeDoc` gate for every inbound document | Files, autosave and collaboration peers are equally untrusted, so they share model validation. | Define and check how each new field survives normalization and older readers. |
 | Rule-keyed finding reconciliation | Reviewer status and replies must survive repeated Analyze runs. | Rule `kind` strings are a compatibility contract. Renaming one requires retirement handling, as done for the legacy production-identity kinds. |
 | Saved definitions travel with the model | Models move between people, profiles and builds with different libraries. | Files are larger. Conflicts between saved and installed definitions are shown to the user, not auto-resolved. |
 | Build-time service selection that fails closed | A model, link or preference must not be able to redirect data to a service. | Changing services requires a rebuild or relaunch. Invalid configuration disables the feature. |
@@ -440,13 +452,13 @@ requires.
 
 ## 14. Known limits and maintenance hotspots
 
-- `store.tsx` (about 5,500 lines) and `components/Toolbar.tsx` (about 3,300
-  lines) hold most operations and commands. Changes there have a wide blast
-  radius; keep the matching browser suites close.
+- `store.tsx` and `components/Toolbar.tsx` hold most operations and commands.
+  Changes there affect many workflows; keep the matching browser suites close.
 - Older builds can drop newer metadata when they write to a shared model or
   room. Use matching current builds for every collaboration peer and keep an
   editable `.tma` backup.
-- External exports are lossy drawings or reports, not round-trip formats.
+- External-format drawings and reports can omit model information. Native
+  `.tma` and the model embedded in standalone HTML retain the editable document.
 - The tool documents design intent. It does not discover services, inspect
   live configuration or replace a threat model of SDS itself.
 
@@ -459,3 +471,4 @@ requires.
 - [Model compatibility](model-compatibility.md), [catalog snapshots](catalog-snapshots.md)
   and [TM7 compatibility](tm7-compatibility.md)
 - [Contributing](contributing.md) and the [browser test guide](../tests/browser/README.md)
+- [Threat model of SDS itself](tool-threat-model.md)
