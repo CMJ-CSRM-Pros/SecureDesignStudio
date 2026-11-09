@@ -1,6 +1,6 @@
 # SecureDesignStudio user guide
 
-*Updated: 2026-11-04 - Described Claude Code and Codex alongside Azure as Design Assistant providers.*
+*Updated: 2026-11-09 - Clarified AI providers and Simulate breach behavior.*
 
 **Contents**
 
@@ -56,7 +56,8 @@ The launcher is in the repository root, so there is no folder to hunt for. It
 verifies your prerequisites before doing anything: if Node.js, npm, or a
 supported version is missing, it names what is missing and the exact command
 that installs it, instead of failing with a raw error. It then installs
-dependencies on first run and starts the app.
+dependencies on first run, repairs missing or incompatible direct dependencies
+after updates, and starts the app.
 
 Open **http://localhost:5173/**. Keep that terminal running; Ctrl+C stops it.
 Port 5173 is strict: the launcher checks it first and, when it is busy, reports
@@ -80,8 +81,7 @@ or Codex CLI signed in with your own eligible subscription. Everything in this
 guide except Chat, AI Analysis, Simulate breach and Design with AI works
 without it.
 
-Beyond the setup above, every provider needs a provider choice; the other
-requirements apply only to Azure:
+Choose a provider at startup. The remaining setup differs by provider:
 
 | Requirement | Notes |
 |---|---|
@@ -97,15 +97,18 @@ az login
 .\Start-SecureDesignStudio-WithAI.ps1 -Provider Azure
 ```
 
-For Azure, add `-VerifyEndpoint` to probe the deployment before starting, which
-reports a missing role, a blocked IP, or a wrong deployment name as a clear
-message rather than an opaque failure in the browser.
+For Azure, add `-VerifyEndpoint` to probe the deployment before starting. The
+probe sends an inference request and may incur usage. It reports a missing
+role, a blocked IP, or a wrong deployment name as a clear message rather than
+an opaque failure in the browser.
 
 For Claude or Codex, install and sign in to its CLI (`claude auth login` or
 `codex login`), then start with `-Provider Claude` or `-Provider Codex`. No
 Azure resource, Azure CLI or Functions Core Tools is needed. Add
-`-DiagnoseProvider` to check CLI readiness without starting servers. Omit
-`-Provider` for an interactive menu.
+`-DiagnoseProvider` to check CLI readiness without starting servers or making
+an inference request. Omit `-Provider` for an interactive menu. Successful
+sign-in alone does not establish executable discovery or isolation support;
+see [CLI startup troubleshooting](bring-your-own-ai.md#troubleshoot-subscription-cli-startup).
 
 To create an Azure OpenAI instance and secure it properly — disabling key
 authentication, restricting network access, and assigning the data-plane role —
@@ -123,8 +126,10 @@ git pull --ff-only
 .\Start-SecureDesignStudio.ps1
 ```
 
-The launcher reinstalls dependencies only when `node_modules` is absent. After
-a lockfile change, run `npm ci` once yourself. Resolve Git conflicts or
+The launcher checks installed direct dependencies and runs `npm ci` when
+`node_modules` is absent or packages are missing or incompatible. For a
+lockfile-only update to otherwise compatible packages, run `npm ci` yourself
+to restore the exact locked versions. Resolve Git conflicts or
 non-fast-forward updates with the branch owner; do not discard edits or switch
 a shared preview branch.
 
@@ -677,6 +682,43 @@ provider information cannot trap findings in a thin strip. **Go to AI findings**
 jumps past those controls. Chat keeps its own scrolling area and composer when
 space permits; in short panels its content scrolls together. Scroll or Tab
 through finding actions to reach the final result.
+
+#### Simulate a breach path
+
+**Simulate breach**, beside **Analyze model** in AI Analysis, plays a
+suggested attack path across the active scenario's diagram to help explain a
+finding. Like AI Analysis, it needs a selected scenario and a configured
+provider. A new AI Analysis request sends active-scenario context to that
+provider; replaying existing findings does not.
+
+- If AI Analysis already has findings for the active scenario, the simulation
+  reuses them. Otherwise it sends one AI Analysis request that asks for the
+  most plausible path from an entry point to sensitive data.
+- It takes the finding with the highest suggested severity and builds the path
+  in the browser. Starting from a flow the finding references (or else a flow
+  touching a referenced node, or else the scenario's first flow), it follows
+  connected flows upstream and downstream, up to five flows. The path is a
+  chain of declared flows near the finding, not necessarily the exact path the
+  AI described. If the scenario has no flows, only referenced nodes are shown.
+  If nothing can be shown, the panel asks you to add a connected flow.
+- The canvas zooms to the path and highlights each node and flow in turn,
+  about once a second. The panel lists the steps; select one to focus it on
+  the canvas. A step whose element has since been removed is unavailable. Use
+  **Pause**, **Resume**, **Restart** or **Close** to control playback.
+- When playback finishes, the panel names the last step under **Target
+  reached** and lists up to four **Recommended protections**, taken from the
+  recommendations of all current AI findings in severity order. **Create
+  *N* work items** adds one Pending review work item per protection with only
+  its Description filled in, closes the simulation and opens Work. Add a Name,
+  type and severity before accepting them.
+
+The score beside the title, such as 76/100, is a fixed value for the finding's
+suggested severity (critical 92, high 76, medium 54, low 28), not a calculated
+risk score. Labels such as **Live attack path** and **Target reached** describe
+the animation. The path is an AI-assisted hypothesis over declared flows, not
+an observed attack, a tested exploit or proof that the target is reachable.
+The animation and playback state are not saved with the model. Work items you
+create from its protections are saved normally.
 
 #### Move the whole inspector
 

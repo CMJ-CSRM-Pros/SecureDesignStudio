@@ -2,6 +2,7 @@ import "./collaboration-loader.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { join } from "node:path";
 import * as Y from "yjs";
 import { documentFixture, IDS, PROMOTED_METHOD_IDS, historicalAuthenticationDefinitions } from "./catalog-fixtures.mjs";
 
@@ -151,7 +152,7 @@ test("libraries: selected directory reads do not auto-discover optional content 
   const missing = await readLibraryCandidates(JSON.stringify(["missing-example-library"]), process.cwd());
   assert.equal(missing[0].source, "Configured library 1");
   assert.ok(missing[0].error);
-  const loaded = await readLibraryCandidates(JSON.stringify(["examples\\custom-libraries\\example"]), process.cwd());
+  const loaded = await readLibraryCandidates(JSON.stringify([join("examples", "custom-libraries", "example")]), process.cwd());
   assert.equal(loaded[0].value.id, "example");
   const hosted = libraryBuildBridge(loaded, false);
   assert.equal(hosted.delivery.mode, "same-origin");

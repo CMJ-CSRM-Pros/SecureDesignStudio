@@ -1,10 +1,15 @@
 {
   "name": "secure-design-studio",
   "private": true,
-  "version": "1.0.41",
+  "version": "1.0.48",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
+    "start": "node scripts/launch.mjs",
+    "start:ai": "node scripts/launch.mjs --ai",
     "dev:ado": "vite --mode ado",
     "setup:ai": "node scripts/configure-local-ai.mjs",
     "dev:ai": "npm run setup:ai && npm --prefix api run build && concurrently --kill-others --names web,api-build,api \"vite --mode ai\" \"npm --prefix api run watch\" \"npm --prefix api run start\"",

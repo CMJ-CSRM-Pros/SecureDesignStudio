@@ -10,6 +10,8 @@ or library configuration:
   root license into built/exported HTML.
 - `configure-local-ai.mjs`: setup for the separately selected local AI workflow.
 - `launcher-common.ps1`: shared Windows launcher prerequisite checks.
+- `launch.mjs`: cross-platform launcher behind `npm run start`/`start:ai` and
+  the POSIX `start-securedesignstudio*.sh` wrappers.
 
 Use the [contributor guide](../docs/contributing.md) and
 [advanced configuration](../docs/advanced-configuration.md). Model files do not

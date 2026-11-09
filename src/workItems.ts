@@ -111,7 +111,7 @@ export function normalizeWorkItem(value: unknown): PsWorkItem {
       ? source.id
       : uid("wi"),
     description: typeof source.description === "string" ? source.description : "",
-    link: DANGEROUS_SCHEME_RE.test(rawLink) ? "" : rawLink,
+    link: DANGEROUS_SCHEME_RE.test(rawLink.replace(/[\u0000-\u0020]/g, "")) ? "" : rawLink,
     title: source.title === undefined ? "" : source.title,
     decision: source.decision === undefined ? "pending" : source.decision,
   };

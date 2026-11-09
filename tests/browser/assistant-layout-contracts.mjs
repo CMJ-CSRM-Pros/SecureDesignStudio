@@ -35,6 +35,10 @@ async function assistantLayout(page, content) {
 export async function exerciseAnalysisLayout({ page, observations }, { width, height }) {
   await page.setViewportSize({ width, height });
   await page.getByRole("tab", { name: /^Findings\b/ }).click();
+  if (width <= 640) {
+    await until(() => page.getByRole("button", { name: "Restore inspector size", exact: true })
+      .getAttribute("aria-expanded").then(value => value === "true"), "Narrow Findings inspector finishes expanding");
+  }
   const analysis = page.locator(".ps-assistant-analysis");
   observations.initialAnalysis = await bounds(analysis);
   await analysis.waitFor({ state: "visible" });

@@ -45,7 +45,7 @@ test("build dependencies: standalone inlining removes vulnerable dependencies an
   for (const [, pkg] of quotes) assert.equal(pkg.version, "1.12.0");
   for (const prefix of ["", "./"]) {
     const bundle = {
-      "index.html": { type: "asset", fileName: "index.html", source: `<script type="module" src="${prefix}app.js"></script><link href="${prefix}app.css">` },
+      "index.html": { type: "asset", fileName: "index.html", source: `<head><script type="module" src="${prefix}app.js"></script><link href="${prefix}app.css"></head>` },
       "app.js": { type: "chunk", fileName: "app.js", code: 'console.log("</script></SCRIPT><!-- __VITE_PRELOAD__");' },
       "app.css": { type: "asset", fileName: "app.css", source: 'body{color:red}/* </style> */' },
     };
@@ -64,7 +64,7 @@ test("build dependencies: standalone inlining removes vulnerable dependencies an
   const context = { error(message) { throw new Error(message); } };
   assert.throws(() => plugin.generateBundle.call(context, {}, {}), /did not emit HTML/);
   assert.throws(() => plugin.generateBundle.call(context, {}, {
-    "index.html": { type: "asset", fileName: "index.html", source: "<html></html>" },
+    "index.html": { type: "asset", fileName: "index.html", source: "<html><head></head></html>" },
     "app.js": { type: "chunk", fileName: "app.js", code: "void 0;" },
   }), /not inlined/);
   const config = {};

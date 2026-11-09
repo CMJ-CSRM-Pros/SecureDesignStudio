@@ -40,6 +40,7 @@ async function readBadges(page) {
     ["node", '.react-flow__node-process[data-id="n_api"]'],
     ["edge", '.ps-edge-label[data-edge-id="e_request"]'],
   ]) {
+    await page.locator(selector).waitFor({ state: "attached" });
     counts[name] = await page.locator(selector).locator(".ps-comment-badge, .ps-issue-badge")
       .evaluateAll(elements => elements.map(element => element.title).sort());
   }

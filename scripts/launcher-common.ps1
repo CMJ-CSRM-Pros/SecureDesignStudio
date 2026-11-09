@@ -525,8 +525,8 @@ function Assert-PortFree {
     exit 1
 }
 
-# Install dependencies on first run. npm ci is reproducible and matches the
-# lockfile, which is what a fresh clone needs.
+# Reuse healthy installs; restore missing or incompatible direct dependencies
+# from the lockfile after updates or interrupted installations.
 function Install-ProjectDependencies {
     param(
         [string]$RelativePath = ".",
@@ -534,9 +534,22 @@ function Install-ProjectDependencies {
     )
 
     $modulesPath = if ($RelativePath -eq ".") { "node_modules" } else { Join-Path $RelativePath "node_modules" }
-    if (Test-Path -LiteralPath $modulesPath) { return }
+    if (Test-Path -LiteralPath $modulesPath) {
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            if ($RelativePath -eq ".") {
+                npm ls --depth=0 --json >$null 2>$null
+            } else {
+                npm --prefix $RelativePath ls --depth=0 --json >$null 2>$null
+            }
+            $dependenciesHealthy = $LASTEXITCODE -eq 0
+        } finally { $ErrorActionPreference = $previous }
+        if ($dependenciesHealthy) { return }
+        Write-SetupStep "$Label dependencies are missing or incompatible; restoring from package-lock.json."
+    }
 
-    Write-SetupStep "Installing $Label dependencies (first run only; this can take a few minutes)..."
+    Write-SetupStep "Installing $Label dependencies (this can take a few minutes)..."
 
     if ($RelativePath -eq ".") {
         npm ci
