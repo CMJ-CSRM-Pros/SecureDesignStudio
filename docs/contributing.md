@@ -93,4 +93,5 @@ Thank you to our contributors
 - Krishnan Shankar (MSFT)
 - Aman Khabanda (MSFT)
 - Abhinav Chawla (MSFT)
+- Rosomak ([@rosomak-sh](https://github.com/rosomak-sh)) - runtime, security and build-tooling contributions
 - Christopher Jeffords ([@CMJ-CSRM-Pros](https://github.com/CMJ-CSRM-Pros)) - architecture, use cases and breach-simulation documentation
