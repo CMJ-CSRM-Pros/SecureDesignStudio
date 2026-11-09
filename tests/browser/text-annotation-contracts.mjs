@@ -257,14 +257,14 @@ export function registerTextAnnotationContracts({ getHarness, exportModel }) {
       const sourceEditor = page.getByLabel("Annotation text", { exact: true });
       assert.equal(await sourceEditor.inputValue(), "First plain note\n\n Ω", "The textarea displays the browser-normalized newline representation");
       assert.equal(await page.getByRole("button", { name: "Apply text", exact: true }).isDisabled(), true);
-      await sourceEditor.press("Control+End");
+      await sourceEditor.press(process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End");
       await sourceEditor.pressSequentially("!");
       await page.getByRole("button", { name: "Apply text", exact: true }).click();
       assert.equal((await savedDoc(page)).textAnnotations[0].text, "First plain note\r\n\r\n Ω!", "Real typing preserves the imported CRLF convention");
       await page.getByRole("button", { name: "Undo", exact: true }).click();
       assert.deepEqual(await savedDoc(page), before);
       await annotationElement(page, "a_first").locator(".ps-text-annotation").click();
-      await annotationElement(page, "a_second").locator(".ps-text-annotation").click({ modifiers: ["Control"] });
+      await annotationElement(page, "a_second").locator(".ps-text-annotation").click({ modifiers: ["ControlOrMeta"] });
       assert.equal(await page.locator(".ps-text-annotation.selected").count(), 2);
       await page.keyboard.press("Delete");
       const deleted = await savedDoc(page);
