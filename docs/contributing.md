@@ -17,6 +17,10 @@ collaboration. Do not stop another user's listener or silently choose a new
 port. The optional AI workflow is separate; see
 [advanced configuration](advanced-configuration.md).
 
+For an overview of the components, data model and design decisions, start
+with [architecture and design](architecture.md); [use cases](use-cases.md)
+maps each workflow to its source and tests.
+
 Before changing behavior, inspect the current source and existing tests.
 Preserve stable IDs, scenario ownership, saved definitions, old-file
 compatibility and one-step Undo. Keep private data, credentials and real
@@ -26,6 +30,7 @@ customer/service exports out of fixtures.
 
 | Surface | Command |
 |---|---|
+| Documentation only | Check links, anchors, examples and implementation claims; parse changed Mermaid diagrams. No unrelated runtime build is needed. |
 | Frontend runtime, dependencies or build configuration | `npm run build` (typecheck, normal and standalone output) |
 | Model, import/export, catalogs or pure helpers | `npm run test:runtime` |
 | UI and current application behavior | `npm run test:browser` (regression and automated usability union) |
@@ -88,3 +93,5 @@ Thank you to our contributors
 - Krishnan Shankar (MSFT)
 - Aman Khabanda (MSFT)
 - Abhinav Chawla (MSFT)
+- Rosomak ([@rosomak-sh](https://github.com/rosomak-sh)) - runtime, security and build-tooling contributions
+- Christopher Jeffords ([@CMJ-CSRM-Pros](https://github.com/CMJ-CSRM-Pros)) - architecture, use cases and breach-simulation documentation
