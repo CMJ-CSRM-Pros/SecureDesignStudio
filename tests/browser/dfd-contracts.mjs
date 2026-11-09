@@ -882,7 +882,7 @@ export function registerDfdContracts({ getHarness, exportModel }) {
       assert.deepEqual((await exportModel(page)).doc, expectedWithReason("synthetic-owner"));
 
       await reason.focus();
-      await reason.press("Control+A");
+      await reason.press("ControlOrMeta+A");
       await reason.press("Backspace");
       await history("Undo");
       await assertEditor("synthetic-owner");
@@ -892,7 +892,7 @@ export function registerDfdContracts({ getHarness, exportModel }) {
       assert.deepEqual((await exportModel(page)).doc, before.doc, "Redo reapplies deletion without hiding the editor");
 
       await reason.pressSequentially("one continuous reason");
-      await reason.press("Control+A");
+      await reason.press("ControlOrMeta+A");
       await reason.press("Backspace");
       await history("Undo");
       await assertEditor("one continuous reason");
@@ -908,7 +908,7 @@ export function registerDfdContracts({ getHarness, exportModel }) {
       await reason.pressSequentially("erase");
       await page.getByRole("textbox", { name: "Title", exact: true }).focus();
       await reason.focus();
-      await reason.press("End");
+      await reason.press(process.platform === "darwin" ? "Meta+ArrowRight" : "End");
       for (let i = 0; i < 5; i++) await reason.press("Backspace");
       await history("Undo");
       await assertEditor("erase");
@@ -984,7 +984,7 @@ export function registerDfdContracts({ getHarness, exportModel }) {
       });
       await reason.pressSequentially("first-owner");
       const firstHistory = await readHistory("first-owner");
-      await reason.press("Control+A");
+      await reason.press("ControlOrMeta+A");
       assert.deepEqual(await reason.evaluate(element => ({
         start: element.selectionStart, end: element.selectionEnd, focused: document.activeElement === element,
       })), { start: 0, end: 11, focused: true });
@@ -1297,7 +1297,7 @@ export function registerDfdContracts({ getHarness, exportModel }) {
       const role = page.getByRole("combobox", { name: "DFD role", exact: true });
       assert.equal(await role.inputValue(), "legacy");
       await role.focus();
-      await role.press("End");
+      await role.press("e");
       await role.press("Enter");
       assert.equal(await role.inputValue(), "ExternalInteractor");
       assert.match(await page.locator('.react-flow__node-process[data-id="n_api"]').getAttribute("aria-label"), /External Interactor/);

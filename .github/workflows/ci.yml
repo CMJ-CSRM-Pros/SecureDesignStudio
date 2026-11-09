@@ -85,12 +85,8 @@ jobs:
       - name: Runtime tests
         run: npm run test:runtime
 
-      # ARM Linux has no preinstalled supported Chrome/Edge channel. Its build,
-      # runtime and launcher checks remain required; browser coverage runs on
-      # Windows, macOS and x64 Linux, without downloading a browser.
-      - name: Browser contract tests
-        if: matrix.browser != ''
-        run: npm run test:browser
+      - name: Browser harness safety tests
+        run: npm run test:browser:unit
 
       - name: POSIX launcher smoke test
         if: runner.os != 'Windows'
@@ -106,6 +102,23 @@ jobs:
           kill "$launcher" 2>/dev/null || true
           cat launcher.log
           test "$ok" = 1
+
+      # ARM Linux has no preinstalled supported Chrome/Edge channel. Its build,
+      # runtime and launcher checks remain required; browser coverage runs on
+      # Windows, macOS and x64 Linux, without downloading a browser.
+      - name: Browser contract tests
+        if: matrix.browser != ''
+        env:
+          SDS_TEST_OUTPUT_DIR: ${{ runner.temp }}/sds-browser-contracts
+        run: npm run test:browser
+
+      - name: Upload browser evidence
+        if: always() && matrix.browser != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-${{ matrix.os }}
+          path: ${{ runner.temp }}/sds-browser-contracts
+          retention-days: 7
 
       - name: Upload standalone build
         if: matrix.os == 'ubuntu-latest'

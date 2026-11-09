@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { until } from "./harness.mjs";
-import { modelFixture } from "./fixture.mjs";
+import { autosaveKey, modelFixture } from "./fixture.mjs";
 import { sampleExpectations } from "../authentication/sample-expectations.mjs";
 
 const directory = new URL("../../samples/", import.meta.url);
@@ -37,6 +37,28 @@ export function registerSampleContracts({ getHarness, exportModel,
         assert.equal(await picker.inputValue(), input.view.activeScenarioId);
         const close = page.getByRole("button", { name: "Close inspector", exact: true });
         if (await close.isVisible()) await close.click();
+        // Auto-sized process nodes use the host's system font, not the sample author's font.
+        await picker.selectOption("");
+        await page.waitForFunction(({ count, key }) => {
+          window.dispatchEvent(new Event("pagehide"));
+          const doc = JSON.parse(localStorage.getItem(key) ?? "null")?.doc;
+          const elements = [...document.querySelectorAll(".react-flow__node-process")];
+          return elements.length === count && elements.every(element => {
+            const node = doc?.nodes.find(node => node.id === element.dataset.id);
+            return element.offsetWidth > 0 && element.offsetHeight > 0 &&
+              node?.size?.width === element.offsetWidth && node?.size?.height === element.offsetHeight;
+          });
+        }, { count: expected.nodes.length, key: autosaveKey });
+        const hostSizes = await page.locator(".react-flow__node-process").evaluateAll(elements =>
+          Object.fromEntries(elements.map(element => [element.dataset.id,
+            { width: element.offsetWidth, height: element.offsetHeight }])));
+        for (const node of expected.nodes) {
+          assert.ok(hostSizes[node.id], `${node.id}: independent host measurement required`);
+          node.size = hostSizes[node.id];
+        }
+        assert.deepEqual((await exportModel(page)).doc, expected,
+          "Initial import preserves every authored field and independently measured host geometry");
+        await picker.selectOption(input.view.activeScenarioId);
         const output = process.env.SDS_TEST_OUTPUT_DIR ?? mkdtempSync(path.join(os.tmpdir(), "sds-samples-"));
         observations.screenshots = [];
         observations.geometryViolations = [];
@@ -84,7 +106,11 @@ export function registerSampleContracts({ getHarness, exportModel,
             };
           });
           assert.deepEqual(geometry.nodes.map(node => node.id).sort(), [...scenario.nodeIds].sort());
-          for (const node of geometry.nodes) observations.measuredNodes[node.id] = { width: node.width, height: node.height };
+          for (const node of geometry.nodes) {
+            observations.measuredNodes[node.id] = { width: node.width, height: node.height };
+            assert.deepEqual(observations.measuredNodes[node.id], hostSizes[node.id],
+              `${scenario.name}: ${node.id} retains its independently measured dimensions`);
+          }
           assert.deepEqual(geometry.labels.map(label => label.id).sort(), [...scenario.edgeIds].sort());
           const screenshot = path.join(output, `${file}-${scenario.id}.png`);
           await page.screenshot({ path: screenshot, fullPage: true });
@@ -173,7 +199,7 @@ export function registerSampleContracts({ getHarness, exportModel,
             const box = boxes[i];
             assert.ok(!(Math.min(box.right, other.right) - Math.max(box.x, other.x) > 1 &&
               Math.min(box.bottom, other.bottom) - Math.max(box.y, other.y) > 1),
-            `Reference Show all: ${box.id} overlaps ${other.id}`);
+            `Reference Show all: ${box.id} overlaps ${other.id}: ${JSON.stringify({ box, other })}`);
           }
         }
         await picker.selectOption(input.view.activeScenarioId);
