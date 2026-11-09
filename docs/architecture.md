@@ -1,6 +1,6 @@
 # SecureDesignStudio architecture and design
 
-*Updated: 2026-11-04 - First version: system context, runtime modes, components, data model, key flows and design decisions.*
+*Updated: 2026-11-09 - Added the error boundary, model field-type checks and content security policies from the security hardening in #39.*
 
 This page explains how SecureDesignStudio (SDS) is built. It is meant for
 contributors, maintainers, deployers and reviewers who need to understand the
@@ -120,7 +120,7 @@ page documents each variable.
 
 ```mermaid
 flowchart TB
-  main[main.tsx<br/>capture pristine HTML, bootstrap libraries]
+  main[main.tsx<br/>capture pristine HTML, bootstrap libraries,<br/>AppErrorBoundary]
   lib[LibraryProvider<br/>libraries/]
   app[App.tsx shell]
   store[StoreProvider<br/>store.tsx]
@@ -143,7 +143,7 @@ flowchart TB
 
 | Layer | Responsibility | Main sources |
 |---|---|---|
-| Bootstrap | Captures the parsed HTML for standalone export before React mounts, loads build-selected Custom Libraries, mounts the app in `StrictMode`. | [`main.tsx`](../src/main.tsx), [`libraries/bootstrap.ts`](../src/libraries/bootstrap.ts) |
+| Bootstrap | Captures the parsed HTML for standalone export before React mounts, loads build-selected Custom Libraries, mounts the app in `StrictMode` inside an error boundary. | [`main.tsx`](../src/main.tsx), [`libraries/bootstrap.ts`](../src/libraries/bootstrap.ts), [`AppErrorBoundary.tsx`](../src/components/AppErrorBoundary.tsx) |
 | Shell and UI state | Layout, theme, inspector placement, autosave interval and other per-browser presentation settings. | [`App.tsx`](../src/App.tsx), [`uiShell.tsx`](../src/uiShell.tsx) |
 | Store | The only owner of the working document, selection, filters, active scenario, Undo/Redo history, profile libraries, collaboration session and every mutating operation. | [`store.tsx`](../src/store.tsx) |
 | Views | React components that read from the store and call its operations. Graph editing uses `@xyflow/react`; the sequence view renders the same scenario as a call timeline. Switching views never changes the document. | [`components/`](../src/components) |
@@ -222,7 +222,14 @@ saved-definition rules.
   collaboration peers) passes through `normalizeDoc` in
   [`store.tsx`](../src/store.tsx). It validates shapes, keeps unfamiliar but
   valid identifiers, and rejects or repairs malformed values without
-  regenerating stable IDs.
+  regenerating stable IDs. Fields the UI renders as text must be strings, and
+  positions, sizes and flow numbers must be finite numbers; any other value
+  is replaced with a default, so one crafted field cannot crash rendering.
+- **Render failure recovery.** If rendering still fails, `AppErrorBoundary`
+  replaces the blank page with a recovery screen: reload, download the
+  autosaved model, or discard it after confirmation. A damaged autosave would
+  otherwise crash every reload. The screen never shows the error text, and the
+  boundary does not log it, because either can contain model content.
 - **Autosave.** The document, Undo/Redo stacks and view are written to
   `localStorage` (`secure-design-studio:autosave:v1`) on a debounce the user
   can set (0.5 to 15 seconds). On quota errors, saving retries with shorter
@@ -324,7 +331,7 @@ sequenceDiagram
 | HTML review report | Export only | Escaped text, allow-listed links and a restrictive content security policy. |
 | PNG diagram image | Export only | The current scenario's diagram. |
 | Excel `.xlsx` workbook and ADO CSV | Export only | Text-only cells, no formulas or macros; long text split instead of truncated. |
-| Standalone HTML | Export, open | The single-file app with the model embedded as escaped JSON. Open only trusted files, because opening one runs its code. |
+| Standalone HTML | Export, open | The single-file app with the model embedded as JSON in which every `<` is escaped, so model text cannot end or alter the script block. A content security policy allows only the build's own inline scripts, pinned by hash. Open only trusted files, because opening one runs its code. |
 
 ## 9. Analysis engine
 
@@ -389,6 +396,14 @@ See [Custom Libraries](custom-libraries.md) for the package contract.
   requires a same-origin HTTPS request carrying the user's own ADO bearer
   token. The collaboration token route is anonymous and issues 60-minute
   tokens scoped to one room ([`staticwebapp.config.json`](../staticwebapp.config.json)).
+- **Content security policy on every HTML surface.** The hosted app sends a
+  content security policy that allows scripts only from its own origin and
+  forbids framing, plus `X-Content-Type-Options: nosniff` and
+  `Referrer-Policy: no-referrer` ([`staticwebapp.config.json`](../staticwebapp.config.json)).
+  Standalone files carry a policy in a meta tag that pins each inline script
+  by SHA-256 hash ([`single-file-build.mjs`](../scripts/single-file-build.mjs)),
+  and the build fails if it cannot place that tag before the first script.
+  Exported review reports allow no scripts or outside resources at all.
 - **Explicit external effects.** Nothing contacts a service implicitly. Joining
   a room, sending an AI request and submitting to ADO are separate user
   actions, and Undo cannot reverse an external write.
