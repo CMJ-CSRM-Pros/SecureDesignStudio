@@ -375,11 +375,11 @@ test("providers: Claude uses the public system prompt flag rather than the hidde
     assert.ok(h.calls.find(call => call.args.includes("status")).args.includes(flag));
   }
   const unsupported = harness({ SDS_LOCAL_AI: "1", SDS_AI_PROVIDER: "claude" }, { unsupportedIsolation: true });
-  const status = await unsupported.load("api\\design-assistant\\localProviders.ts").localProviderStatus("claude");
+  const status = await unsupported.load(join("api", "design-assistant", "localProviders.ts")).localProviderStatus("claude");
   assert.equal(status.available, false);
   assert.equal(unsupported.calls.some(call => call.args.includes("-p")), false);
   const missing = harness({}, { missingSystemPrompt: true });
-  const missingStatus = await missing.load("api\\design-assistant\\localProviders.ts").localProviderStatus("claude");
+  const missingStatus = await missing.load(join("api", "design-assistant", "localProviders.ts")).localProviderStatus("claude");
   assert.equal(missingStatus.available, false);
   assert.match(missingStatus.message, /--system-prompt/);
   assert.equal(missing.calls.some(call => call.args.includes("status") || call.args.includes("-p")), false);
@@ -388,7 +388,7 @@ test("providers: Claude uses the public system prompt flag rather than the hidde
 test("providers: Claude bounds the combined Windows system prompt and schema arguments before inference", async () => {
   for (const size of [10_000, 31_000]) {
     const h = harness();
-    const request = h.load("api\\design-assistant\\localProviders.ts")
+    const request = h.load(join("api", "design-assistant", "localProviders.ts"))
       .runLocalProvider("claude", "x".repeat(size), "Synthetic", { type: "object" });
     if (size === 10_000) {
       assert.deepEqual(JSON.parse(await request), result);

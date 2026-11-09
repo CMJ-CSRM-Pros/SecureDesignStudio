@@ -38,11 +38,14 @@ test("regression: standalone build pins its inline script by hash in a CSP meta 
   const meta = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html);
   assert.ok(meta, "CSP meta tag present");
   assert.ok(html.indexOf(meta[0]) < html.indexOf("<script"), "CSP precedes the first script");
-  const inline = /<script[^>]*>([\s\S]*?)<\/script>/.exec(html)[1];
-  const parsed = inline.replace(/\r\n?/g, "\n");
-  const hash = `'sha256-${createHash("sha256").update(parsed).digest("base64")}'`;
   const csp = directives(meta[1]);
-  assert.deepEqual(csp.get("script-src"), [hash]);
+  for (const tag of ["script", "SCRIPT", "sCrIpT"]) {
+    const variant = html.replaceAll("<script", `<${tag}`).replaceAll("</script", `</${tag}`);
+    const inline = /<script[^>]*>([\s\S]*?)<\/script>/i.exec(variant)[1];
+    const parsed = inline.replace(/\r\n?/g, "\n");
+    const hash = `'sha256-${createHash("sha256").update(parsed).digest("base64")}'`;
+    assert.deepEqual(csp.get("script-src"), [hash]);
+  }
   assert.deepEqual(csp.get("default-src"), ["'none'"]);
   assert.deepEqual(csp.get("object-src"), ["'none'"]);
   assert.equal(csp.has("frame-ancestors"), false, "ignored in meta tags");
@@ -92,6 +95,6 @@ test("regression: a charset-looking string inside inlined JS is never the CSP in
   const meta = cspMeta(html);
   assert.ok(meta, "CSP meta tag present");
   assert.ok(html.indexOf(meta[0]) < html.indexOf("<script"), "CSP precedes the first script");
-  const inline = /<script[^>]*>([\s\S]*?)<\/script>/.exec(html)[1];
+  const inline = /<script[^>]*>([\s\S]*?)<\/script>/i.exec(html)[1];
   assert.equal(inline, code, "inlined script text unchanged");
 });
