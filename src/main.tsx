@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { capturePristineHtml } from "./embeddedDoc";
 import { bootstrapLibraries } from "./libraries/bootstrap";
 import { LibraryProvider } from "./libraries/LibraryProvider";
@@ -17,9 +18,11 @@ if (!root) throw new Error("Missing #root");
 bootstrapLibraries(__SDS_LIBRARY_DELIVERY__, __PS_LOCAL_ONLY__, location.href).then(registry => {
   createRoot(root).render(
     <React.StrictMode>
-      <LibraryProvider registry={registry}>
-        <App />
-      </LibraryProvider>
+      <AppErrorBoundary>
+        <LibraryProvider registry={registry}>
+          <App />
+        </LibraryProvider>
+      </AppErrorBoundary>
     </React.StrictMode>
   );
 });

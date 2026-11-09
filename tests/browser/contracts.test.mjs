@@ -68,6 +68,474 @@ registerSampleContracts({ getHarness: () => harness, exportModel });
 registerDesignerContracts({ getHarness: () => harness });
 registerAiGuidanceContracts({ getHarness: () => harness, exportModel });
 
+test("regression: Work queue saves decisions and ADO configuration without local network submission", async () => {
+  await harness.run("regression: Work queue and ADO configuration", async ({ page }) => {
+    const input = modelFixture();
+    input.doc.workItems = [{ id: "wi_ado_queue", description: "Legacy description retained", link: "" }];
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "work-queue.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    const panel = page.locator("#ps-inspector-panel-work");
+    const work = panel.getByRole("region", { name: "Work item 1", exact: true });
+    assert.equal(await work.getByLabel("Description", { exact: true }).inputValue(), "Legacy description retained");
+    assert.equal(await work.getByLabel("Submission decision").inputValue(), "pending");
+    assert.equal(await work.getByLabel("Severity", { exact: true }).inputValue(), "");
+    await work.getByLabel("Name", { exact: true }).fill("=Review synthetic ownership");
+    assert.equal(await work.getByLabel("Work item type", { exact: true }).inputValue(), "");
+    assert.equal(await work.getByLabel("Weakness Type", { exact: true }).inputValue(), "");
+    await work.getByLabel("Work item type", { exact: true }).selectOption("Bug");
+    await work.getByLabel("Weakness Type", { exact: true }).fill("Work-specific weakness");
+    await work.getByLabel("Severity", { exact: true }).selectOption("2 - High");
+    await panel.getByRole("button", { name: "+ Add work item", exact: true }).click();
+    await panel.getByRole("region", { name: "Work item 2", exact: true }).getByLabel("Severity", { exact: true })
+      .selectOption("1 - Critical");
+    await work.getByLabel("Submission decision").selectOption("accepted");
+    assert.equal(await panel.getByRole("button", { name: "Submit accepted (1)", exact: true }).isDisabled(), true);
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    assert.doesNotMatch(await panel.innerText(), /service\s*tree/i);
+    const configEditor = panel.getByLabel("ADO configuration (JSON)", { exact: true });
+    assert.equal(JSON.parse(await configEditor.inputValue()).inventoryId, "");
+    for (const label of ["Organization URL", "Project", "Work item type", "Inventory ID", "Reviewer", "SDS field template (JSON defaults)"]) {
+      assert.equal(await panel.locator(".ps-work-config").getByLabel(label, { exact: true }).count(), 0, "No competing split configuration controls");
+    }
+    const configuration = {
+      organizationUrl: "https://dev.azure.com/synthetic", project: "Synthetic Project",
+      inventoryId: "not-a-guid", reviewer: "reviewer@example.invalid",
+      descriptionField: "System.Description", defaults: { "System.Tags": "synthetic" },
+    };
+    await configEditor.fill(JSON.stringify(configuration));
+    assert.equal(await panel.getByLabel("Entra tenant ID", { exact: true }).count(), 0);
+    assert.equal(await panel.getByLabel("Entra SPA client ID", { exact: true }).count(), 0);
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    assert.match(await panel.getByRole("alert").innerText(), /Inventory ID/);
+    assert.equal(await page.evaluate(() => localStorage.getItem("secure-design-studio:ado-configuration:v1")), null);
+    configuration.inventoryId = "33333333-3333-4333-8333-333333333333";
+    await configEditor.fill(JSON.stringify(configuration));
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    assert.equal(await panel.getByRole("button", { name: "Connect to Azure DevOps", exact: true }).isDisabled(), true);
+    const savedConfig = await page.evaluate(() => JSON.parse(localStorage.getItem("secure-design-studio:ado-configuration:v1")));
+    assert.equal(savedConfig.project, "Synthetic Project");
+    assert.equal(savedConfig.inventoryId, "33333333-3333-4333-8333-333333333333");
+    assert.equal(savedConfig.reviewer, "reviewer@example.invalid");
+    assert.equal(Object.hasOwn(savedConfig, "tenantId"), false);
+    assert.equal(Object.hasOwn(savedConfig, "clientId"), false);
+    assert.equal(Object.hasOwn(savedConfig, "workItemType"), false);
+    await work.getByLabel("Submission decision").selectOption("rejected");
+    assert.equal(await panel.getByRole("button", { name: "Submit accepted (0)", exact: true }).isDisabled(), true);
+    const output = await exportModel(page);
+    assert.equal(output.doc.workItems[0].title, "=Review synthetic ownership");
+    assert.equal(output.doc.workItems[0].decision, "rejected");
+    assert.deepEqual(output.doc.workItems.map(item => item.severity), ["2 - High", "1 - Critical"]);
+    assert.equal(output.doc.workItems[0].workItemType, "Bug");
+    assert.equal(output.doc.workItems[0].weaknessType, "Work-specific weakness");
+    assert.equal(output.doc.workItems[1].workItemType, undefined);
+    assert.equal(JSON.stringify(output).includes("22222222-2222-4222-8222-222222222222"), false,
+      "ADO profile settings never enter native model exports");
+    for (const value of [savedConfig.inventoryId, savedConfig.reviewer]) {
+      assert.equal(JSON.stringify(output).includes(value), false, "Destination context is profile-local");
+    }
+    await page.evaluate(() => {
+      const key = "secure-design-studio:ado-configuration:v1";
+      const legacy = JSON.parse(localStorage.getItem(key));
+      localStorage.setItem(key, JSON.stringify({
+        ...legacy, tenantId: "11111111-1111-4111-8111-111111111111",
+        clientId: "22222222-2222-4222-8222-222222222222",
+        workItemType: "Task",
+        defaults: { ...legacy.defaults, "Custom.WeaknessType": "Old global weakness", "Custom.RiskRating": 2,
+          "Microsoft.VSTS.Common.Priority": 2, "Microsoft.VSTS.CMMI.Blocked": "No", "Microsoft.VSTS.CMMI.RootCause": "Unknown" },
+      }));
+    });
+    await page.reload();
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    assert.deepEqual(JSON.parse(await configEditor.inputValue()), savedConfig);
+    assert.equal(await panel.getByLabel("Entra SPA client ID", { exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("secure-design-studio:ado-configuration:v1")).tenantId),
+      "11111111-1111-4111-8111-111111111111", "Reading an old profile does not silently rewrite storage");
+    assert.equal(await work.getByLabel("Work item type", { exact: true }).inputValue(), "Bug");
+    assert.equal(await work.getByLabel("Weakness Type", { exact: true }).inputValue(), "Work-specific weakness");
+    assert.equal(await panel.getByRole("region", { name: "Work item 2", exact: true }).getByLabel("Work item type", { exact: true }).inputValue(), "",
+      "The old global type is not copied onto unclassified work");
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("secure-design-studio:ado-configuration:v1"))),
+      savedConfig, "Explicit save migrates old profile IDs away without changing the destination");
+    assert.equal(await page.locator("#ps-inspector-panel-work").getByRole("region", { name: "Work item 1" })
+      .getByLabel("Submission decision").inputValue(), "rejected");
+    assert.equal(await page.locator("#ps-inspector-panel-work").getByRole("region", { name: "Work item 1" })
+      .getByLabel("Severity", { exact: true }).inputValue(), "2 - High");
+    await page.evaluate(() => localStorage.setItem("secure-design-studio:ado-submission-journal:v1", JSON.stringify({
+      wi_ado_queue: { operationId: "synthetic_recovery", destinationKey: "synthetic/task",
+        attemptedAt: 1, status: "submitted", adoId: 99,
+        url: "https://dev.azure.com/synthetic/project/_workitems/edit/99" },
+    })));
+    await page.reload();
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    await page.locator("#ps-inspector-panel-work").getByRole("button", { name: "Keep recorded result in model", exact: true }).click();
+    const recovered = await exportModel(page);
+    assert.equal(recovered.doc.workItems[0].submission.adoId, 99);
+    assert.equal(recovered.doc.workItems[0].link, "https://dev.azure.com/synthetic/project/_workitems/edit/99");
+  });
+});
+
+test("regression: Work exports offline ADO creation CSV and the approved Excel template without submitting", async () => {
+  await harness.run("regression: ADO CSV and Excel import exports", async ({ page }) => {
+    const input = modelFixture();
+    input.doc.workItems = [
+      { id: "wi_ado_export", title: 'Complete "finding", title', description: "Full rationale & recommendation\nOriginal references",
+        severity: "2 - High", workItemType: "Bug", weaknessType: "Bug-specific weakness", decision: "accepted", link: "" },
+      { id: "wi_pending", title: "Pending must not export", description: "", link: "" },
+      { id: "wi_rejected", title: "Rejected must not export", description: "", decision: "rejected", link: "" },
+      { id: "wi_linked", title: "Linked must not export", description: "", decision: "accepted", link: "https://example.invalid/already-created" },
+    ];
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "ado-export.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    const panel = page.locator("#ps-inspector-panel-work");
+    let downloadCount = 0;
+    page.on("download", () => downloadCount++);
+    await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).click();
+    assert.match(await panel.getByRole("alert").innerText(), /Save.*ADO configuration/);
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    const defaults = {
+      "System.AreaPath": "Synthetic Project\\Security", "System.AssignedTo": "owner@example.invalid",
+      "System.Tags": "Synthetic review", "Custom.ReviewTeam": "Synthetic review team",
+    };
+    const configuration = {
+      organizationUrl: "https://dev.azure.com/synthetic", project: "Synthetic Project",
+      inventoryId: "33333333-3333-4333-8333-333333333333", reviewer: "reviewer@example.invalid",
+      defaults,
+    };
+    const editor = panel.getByLabel("ADO configuration (JSON)", { exact: true });
+    await editor.fill(JSON.stringify(configuration));
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).click();
+    assert.match(await panel.getByRole("alert").innerText(), /Custom.TeamID/);
+    assert.equal(downloadCount, 0, "Missing sources cannot produce a partial import file");
+    await editor.fill(JSON.stringify({ ...configuration, defaults: { ...defaults, "Custom.TeamID": "44444444-4444-4444-8444-444444444444" } }));
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    const before = await exportModel(page);
+    const readDownload = async (label, filename) => {
+      const event = page.waitForEvent("download");
+      await panel.getByRole("button", { name: label, exact: true }).click();
+      const download = await event;
+      assert.equal(download.suggestedFilename(), filename);
+      const chunks = [];
+      for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+      return Buffer.concat(chunks);
+    };
+    const csv = (await readDownload("Export ADO CSV", "secure-design-studio-ado-import.csv")).toString("utf8");
+    const headers = ["Title", "Tags", "ServiceTree ID", "Review Team", "Work Item Type",
+      "Review Type", "Area Path", "Weakness Type", "Team ID", "Security Reviewer", "Description", "Severity"];
+    assert.equal(csv.split("\r\n")[0], "\uFEFF" + headers.map(value => `"${value}"`).join(","));
+    assert.ok(csv.includes('"Complete ""finding"", title"'));
+    assert.ok(csv.includes("Full rationale &amp; recommendation<br>Original references"));
+    assert.doesNotMatch(csv, /must not export|owner@example.invalid|Created Date|Assigned To|Submission status/);
+    const bytes = await readDownload("Export ADO Excel template", "secure-design-studio-ado-import.xlsx");
+    const files = unzipSync(bytes);
+    const sheet = new DOMParser().parseFromString(strFromU8(files["xl/worksheets/sheet1.xml"]), "application/xml");
+    assert.equal(sheet.getElementsByTagName("f").length, 0);
+    const rows = [...sheet.getElementsByTagName("row")].map(row => [...row.getElementsByTagName("c")].map(cell => {
+      assert.equal(cell.getAttribute("t"), "inlineStr");
+      return cell.getElementsByTagName("t")[0]?.textContent ?? "";
+    }));
+    assert.deepEqual(rows[0], ["ID", "Title", "Assigned To", "State", "Tags", "ServiceTree ID", "Review Team",
+      "Created Date", "Work Item Type", "Review Type", "Area Path",
+      "Weakness Type", "Team ID", "Security Reviewer", "Description", "Severity"]);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[1][0], "");
+    assert.equal(rows[1][3], "");
+    assert.equal(rows[1][7], "");
+    assert.equal(rows[1][2], "owner@example.invalid");
+    assert.equal(rows[1][8], "Bug");
+    assert.equal(rows[1][11], "Bug-specific weakness");
+    assert.equal(rows[1][13], "reviewer@example.invalid");
+    assert.equal(rows[1][15], "2 - High");
+    assert.deepEqual((await exportModel(page)).doc, before.doc, "Exports do not mutate authored Work or create a receipt");
+    assert.equal(await page.evaluate(() => localStorage.getItem("secure-design-studio:ado-submission-journal:v1")), null);
+    await panel.getByRole("button", { name: "+ Add work item", exact: true }).click();
+    const task = panel.getByRole("region", { name: "Work item 5", exact: true });
+    await task.getByLabel("Name", { exact: true }).fill("Task follow-up");
+    await task.getByLabel("Description", { exact: true }).fill("Task-specific details");
+    await task.getByLabel("Work item type", { exact: true }).selectOption("Task");
+    await task.getByLabel("Weakness Type", { exact: true }).fill("Task-specific weakness");
+    await task.getByLabel("Severity", { exact: true }).selectOption("4 - Low");
+    await task.getByLabel("Submission decision").selectOption("accepted");
+    const mixedCsv = (await readDownload("Export ADO CSV", "secure-design-studio-ado-import.csv")).toString("utf8").trimEnd().split("\r\n");
+    assert.equal(mixedCsv.length, 3);
+    assert.ok(mixedCsv[1].includes(',"Bug",') && mixedCsv[1].includes(',"Bug-specific weakness",'));
+    assert.ok(mixedCsv[2].includes(',"Task",') && mixedCsv[2].includes(',"Task-specific weakness",'));
+    const mixedFiles = unzipSync(await readDownload("Export ADO Excel template", "secure-design-studio-ado-import.xlsx"));
+    const mixedSheet = new DOMParser().parseFromString(strFromU8(mixedFiles["xl/worksheets/sheet1.xml"]), "application/xml");
+    const mixedRows = [...mixedSheet.getElementsByTagName("row")].slice(1).map(row =>
+      [...row.getElementsByTagName("t")].map(cell => cell.textContent));
+    assert.deepEqual(mixedRows.map(row => [row[8], row[11], row[15]]),
+      [["Bug", "Bug-specific weakness", "2 - High"], ["Task", "Task-specific weakness", "4 - Low"]]);
+    await panel.getByRole("region", { name: "Work item 1", exact: true }).getByLabel("Link", { exact: true })
+      .fill("https://dev.azure.com/synthetic/_workitems/edit/123");
+    await task.getByLabel("Link", { exact: true }).fill("https://dev.azure.com/synthetic/_workitems/edit/124");
+    await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).click();
+    assert.match(await panel.getByRole("alert").innerText(), /Accept at least one unlinked/);
+    assert.equal(downloadCount, 6, "Only the single/mixed CSV and XLSX exports and two native model snapshots were downloaded");
+  });
+});
+
+test("regression: ADO export failures stay visible beside the buttons and explain excluded work", async () => {
+  await harness.run("regression: visible ADO export feedback", async ({ page }) => {
+    const input = modelFixture();
+    input.doc.workItems = Array.from({ length: 18 }, (_, index) => ({
+      id: `wi_feedback_${index}`, title: `Synthetic finding ${index + 1}`,
+      description: "Complete synthetic finding", severity: "2 - High", workItemType: "Bug",
+      weaknessType: "Individual weakness", decision: "pending", link: "",
+    }));
+    input.doc.workItems[0] = { ...input.doc.workItems[0], decision: "accepted", link: "https://example.invalid/already-tracked" };
+    input.doc.workItems[1].decision = "rejected";
+    input.doc.workItems[2] = { ...input.doc.workItems[2], decision: "accepted", submission: {
+      operationId: "synthetic_unknown", destinationKey: "synthetic", status: "unknown", attemptedAt: 1,
+    } };
+    delete input.doc.workItems[17].severity;
+    delete input.doc.workItems[17].workItemType;
+    delete input.doc.workItems[17].weaknessType;
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "export-feedback.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    const panel = page.locator("#ps-inspector-panel-work");
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    const configuration = {
+      organizationUrl: "https://dev.azure.com/synthetic", project: "Synthetic Project",
+      inventoryId: "33333333-3333-4333-8333-333333333333", reviewer: "reviewer@example.invalid",
+      defaults: {
+        "System.AreaPath": "Synthetic Project", "Custom.ReviewTeam": "Synthetic review team",
+        "Custom.TeamID": "44444444-4444-4444-8444-444444444444",
+      },
+    };
+    await panel.getByLabel("Load ADO configuration JSON", { exact: true }).setInputFiles({
+      name: "configuration.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(configuration)),
+    });
+    await panel.getByText("JSON loaded into the editor. Save ADO configuration to apply it.", { exact: true }).waitFor();
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    let downloadCount = 0;
+    page.on("download", () => downloadCount++);
+    const assertFailureVisible = async (pattern, ownerPanel = panel) => {
+      const alert = ownerPanel.getByRole("alert").filter({ hasText: pattern });
+      await alert.waitFor();
+      await alert.evaluate(element => new Promise(resolve => {
+        const view = element.ownerDocument.defaultView;
+        view.requestAnimationFrame(() => view.requestAnimationFrame(resolve));
+      }));
+      const box = await alert.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        return { y: rect.y, height: rect.height, viewportHeight: element.ownerDocument.defaultView.innerHeight };
+      });
+      assert.ok(box.y >= 0 && box.y + box.height <= box.viewportHeight,
+        `Export feedback must be in the viewport after clicking a bottom action: ${JSON.stringify(box)}`);
+      assert.equal(await alert.evaluate(element => element === element.ownerDocument.activeElement), true,
+        "Keyboard focus must announce the actionable export failure");
+    };
+    for (const label of ["Export ADO CSV", "Export ADO Excel template"]) {
+      if (label === "Export ADO Excel template") await page.setViewportSize({ width: 320, height: 720 });
+      await panel.getByRole("button", { name: label, exact: true }).click();
+      await assertFailureVisible(/Accept at least one unlinked/);
+      assert.equal(downloadCount, 0);
+    }
+    await page.setViewportSize({ width: 1366, height: 900 });
+    const readiness = panel.getByRole("status", { name: "ADO work selection", exact: true });
+    assert.match(await readiness.innerText(), /0 selected.*15 pending review.*1 rejected.*1 linked.*1 recorded/);
+    const last = panel.getByRole("region", { name: "Work item 18", exact: true });
+    await last.getByLabel("Submission decision").selectOption("accepted");
+    await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).click();
+    await assertFailureVisible(/Work item 18.*Work item type/);
+    await last.getByLabel("Work item type", { exact: true }).selectOption("Task");
+    await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).click();
+    await assertFailureVisible(/Work item 18.*Severity/);
+    assert.equal(downloadCount, 0, "Incomplete accepted work does not produce a misleading import file");
+    await last.getByLabel("Severity", { exact: true }).selectOption("2 - High");
+    assert.equal(await last.getByLabel("Weakness Type", { exact: true }).inputValue(), "", "Blank optional weakness is allowed");
+    const checkDownload = async (owner, ownerPanel, label, extension) => {
+      const event = owner.waitForEvent("download");
+      await ownerPanel.getByRole("button", { name: label, exact: true }).click();
+      const download = await event;
+      assert.equal(download.suggestedFilename(), `secure-design-studio-ado-import.${extension}`);
+      const chunks = [];
+      for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+      const bytes = Buffer.concat(chunks);
+      if (extension === "csv") {
+        const lines = bytes.toString("utf8").trimEnd().split("\r\n");
+        assert.equal(lines.length, 2, "Only the one accepted, unlinked, complete item is exported");
+        assert.ok(lines[1].startsWith('"Synthetic finding 18",'));
+        assert.equal(lines[1].split(",")[7], '""', "The synthetic CSV row has an empty Weakness Type cell");
+      } else {
+        const files = unzipSync(bytes);
+        const sheet = new DOMParser().parseFromString(strFromU8(files["xl/worksheets/sheet1.xml"]), "application/xml");
+        const rows = [...sheet.getElementsByTagName("row")];
+        assert.equal(rows.length, 2);
+        assert.equal(rows[1].getElementsByTagName("t")[1].textContent, "Synthetic finding 18");
+        assert.equal(rows[1].getElementsByTagName("t")[11].textContent, "");
+      }
+      await ownerPanel.getByRole("status", { name: "ADO export result", exact: true }).filter({ hasText: /1 work item/ }).waitFor();
+    };
+    for (const [label, extension] of [["Export ADO CSV", "csv"], ["Export ADO Excel template", "xlsx"]]) {
+      await checkDownload(page, panel, label, extension);
+    }
+    assert.equal(downloadCount, 2);
+    assert.match(await readiness.innerText(), /1 selected/);
+    const linked = panel.getByRole("region", { name: "Work item 1", exact: true });
+    assert.equal(await linked.getByLabel("Link", { exact: true }).inputValue(), input.doc.workItems[0].link,
+      "Repair must not clear existing tracker links to bypass duplicate guards");
+    assert.match(await linked.innerText(), /existing.*tracker|existing.*work item/i);
+    assert.match(await linked.innerText(), /not.*destination/i);
+    const popupEvent = page.context().waitForEvent("page");
+    await page.getByRole("combobox", { name: "Inspector display", exact: true }).selectOption("window");
+    const child = await popupEvent;
+    child.on("download", () => downloadCount++);
+    const childPanel = child.locator("#ps-inspector-panel-work");
+    const childLast = childPanel.getByRole("region", { name: "Work item 18", exact: true });
+    await childLast.getByLabel("Submission decision").selectOption("pending");
+    await childPanel.getByRole("button", { name: "Export ADO CSV", exact: true }).click();
+    await assertFailureVisible(/Accept at least one unlinked/, childPanel);
+    await childLast.getByLabel("Submission decision").selectOption("accepted");
+    for (const [label, extension] of [["Export ADO CSV", "csv"], ["Export ADO Excel template", "xlsx"]]) {
+      await checkDownload(child, childPanel, label, extension);
+    }
+    assert.equal(downloadCount, 4, "Both file formats work from the owning popup document too");
+    await child.close();
+  });
+});
+
+test("regression: Work configuration JSON loads, saves and downloads atomically without using stale settings", async () => {
+  await harness.run("regression: single ADO configuration JSON", async ({ page }) => {
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    const panel = page.locator("#ps-inspector-panel-work");
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    const editor = panel.getByLabel("ADO configuration (JSON)", { exact: true });
+    const save = panel.getByRole("button", { name: "Save ADO configuration", exact: true });
+    const input = panel.getByLabel("Load ADO configuration JSON", { exact: true });
+    const configuration = {
+      organizationUrl: "https://dev.azure.com/synthetic", project: "Synthetic Project",
+      inventoryId: "33333333-3333-4333-8333-333333333333", reviewer: "reviewer@example.invalid",
+      descriptionField: "System.Description",
+      defaults: { "System.AreaPath": "Synthetic Project\\Area", "System.IterationPath": "Synthetic Project" },
+    };
+    const key = "secure-design-studio:ado-configuration:v1";
+    const stored = () => page.evaluate(key => localStorage.getItem(key), key);
+    await editor.fill(JSON.stringify(configuration));
+    assert.equal(await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).isDisabled(), true);
+    await save.click();
+    const original = await stored();
+    assert.deepEqual(JSON.parse(original), configuration, "Pasting the complete configuration saves every section together");
+    await editor.fill('{"private":"never-echo-in-error",');
+    await save.click();
+    assert.match(await panel.getByRole("alert").innerText(), /JSON is invalid/);
+    assert.doesNotMatch(await panel.getByRole("alert").innerText(), /never-echo/);
+    assert.equal(await stored(), original);
+    await editor.fill(JSON.stringify({ ...configuration, project: "Other Project" }));
+    await save.click();
+    assert.match(await panel.getByRole("alert").innerText(), /System.AreaPath.*Other Project/);
+    assert.equal(await stored(), original, "A foreign Area Path cannot replace the saved destination");
+    await editor.fill(JSON.stringify({
+      ...configuration, defaults: { ...configuration.defaults, "System.IterationPath": "Other Project" },
+    }));
+    await save.click();
+    assert.match(await panel.getByRole("alert").innerText(), /System.IterationPath/);
+    assert.equal(await stored(), original);
+    await editor.fill(JSON.stringify(configuration));
+    await save.click();
+    const beforeLoad = await editor.inputValue();
+    await input.setInputFiles({
+      name: "defaults-only.json", mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(configuration.defaults)),
+    });
+    await panel.getByRole("alert").filter({ hasText: /complete ADO configuration/ }).waitFor();
+    assert.equal(await editor.inputValue(), beforeLoad, "An invalid file does not discard the editor draft");
+    const changed = {
+      ...configuration, project: "Other Project",
+      defaults: { "System.AreaPath": "Other Project", "System.IterationPath": "Other Project" },
+    };
+    await input.setInputFiles({
+      name: "complete-configuration.json", mimeType: "application/json",
+      buffer: Buffer.from("\uFEFF" + JSON.stringify(changed)),
+    });
+    await panel.getByText("JSON loaded into the editor. Save ADO configuration to apply it.", { exact: true }).waitFor();
+    assert.deepEqual(JSON.parse(await editor.inputValue()), changed);
+    assert.equal(await stored(), original, "Load is draft-only, not an implicit destination switch");
+    for (const label of ["Export ADO CSV", "Export ADO Excel template", "Connect to Azure DevOps", "Submit accepted (0)"]) {
+      assert.equal(await panel.getByRole("button", { name: label, exact: true }).isDisabled(), true);
+    }
+    await panel.getByText(/Unsaved configuration JSON/).waitFor();
+    await page.getByRole("tab", { name: /^Data\b/ }).click();
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    assert.deepEqual(JSON.parse(await editor.inputValue()), changed, "The JSON draft survives tab switches");
+    const downloadEvent = page.waitForEvent("download");
+    await panel.getByRole("button", { name: "Download JSON", exact: true }).click();
+    const download = await downloadEvent;
+    assert.equal(download.suggestedFilename(), "secure-design-studio-ado-config.json");
+    const chunks = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+    assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString("utf8")), changed);
+    assert.equal(await stored(), original, "Downloading the edited JSON does not apply it");
+    await save.click();
+    assert.deepEqual(JSON.parse(await stored()), changed);
+    assert.equal(await panel.getByRole("button", { name: "Export ADO CSV", exact: true }).isEnabled(), true);
+    await page.reload();
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    assert.deepEqual(JSON.parse(await editor.inputValue()), changed);
+    const broken = '{"project":"recover-me",';
+    await page.evaluate(({ key, broken }) => localStorage.setItem(key, broken), { key, broken });
+    await page.reload();
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    assert.equal(await editor.inputValue(), broken, "Malformed saved JSON remains available for repair");
+    assert.equal(await stored(), broken, "Recovery does not overwrite the stored source");
+    await editor.fill(JSON.stringify(changed));
+    await save.click();
+    assert.equal(await panel.getByRole("alert").count(), 0);
+    assert.deepEqual(JSON.parse(await stored()), changed);
+  });
+});
+
+test("usability: Work JSON configuration and individual severity remain reachable at 320px", async () => {
+  await harness.run("usability: narrow Work JSON configuration and severity", async ({ page }) => {
+    const input = modelFixture();
+    input.doc.workItems = [{ id: "wi_narrow", title: "Synthetic finding", description: "Synthetic description", link: "" }];
+    await page.locator("#ps-file-open-input").setInputFiles({
+      name: "work-narrow.tma", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(input)),
+    });
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    const panel = page.locator("#ps-inspector-panel-work");
+    await panel.getByText("ADO configuration", { exact: true }).click();
+    const editor = panel.getByLabel("ADO configuration (JSON)", { exact: true });
+    await editor.fill(JSON.stringify({
+      organizationUrl: "https://dev.azure.com/synthetic", project: "Synthetic Project",
+      inventoryId: "33333333-3333-4333-8333-333333333333", reviewer: "reviewer@example.invalid", defaults: {},
+    }, null, 2));
+    await editor.press("Tab");
+    assert.equal(await panel.getByRole("button", { name: "Load JSON file", exact: true }).evaluate(element => element === element.ownerDocument.activeElement), true);
+    await panel.getByRole("button", { name: "Save ADO configuration", exact: true }).click();
+    const severity = panel.getByLabel("Severity", { exact: true });
+    const type = panel.getByLabel("Work item type", { exact: true });
+    const weakness = panel.getByLabel("Weakness Type", { exact: true });
+    await type.selectOption("Task");
+    await weakness.fill("Task classification");
+    await severity.selectOption("4 - Low");
+    await severity.selectOption("");
+    assert.equal(await severity.inputValue(), "", "The author can explicitly clear a pending finding's severity");
+    for (const control of [editor, panel.getByRole("button", { name: "Load JSON file", exact: true }),
+      panel.getByRole("button", { name: "Save ADO configuration", exact: true }),
+      panel.getByRole("button", { name: "Download JSON", exact: true }), type, weakness, severity,
+      panel.getByRole("button", { name: "Export ADO CSV", exact: true }),
+      panel.getByRole("button", { name: "Export ADO Excel template", exact: true })]) {
+      await control.scrollIntoViewIfNeeded();
+      const bounds = await control.boundingBox();
+      assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 321, "Work fields fit the narrow viewport");
+    }
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  });
+});
+
 test("usability: all inspector tabs share one persistent docked, floating and popup surface and workbook", async () => {
   await harness.run("usability: unified inspector presentations", async ({ page }) => {
     const input = modelFixture();

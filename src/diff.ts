@@ -127,7 +127,7 @@ function dataLabel(d: PsData | undefined, id: string): string {
   return t && t.length > 0 ? t : id;
 }
 function workItemLabel(w: PsWorkItem | undefined, id: string): string {
-  const t = w?.description?.trim();
+  const t = w?.title?.trim() || w?.description?.trim();
   return t && t.length > 0 ? t : id;
 }
 function deviationLabel(d: PsDeviation | undefined, id: string): string {
@@ -890,11 +890,44 @@ export function diffDocuments(
       });
     } else {
       const pw = prevWorkItems.get(id)!;
+      if ((pw.title ?? "") !== (w.title ?? "")) {
+        changes.push({
+          id: nextId(), category: "workItem",
+          description: `Changed work item name from "${pw.title ?? ""}" to "${w.title ?? ""}"`,
+        });
+      }
+      if ((pw.decision ?? "pending") !== (w.decision ?? "pending")) {
+        changes.push({
+          id: nextId(), category: "workItem",
+          description: `Changed decision on work item "${workItemLabel(w, id)}" from "${pw.decision ?? "pending"}" to "${w.decision ?? "pending"}"`,
+        });
+      }
+      if (pw.severity !== w.severity) {
+        changes.push({
+          id: nextId(), category: "workItem",
+          description: `Changed severity on work item "${workItemLabel(w, id)}" from "${pw.severity ?? "(not set)"}" to "${w.severity ?? "(not set)"}"`,
+        });
+      }
+      for (const [field, label] of [["workItemType", "type"], ["weaknessType", "Weakness Type"]] as const) {
+        if ((pw[field] ?? "") !== (w[field] ?? "")) {
+          changes.push({
+            id: nextId(), category: "workItem",
+            description: `Changed ${label} on work item "${workItemLabel(w, id)}" from "${pw[field] ?? "(not set)"}" to "${w[field] ?? "(not set)"}"`,
+          });
+        }
+      }
+      const receiptFields = ["operationId", "destinationKey", "status", "attemptedAt", "adoId", "url", "error"] as const;
+      if (receiptFields.some(field => pw.submission?.[field] !== w.submission?.[field])) {
+        changes.push({
+          id: nextId(), category: "workItem",
+          description: `Changed submission receipt on work item "${workItemLabel(w, id)}" from ${JSON.stringify(pw.submission ?? null)} to ${JSON.stringify(w.submission ?? null)}`,
+        });
+      }
       if (pw.description !== w.description) {
         changes.push({
           id: nextId(),
           category: "workItem",
-          description: `Changed work item description from "${workItemLabel(pw, id)}" to "${workItemLabel(w, id)}"`,
+          description: `Changed description on work item "${workItemLabel(w, id)}" from "${pw.description}" to "${w.description}"`,
         });
       }
       if (pw.link !== w.link) {

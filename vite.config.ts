@@ -6,6 +6,8 @@ import { readLibraryCandidates, libraryBuildBridge } from "./scripts/custom-libr
 import { readServiceConfiguration, serviceBuildConfiguration, serviceBuildReceiptPlugin } from "./scripts/service-configuration.mjs";
 import { distributionLicensePlugin } from "./scripts/distribution-license.mjs";
 import { localAiVitePlugin } from "./scripts/local-ai-vite.mjs";
+import { localAdoVitePlugin } from "./scripts/local-ado-vite.mjs";
+import { normalizeAdoAuthentication } from "./shared/adoContract.ts";
 
 // Set BUILD_SINGLE_FILE=1 to emit a single self-contained index.html (in
 // dist-single/) with all JS/CSS inlined. The default `npm run build` runs
@@ -16,6 +18,13 @@ const singleFile = process.env.BUILD_SINGLE_FILE === "1";
 export default defineConfig(async ({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const localOnly = command === "serve";
+  const localAdo = localOnly && mode === "ado";
+  if (localAdo && (!env.VITE_ADO_TENANT_ID || !env.VITE_ADO_CLIENT_ID)) {
+    throw new Error("dev:ado requires VITE_ADO_TENANT_ID and VITE_ADO_CLIENT_ID. Configure the SDS SPA registration with redirect URI http://localhost:5173/.");
+  }
+  const adoAuthentication = (localOnly && !localAdo) || (!env.VITE_ADO_TENANT_ID && !env.VITE_ADO_CLIENT_ID)
+    ? null
+    : normalizeAdoAuthentication({ tenantId: env.VITE_ADO_TENANT_ID, clientId: env.VITE_ADO_CLIENT_ID });
   const libraries = libraryBuildBridge(
     await readLibraryCandidates(env.SDS_LIBRARY_PATHS, process.cwd()), localOnly || singleFile,
   );
@@ -50,22 +59,26 @@ export default defineConfig(async ({ command, mode }) => {
   const services = localOnly ? {
     tokenEndpoint: "", publicAppUrl: "http://localhost:5173/",
     assistantEndpoint: localAi ? "http://localhost:5173/api/design-assistant" : "",
-    selection: { source: localAi ? "Explicit local AI workflow" : "Credential-free local workflow" },
+    selection: { source: localAi ? "Explicit local AI workflow" :
+      localAdo ? "Explicit local ADO workflow" : "Credential-free local workflow" },
   } : serviceBuildConfiguration(await readServiceConfiguration(env.SDS_SERVICE_CONFIG, env, process.cwd()), singleFile);
   if (services.selection.error) console.warn(`[service-configuration] ${services.selection.error}`);
 
   return {
     plugins: [react(), libraries.plugin, ...(localAi ? [localAiVitePlugin({ cliOnly })] : []),
+      ...(localAdo ? [localAdoVitePlugin()] : []),
       await distributionLicensePlugin(process.cwd(), packageJson), ...(singleFile ? [singleFileBuildPlugin()] : []),
       ...(!localOnly ? [serviceBuildReceiptPlugin(services, singleFile, packageJson.version)] : [])],
     define: {
       __PS_SINGLE_FILE__: JSON.stringify(singleFile),
       __PS_LOCAL_ONLY__: JSON.stringify(localOnly),
       __PS_LOCAL_AI__: JSON.stringify(localAi),
+      __SDS_LOCAL_ADO__: JSON.stringify(localAdo),
       __PS_TOKEN_ENDPOINT__: JSON.stringify(services.tokenEndpoint),
       __PS_ASSISTANT_ENDPOINT__: JSON.stringify(services.assistantEndpoint),
       __PS_PUBLIC_APP_URL__: JSON.stringify(services.publicAppUrl),
       __SDS_SERVICE_SELECTION__: JSON.stringify(services.selection),
+      __SDS_ADO_AUTH__: JSON.stringify(adoAuthentication),
       __PS_VERSION__: JSON.stringify(packageJson.version),
       __SDS_LIBRARY_DELIVERY__: JSON.stringify(libraries.delivery),
     },

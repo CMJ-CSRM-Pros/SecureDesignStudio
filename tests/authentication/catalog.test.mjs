@@ -823,8 +823,10 @@ describe("authentication catalog: diff, report, TM7 and standalone interoperabil
     const matches = [...html.matchAll(/<script type="application\/json" id="ps-embedded-doc">([\s\S]*?)<\/script>/g)];
     assert.equal(matches.length, 1);
     assert.doesNotMatch(matches[0][1], /<\/script/i);
-    assert.match(matches[0][1], /<\\\/script>/);
-    assert.match(matches[0][1], /<\\\/script>/i);
+    // Every "<" is a JSON unicode escape, which also defeats "<!--<script>".
+    assert.doesNotMatch(matches[0][1], /</);
+    assert.match(matches[0][1], /\\u003c\/script>/);
+    assert.match(matches[0][1], /\\u003c\/ScRiPt>/);
     assert.deepEqual(JSON.parse(matches[0][1]), wrapper);
     assert.ok(html.indexOf('id="ps-embedded-doc"') > html.indexOf("<main>fixture</main>"));
     assert.ok(html.startsWith("<!DOCTYPE html>"));

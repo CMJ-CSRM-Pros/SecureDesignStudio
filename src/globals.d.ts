@@ -18,6 +18,9 @@ declare const __PS_LOCAL_ONLY__: boolean;
 // disabled, while Design Assistant may call the fixed localhost Functions API.
 declare const __PS_LOCAL_AI__: boolean;
 
+// Explicit `npm run dev:ado` only; does not enable collaboration or AI.
+declare const __SDS_LOCAL_ADO__: boolean;
+
 // Absolute URL of the Azure Function endpoint that mints short-lived,
 // group-scoped Web Pub/Sub client access tokens. Empty disables collaboration.
 // Always empty while Vite serves the local-only app.
@@ -26,6 +29,10 @@ declare const __PS_TOKEN_ENDPOINT__: string;
 // Server-side Design Assistant URL (or same-origin path in hosted builds).
 // Empty disables requests, including in credential-free local development.
 declare const __PS_ASSISTANT_ENDPOINT__: string;
+
+// Non-secret deployment-owned MSAL registration, never a user/profile setting.
+// Null disables ADO connection; ordinary local Vite injects null, except explicit dev:ado.
+declare const __SDS_ADO_AUTH__: import("../shared/adoContract").AdoAuthentication | null;
 
 // Absolute URL of the deployment's hosted version of the diagrammer.
 // Used by the Share button in the single-file build to construct

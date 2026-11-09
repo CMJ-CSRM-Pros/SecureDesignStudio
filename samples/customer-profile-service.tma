@@ -692,6 +692,8 @@
     "workItems": [
       {
         "id": "wi_reference_controls",
+        "title": "Verify reference controls",
+        "decision": "pending",
         "description": "Verify cross-account profile update and aggregate re-identification controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
         "link": ""
       }

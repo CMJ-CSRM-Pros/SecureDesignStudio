@@ -56,7 +56,8 @@ The launcher is in the repository root, so there is no folder to hunt for. It
 verifies your prerequisites before doing anything: if Node.js, npm, or a
 supported version is missing, it names what is missing and the exact command
 that installs it, instead of failing with a raw error. It then installs
-dependencies on first run and starts the app.
+dependencies on first run, repairs missing or incompatible direct dependencies
+after updates, and starts the app.
 
 Open **http://localhost:5173/**. Keep that terminal running; Ctrl+C stops it.
 Port 5173 is strict: the launcher checks it first and, when it is busy, reports
@@ -114,8 +115,10 @@ git pull --ff-only
 .\Start-SecureDesignStudio.ps1
 ```
 
-The launcher reinstalls dependencies only when `node_modules` is absent. After
-a lockfile change, run `npm ci` once yourself. Resolve Git conflicts or
+The launcher checks installed direct dependencies and runs `npm ci` when
+`node_modules` is absent or packages are missing or incompatible. For a
+lockfile-only update to otherwise compatible packages, run `npm ci` yourself
+to restore the exact locked versions. Resolve Git conflicts or
 non-fast-forward updates with the branch owner; do not discard edits or switch
 a shared preview branch.
 
@@ -733,6 +736,204 @@ silently truncated. Export is local and does not send an AI request.
 
 Keep the native `.tma` file for an editable model backup. The workbook is a
 review snapshot, not an import format or proof of a complete security analysis.
+
+#### Work items and Azure DevOps submission
+
+Open **Model > Work Items** or the **Work** inspector tab. Each entry has a
+**Name**, **Description**, **Work item type** (Bug or Task), **Weakness Type**,
+**Severity**, **Submission decision** and optional tracker **Link**.
+Legacy entries keep their description/link and start pending review. Choose
+**Accept** to queue work or **Reject** to exclude it; neither choice contacts
+ADO or changes an existing ADO item's lifecycle state.
+**Link** is the URL of an already-created external work item or tracker record,
+not the ADO organization/project destination. Leave it blank for new work.
+Any nonblank Link excludes that record from creating another ADO item, whether
+through direct submission or the import exports. Do not clear genuine tracker
+links or recorded results just to recreate existing work.
+In **Findings**, **Create work item** prefills the finding's Name and maps its
+severity to the matching Work severity. Expand **Work item classification** on
+the finding to choose Bug/Task and enter its Weakness Type before creating work,
+or set those fields later on the Work card. Available finding classification
+values are copied, not taken from a global template; review AI-proposed values
+like the rest of the finding. The Description retains its full
+rationale, recommended action, category, finding ID, original analyzed scenario,
+all diagram-reference labels/IDs (even if no longer available), and supplied
+guidance provenance. The draft remains **Pending review** with no tracker link;
+review/edit it before accepting and explicitly submitting. It is a snapshot:
+later analysis changes do not overwrite the authored work.
+
+For offline bulk creation, use **Export ADO CSV** in Work. It exports only
+accepted, unlinked items without submitted/in-progress/unknown results, including
+the durable browser journal. **Export ADO Excel template** produces a matching
+text-safe worksheet with blank ID, Created Date and State columns, plus the
+configured Assigned To for reference. Following Microsoft's new-item CSV
+instructions, those four columns are omitted from the creation CSV; apply
+assignment after creation. Neither action signs in, submits, or records success.
+The inspector-wide **Excel (.xlsx)** action remains the complete review snapshot,
+including pending/rejected work and submission results; it is not the import file.
+Each Work card explains whether it is selected, pending review, rejected,
+linked or protected by a recorded/uncertain ADO result. The same counts appear
+beside the export buttons. Selecting **Accept** is required even when the JSON
+template is already saved. A selected item must also have its Name, Description,
+Work item type and Severity filled in. **Weakness Type is optional for both Bugs
+and Tasks**: omitted, empty and whitespace-only values are accepted. They leave
+the CSV/XLSX cell blank and omit `Custom.WeaknessType` from ADO requests, without
+falling back to an old global default. Validation identifies the Work card number when a field
+is missing. Export failures appear beside the buttons and receive focus, including
+in an undocked inspector, rather than remaining out of view above a long list.
+Successful preparation reports the item count and prompts you to check browser
+downloads; it does not mean anything was submitted to ADO.
+
+The import template contains 16 XLSX columns and the corresponding 12-column
+creation CSV subset. Risk Rating is removed; Priority, Blocked and RootCause are
+also omitted from outgoing fields, not derived from Severity. No other defaults
+become export columns. Title, Description, Work Item Type, Weakness Type and
+Severity come from each Work item. One file can contain both Bugs and Tasks.
+The saved destination must include Inventory ID, Reviewer and nonempty
+`System.AreaPath`, `Custom.ReviewTeam` and `Custom.TeamID`
+defaults. Optional `Custom.ReviewType` may be blank. The inventory column uses
+Inventory ID; it is not Team ID. The export's Description column maps to `System.Description`.
+Missing values and an Area Path belonging to another project block export
+with a field-specific message. Correct the saved configuration rather than
+copying identities, IDs, dates, status or narrative from an existing Bug.
+
+In the configured destination project, open **Boards > Queries > Import work
+items**, choose the CSV, review Azure Boards' field/identity validation and then
+choose **Save items**. The project still enforces its required fields, valid values
+and permissions; the offline export does not verify them live. The CSV limit is
+1,000 items per file; reduce the accepted batch for larger submissions. If an
+import value exceeds Excel's 32,767-character cell limit, use CSV directly in
+Azure Boards: the import worksheet will not replace text with a Long text pointer.
+Formula-like CSV values are blocked rather than silently modified; the XLSX
+template keeps them as inert text. See Microsoft's
+[supported CSV workflow](https://learn.microsoft.com/en-us/azure/devops/boards/queries/import-work-items-from-csv?view=azure-devops).
+Its [legacy Excel add-in](https://learn.microsoft.com/en-us/azure/devops/boards/backlogs/office/bulk-add-modify-work-items-excel?view=azure-devops)
+is unsupported; the SDS workbook has no add-in connection or Publish command.
+After saving imported items, copy their tracker links back into SDS before
+exporting/submitting again. Offline imports do not create SDS submission receipts;
+never import multiple copies of the same batch.
+
+Expand **ADO configuration**. There is one **ADO configuration (JSON)** editor
+for the complete destination and its defaults, not separate form fields or a
+defaults-only box. Existing saved settings appear in this editor automatically.
+Paste the **entire** configuration object, or select **Load JSON file** to read
+the same format from disk. Loading changes only the draft; select **Save ADO
+configuration** to validate and apply it. **Download JSON** saves the validated
+editor contents to `secure-design-studio-ado-config.json` without applying them.
+
+For example (replace the sample project, identities, GUIDs and process values):
+
+```json
+{
+  "organizationUrl": "https://dev.azure.com/your-organization",
+  "project": "ExampleProject",
+  "inventoryId": "11111111-1111-4111-8111-111111111111",
+  "reviewer": "reviewer@example.com",
+  "descriptionField": "System.Description",
+  "defaults": {
+    "System.AreaPath": "ExampleProject\\Security",
+    "System.IterationPath": "ExampleProject",
+    "System.AssignedTo": "owner@example.com",
+    "System.Tags": "Security; DataSource:SecureDesignStudio",
+    "Custom.ReviewTeam": "Your review team",
+    "Custom.TeamID": "22222222-2222-4222-8222-222222222222"
+  }
+}
+```
+
+Area and iteration paths must equal `project` or belong beneath it. Write a
+single path separator as `\\` in JSON; doubled separators and foreign-project
+paths are rejected before saving. Omit an optional path property to use the ADO
+default rather than leaving its value empty. Invalid JSON, unsupported fields or
+bad paths do not overwrite saved settings. Malformed stored JSON stays available
+in the editor for repair. Unsaved edits are clearly marked and block Connect,
+Submit and ADO import exports until saved, so an old destination is not silently
+used. The inspector review snapshot and ordinary model editing remain available.
+JSON files must fit the 500,000-byte configuration limit, including formatting.
+
+Inventory ID is `inventoryId`, the GUID identifying the inventory associated
+with the work. It replaces existing `ServiceOID:` tags with one canonical tag
+while preserving other tags, and never changes `Custom.TeamID`. Reviewer is
+`reviewer`, an email/UPN mapped to `Custom.SecurityReviewer`; it is separate from
+`defaults.System.AssignedTo` and the signed-in caller. These top-level settings
+override corresponding defaults. Omit or clear them to restore the template
+behavior for generic configurations; the dedicated import export requires both.
+Configuration remains browser-profile-local, not shared with the model.
+
+Keep process-specific ADO reference names and scalar values inside `defaults`.
+There is no second configuration file or separate defaults-only editing step.
+SDS does not automatically discover native ADO team templates. Do not copy a
+source-system tag from another tool onto SDS-created work; use an accurate
+value such as `DataSource:SecureDesignStudio`.
+Name, description, type, Weakness Type and severity come from the individual
+SDS work item. Choose **Bug** or **Task**, the appropriate Weakness Type text,
+and **1 - Critical**, **2 - High**, **3 - Medium** or **4 - Low** for each record.
+Work Item Type and Severity are required for both types before export or
+submission; Weakness Type can remain blank. Legacy records keep missing values unset for explicit review;
+opening a model does not copy global Bug/weakness defaults onto its items.
+Older configuration entries for `workItemType`, `Custom.WeaknessType` and
+`Microsoft.VSTS.Common.Severity` are ignored and omitted when saving the normalized
+configuration. The retired `Custom.RiskRating`, `Microsoft.VSTS.Common.Priority`,
+`Microsoft.VSTS.CMMI.Blocked` and `Microsoft.VSTS.CMMI.RootCause` defaults are
+also removed. Original stored input is not rewritten merely by opening it.
+Mixed-type submission preflights every item, then creates each under its own
+Bug or Task endpoint. The target project must support the selected fields on
+both types; ADO still validates its process rules. Use current SDS peers
+to retain the new optional document fields.
+The top-level `descriptionField` defaults to `System.Description`. For a process
+whose Bug description uses `Microsoft.VSTS.TCM.ReproSteps`, configure that field
+instead; custom processes can specify their own supported HTML field reference.
+This mapping is separate from defaults and cannot be overridden by them.
+
+Select **Connect to Azure DevOps** to sign in with Microsoft. SDS uses its
+deployment-managed MSAL registration; you do not enter tenant or client IDs
+in the configuration JSON. The deployment administrator configures the SPA,
+exact hosted HTTPS redirect URI and delegated ADO permission once, and sets
+`VITE_ADO_TENANT_ID` and `VITE_ADO_CLIENT_ID` before building the frontend.
+If sign-in is not configured for the deployment, SDS displays a setup message
+and disables connection; authoring and export remain available.
+Connection uses interactive sign-in/consent
+when necessary; no PAT, client secret or copied host token is entered into SDS.
+An existing browser session does not guarantee silent authorization. Connect
+from the docked or floating inspector in the main SDS window.
+The HTTPS host must also provide the same-origin `/api/ado-work-items` relay
+with `SDS_ADO_RELAY_ENABLED=1`. It forwards only the caller's short-lived ADO
+token and never uses a service identity or stores credentials. Pure static
+hosting without that API does not support submission; the relay is disabled
+by default and is not started by local development.
+This uses your delegated ADO token, not a backend OAuth OBO token exchange.
+Old profile registration IDs are ignored and removed on the next explicit
+configuration save; destination and template values are preserved.
+
+**Submit accepted** confirms the destination and eligible count, validates
+every queued item against ADO before creating anything, then reports individual
+results. Pending, rejected, already linked and previously submitted work is
+excluded. Configuration is browser-profile-local, not included in `.tma` or
+shared with collaborators. Ordinary local development and file-opened standalone pages
+support authoring/export but disable ADO authentication and submission.
+For explicitly connected localhost use, an administrator must configure an SDS
+SPA registration with redirect URI `http://localhost:5173/` and supply
+`VITE_ADO_TENANT_ID` and `VITE_ADO_CLIENT_ID` in the launch environment or an
+untracked `.env.ado.local` file. Stop the ordinary development server and run
+`npm run dev:ado`, then open `http://localhost:5173/`. Missing settings stop
+startup with a setup message. This mode enables only user-initiated ADO
+connection/submission through a loopback-only adapter; collaboration and AI
+remain disabled, and no separate Function host is started. Normal
+`npm run dev` remains offline-safe and does not use these registration values.
+The registration is still required: MSAL cannot borrow Copilot's or another
+website's application identity. A restart is required to change modes.
+
+A timeout can leave an **unknown** outcome even if ADO created the item. Check
+ADO; SDS blocks automatic retries of uncertain work. The browser's durable
+submission journal survives Undo and reload, but does not coordinate other
+browsers or collaborators: designate one submitter. Do not clear browser data
+to bypass this guard. Undo/deleting an SDS entry does not delete external work.
+When an older opened file is missing a journal result, use **Keep recorded result
+in model** to retain its displayed receipt/link before saving or exporting; this
+does not create another ADO item.
+Keep the native file and export **Excel (.xlsx)** after submission to capture
+saved names, individual severities, decisions, ADO IDs/links and results. Export creates a new review
+snapshot; it does not update a previously downloaded workbook.
 
 Drag the Chat text box's bottom-right handle to resize it vertically. Its height
 is bounded to preserve space for the rest of the panel; longer text scrolls

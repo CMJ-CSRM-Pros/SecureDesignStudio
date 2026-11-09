@@ -89,6 +89,10 @@ SDS does not automatically install or update provider software. Once discovery s
 required isolation capabilities, and ChatGPT subscription login; each can fail
 independently. Diagnostics identify the stage reached; missing isolation flags
 and mismatched feature settings are named without exposing raw CLI output.
+Claude's help output omits some supported flags. SDS uses the advertised
+`--system-prompt` option instead of requiring a hidden `--system-prompt-file`
+help entry. The required restricted/safe-mode checks remain unchanged; an
+installation without those isolation capabilities still needs updating.
 For Codex, the `[features]` stage also reports the CLI version and each required
 feature's observed and required value (`true`, `false`, or `absent`). Command
 execution is blocked by requiring `shell_tool=false`. Current Codex releases
