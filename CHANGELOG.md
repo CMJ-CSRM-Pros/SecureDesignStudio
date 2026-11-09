@@ -72,8 +72,10 @@ already fixed on `main`: Vite 8.3.5 (#22) and `@azure/identity` 4.14.1 (#24).
   macOS and Linux. Before, 14 tests failed there on Windows-style paths.
 - New GitHub Actions workflow (`.github/workflows/ci.yml`) on Windows x64,
   macOS arm64, Linux x64 and Linux arm64: install without install scripts,
-  `npm audit` at high severity, build, API build, runtime tests, browser tests
-  (blocking) and a launcher smoke test on macOS and Linux. Actions
+  `npm audit` at high severity, build, API build, runtime tests and a launcher
+  smoke test on macOS and Linux. Browser tests block Windows, macOS and Linux
+  x64; Linux ARM has no supported preinstalled Chrome/Edge channel and is
+  covered by the build/runtime/launcher gates, not a browser pass. Actions
   are pinned to commit SHAs, the token is read-only, and every step runs in
   bash so a failing command can't be masked on Windows.
 - New release workflow (`.github/workflows/release.yml`) for `v*.*.*` tags.

@@ -4,6 +4,9 @@ SecureDesignStudio uses TypeScript, React, Vite and Node's built-in test runner.
 Use Node 24 LTS (`.nvmrc`), npm and an installed Microsoft Edge or Google Chrome
 browser for browser tests. They use Edge by default; on macOS and Linux set
 `SDS_TEST_BROWSER_CHANNEL=chrome`. The tests never download a browser.
+CI runs blocking browser checks on Windows, macOS and Linux x64. Linux ARM's
+hosted image has no supported preinstalled Chrome/Edge channel; its required
+build, runtime and launcher checks do not establish browser coverage.
 Ordinary editing/building requires no cloud credentials or agent tooling.
 
 ## Development
