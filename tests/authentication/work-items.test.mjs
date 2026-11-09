@@ -118,6 +118,12 @@ test("work items: legacy defaults retain description/link, ID recovery and dange
   for (const scheme of ["javascript", "data", "vbscript", "file"]) {
     assert.equal(normalizeWorkItem({ ...legacy, link: ` \t${scheme.toUpperCase()} :payload` }).link, "");
   }
+  for (const link of ["java\tscript:alert(1)", "jav\nascript:alert(1)", "\u0001javascript:alert(1)"]) {
+    const item = { ...work(), link };
+    const expected = { ...item, link: "" };
+    assert.deepEqual(normalizeWorkItem(item), expected);
+    assert.deepEqual(fixture(item).workItems, [expected]);
+  }
 });
 
 test("work items: exact text and every decision/receipt outcome normalize without truncation", () => {

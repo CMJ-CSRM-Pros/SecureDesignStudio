@@ -16,6 +16,7 @@ import {
   nodeTypeLabel,
 } from "./types";
 import { resolveProtocolReference } from "./protocols";
+import { safeNavigationHref } from "./urlSafety";
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -330,16 +331,20 @@ export function buildReviewReportHtml(options: {
       ),
     ];
   });
-  const workRows = doc.workItems.map((item) => [
-    escapeHtml(item.description),
-    item.link
-      ? `<a href="${escapeHtml(item.link)}" rel="noreferrer">${escapeHtml(item.link)}</a>`
-      : "—",
-  ]);
+  const workRows = doc.workItems.map((item) => {
+    // Only http(s)/mailto become links; anything else stays inert text.
+    const href = safeNavigationHref(item.link);
+    return [
+      escapeHtml(item.description),
+      href
+        ? `<a href="${escapeHtml(href)}" rel="noreferrer">${escapeHtml(href)}</a>`
+        : item.link ? escapeHtml(item.link) : "—",
+    ];
+  });
   const generatedAt = new Date().toLocaleString();
 
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(scenario.name)} review report</title>
 <style>
 .flow-rights{white-space:pre-wrap;overflow-wrap:anywhere}
