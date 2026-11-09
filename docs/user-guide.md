@@ -56,7 +56,8 @@ The launcher is in the repository root, so there is no folder to hunt for. It
 verifies your prerequisites before doing anything: if Node.js, npm, or a
 supported version is missing, it names what is missing and the exact command
 that installs it, instead of failing with a raw error. It then installs
-dependencies on first run and starts the app.
+dependencies on first run, repairs missing or incompatible direct dependencies
+after updates, and starts the app.
 
 Open **http://localhost:5173/**. Keep that terminal running; Ctrl+C stops it.
 Port 5173 is strict: the launcher checks it first and, when it is busy, reports
