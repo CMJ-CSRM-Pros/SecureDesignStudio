@@ -58,7 +58,9 @@ graph exceeds the browser's default 250-entry buffer; the larger bounded buffer
 preserves the actual loaded Yjs URL for synthetic peer checks without importing
 a guessed second module instance.
 
-Native text editing uses platform-appropriate keyboard shortcuts. Sample cases
+Native text editing uses platform-appropriate keyboard shortcuts. Tests await
+the application's scheduled inspector focus and narrow Findings expansion
+before typing or capturing fixed-header geometry. Sample cases
 first measure every auto-sized node independently in the host browser, permit
 only that initial geometry adaptation, then require exact full-document and
 dimension preservation through scenario/view switches and save/reopen. The
