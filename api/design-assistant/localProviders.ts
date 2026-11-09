@@ -360,11 +360,13 @@ async function prepare(provider: "claude" | "codex", cwd: string, diagnostic?: P
   const command = await resolveLocalExecutable(provider, diagnostic);
   diagnostic?.("capabilities", "Checking required isolation flags.");
   const help = await runProcess(command, provider === "codex" ? ["exec", "--help"] : ["--help"], cwd, "", READINESS_TIMEOUT_MS);
+  // Use the advertised prompt option, not the hidden --system-prompt-file.
   const required = provider === "claude"
-    ? ["--restricted", "--safe-mode", "--json-schema", "--no-session-persistence", "--system-prompt-file", "--tools", "--setting-sources"]
+    ? ["--restricted", "--safe-mode", "--json-schema", "--no-session-persistence", "--system-prompt", "--tools", "--setting-sources"]
     : ["--ignore-user-config", "--ignore-rules", "--strict-config", "--disable", "--enable",
       "--ephemeral", "--output-schema", "--sandbox", "--json", "--output-last-message"];
-  const missingFlags = required.filter(flag => !help.includes(flag));
+  const advertisedFlags = new Set(help.split(/[\s,=]+/));
+  const missingFlags = required.filter(flag => !advertisedFlags.has(flag));
   if (missingFlags.length) {
     throw new LocalProviderError(503, `The installed ${provider} CLI cannot prove the required isolation flags: ${missingFlags.join(", ")}. Update it before selecting this provider.`);
   }
@@ -462,17 +464,20 @@ export async function runLocalProvider(
       diagnostic?.("request", `readiness passed; schema bytes=${Buffer.byteLength(JSON.stringify(schema))}; prompt bytes=${Buffer.byteLength(prompt)}`);
       const schemaText = JSON.stringify(schema);
       const instructions = join(cwd, "instructions.txt");
-      await fs.writeFile(instructions, `${system}\n\nThis is a tool-free structured-response request. Use only the supplied model context. Do not run commands, read or modify files, browse, call tools, or delegate work. Return the requested JSON directly; describe missing evidence without attempting to retrieve it.`, { mode: 0o600 });
+      const systemPrompt = `${system}\n\nThis is a tool-free structured-response request. Use only the supplied model context. Do not run commands, read or modify files, browse, call tools, or delegate work. Return the requested JSON directly; describe missing evidence without attempting to retrieve it.`;
       if (provider === "claude") {
-        if (process.platform === "win32" && schemaText.length > 20_000) {
-          throw new LocalProviderError(413, "The catalog schema exceeds the Windows Claude CLI argument limit. Select Codex or Azure explicitly.");
+        const args = [
+          ...CLAUDE_ISOLATION_ARGS, "-p", "--output-format", "json",
+          "--no-session-persistence", "--system-prompt", systemPrompt,
+          "--json-schema", schemaText,
+        ];
+        if (process.platform === "win32" &&
+            command.length + args.reduce((length, arg) => length + JSON.stringify(arg).length + 1, 0) > 30_000) {
+          throw new LocalProviderError(413, "The system prompt and catalog schema exceed the Windows Claude CLI argument limit. Select Codex or Azure explicitly.");
         }
         diagnostic?.("inference", "Claude structured request started");
-        const text = await runProcess(command, [
-          ...CLAUDE_ISOLATION_ARGS, "-p", "--output-format", "json",
-          "--no-session-persistence", "--system-prompt-file", instructions,
-          "--json-schema", schemaText,
-        ], cwd, prompt, Math.max(1, deadline - Date.now()), childEnvironment(), false, [0], diagnostic);
+        const text = await runProcess(command, args, cwd, prompt,
+          Math.max(1, deadline - Date.now()), childEnvironment(), false, [0], diagnostic);
         const response = JSON.parse(text);
         if (response.is_error || response.subtype !== "success" ||
             !response.structured_output || typeof response.structured_output !== "object") {
@@ -482,6 +487,7 @@ export async function runLocalProvider(
       }
       const schemaFile = join(cwd, "response-schema.json");
       const outputFile = join(cwd, "response.json");
+      await fs.writeFile(instructions, systemPrompt, { mode: 0o600 });
       await fs.writeFile(schemaFile, schemaText, { mode: 0o600 });
       diagnostic?.("inference", "Codex structured request started; tool-free; read-only; ephemeral");
       const events = await runProcess(command, [

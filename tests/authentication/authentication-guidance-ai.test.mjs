@@ -9,6 +9,7 @@ import { definition } from "./catalog-fixtures.mjs";
 
 const contract = await import("../../shared/aiDesignGuidance.ts");
 const designContract = await import("../../shared/designContract.ts");
+const adoContract = await import("../../shared/adoContract.ts");
 const guidanceRuntime = await import("../../src/aiDesignGuidance.ts");
 const { guidanceReferencesForFinding, formatGuidanceReferences } = guidanceRuntime;
 const auth = await import("../../src/authentication.ts");
@@ -363,6 +364,7 @@ function loadBrowserTransport(handler) {
       if (name === "../shared/designContract") return designContract;
       if (name === "../shared/aiDesignGuidance") return contract;
       if (name === "./aiDesignGuidance") return guidanceRuntime;
+      if (name === "../shared/adoContract") return adoContract;
       throw new Error(`Unexpected dependency ${name}`);
     }, module, module.exports, async (_url, init) => {
       const request = JSON.parse(init.body);

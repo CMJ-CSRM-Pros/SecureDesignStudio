@@ -1,10 +1,11 @@
 {
   "name": "secure-design-studio",
   "private": true,
-  "version": "1.0.40",
+  "version": "1.0.43",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:ado": "vite --mode ado",
     "setup:ai": "node scripts/configure-local-ai.mjs",
     "dev:ai": "npm run setup:ai && npm --prefix api run build && concurrently --kill-others --names web,api-build,api \"vite --mode ai\" \"npm --prefix api run watch\" \"npm --prefix api run start\"",
     "dev:ai:local": "vite --mode ai",
@@ -20,11 +21,13 @@
     "test:libraries:production": "node --test tests/browser/libraries-production.test.mjs",
     "test:runtime": "node --test tests/authentication/*.test.mjs",
     "test:ai:local": "node --test tests/browser/ai-provider-local.test.mjs",
+    "test:ado:local": "node --test tests/browser/ado-local.test.mjs",
     "test:authentication:production": "node --test tests/browser/authentication-production.test.mjs",
     "test:assistant:production": "node --test tests/browser/assistant-production.test.mjs",
     "test:authentication": "npm run test:runtime"
   },
   "dependencies": {
+    "@azure/msal-browser": "5.27.0",
     "@azure/web-pubsub-client": "^1.0.1",
     "@xyflow/react": "^12.3.5",
     "fflate": "^0.8.3",

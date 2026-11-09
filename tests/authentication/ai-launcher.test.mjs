@@ -8,6 +8,49 @@ const common = await readFile(new URL("../../scripts/launcher-common.ps1", impor
 const diagnostics = common.slice(common.indexOf("function Write-LocalProviderDiagnostics"),
   common.indexOf("function Get-NodeVersion"));
 
+function dependencyCheck({ relativePath = ".", installed = true, healthy = true, installExit = 0 } = {}) {
+  const helper = common.slice(common.indexOf("function Install-ProjectDependencies"), common.indexOf("function Invoke-AzQuiet"));
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `
+function Test-Path { param($LiteralPath) return $${installed} }
+function Write-SetupStep { param($Message) Write-Output $Message }
+function Write-SetupError { param($Lines) $Lines | Write-Output }
+function npm {
+  Write-Output ("NPM:" + ($args -join " "))
+  $script:calls += ,($args -join " ")
+  $global:LASTEXITCODE = if ($args -contains "ci") { ${installExit} } else { ${healthy ? 0 : 1} }
+}
+$script:calls = @()
+${helper}
+Install-ProjectDependencies -RelativePath "${relativePath}"
+Write-Output ("CALLS:" + (ConvertTo-Json -InputObject @($script:calls) -Compress))
+`], { encoding: "utf8", windowsHide: true, timeout: 20_000 });
+  if (result.error) throw result.error;
+  return { status: result.status, text: result.stdout + result.stderr };
+}
+
+test("launchers: existing incomplete dependencies are restored for app and API", { skip: process.platform !== "win32" }, () => {
+  for (const relativePath of [".", "api"]) {
+    const result = dependencyCheck({ relativePath, healthy: false });
+    assert.equal(result.status, 0, result.text);
+    const calls = JSON.parse(result.text.match(/CALLS:(.*)/)[1]);
+    const prefix = relativePath === "." ? "" : "--prefix api ";
+    assert.deepEqual(calls, [`${prefix}ls --depth=0 --json`, `${prefix}ci`]);
+  }
+});
+
+test("launchers: healthy dependencies are reused and first run installs once", { skip: process.platform !== "win32" }, () => {
+  for (const installed of [true, false]) {
+    const result = dependencyCheck({ installed });
+    assert.equal(result.status, 0, result.text);
+    assert.deepEqual(JSON.parse(result.text.match(/CALLS:(.*)/)[1]),
+      installed ? ["ls --depth=0 --json"] : ["ci"]);
+  }
+  const failed = dependencyCheck({ healthy: false, installExit: 1 });
+  assert.equal(failed.status, 1, failed.text);
+  assert.match(failed.text, /Installing app dependencies failed/);
+  assert.doesNotMatch(failed.text, /CALLS:/);
+});
+
 function run(provider, { loggedIn = true, missing = false, switches = "", interactive = false,
   wrapperOnly = false, malformed = false, npmNative = false } = {}) {
   const helpers = `

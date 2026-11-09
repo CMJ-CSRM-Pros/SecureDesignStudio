@@ -3,6 +3,8 @@ export type NodeType = string; // free-form, but suggested values come from a li
 import type { AuthenticationType, AuthTypeDef } from "./authentication";
 import type { ProtocolId, ProtocolTypeDef } from "./protocols";
 import type { MetadataField } from "./libraries/contracts";
+import type { WorkItemSeverity, WorkItemType } from "../shared/adoContract";
+export { WORK_ITEM_SEVERITIES, WORK_ITEM_TYPES } from "../shared/adoContract";
 import productionIdentityTenants from "./data/productionIdentityTenants.json";
 import deviationTypes from "./data/deviationTypes.json";
 export * from "./authentication";
@@ -828,14 +830,28 @@ export interface PsData {
   sample: string;
 }
 
-// A free-standing security-review work item — a brief description and an
-// optional link to an external tracker (ADO/Jira/issue URL). Work items are
-// not attached to any node or edge; they live alongside the model as a
-// catalog the team manages through the "Manage Work Items" toolbar button.
+export interface WorkSubmissionReceipt {
+  operationId: string;
+  destinationKey: string;
+  status: "submitting" | "submitted" | "failed" | "unknown";
+  attemptedAt: number;
+  adoId?: number;
+  url?: string;
+  error?: string;
+}
+
+// Work items are a model-wide review queue, not scenario membership or ADO state.
+// Receipts describe external attempts; document history cannot undo those writes.
 export interface PsWorkItem {
   id: string;
   description: string;
   link: string;
+  title?: string;
+  decision?: "pending" | "accepted" | "rejected";
+  severity?: WorkItemSeverity;
+  workItemType?: WorkItemType;
+  weaknessType?: string;
+  submission?: WorkSubmissionReceipt;
 }
 
 export const REQUIRED_ACCESS_RIGHTS_MAX_LENGTH = 4000;
