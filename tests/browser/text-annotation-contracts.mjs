@@ -38,6 +38,7 @@ export function registerTextAnnotationContracts({ getHarness, exportModel }) {
       await page.locator("#ps-command-menu-model").getByRole("menuitem", { name: "New text annotation", exact: true }).click();
       const editor = page.getByLabel("Annotation text", { exact: true });
       await editor.waitFor();
+      await page.waitForFunction(() => document.activeElement?.id === "ps-inspector-tab-properties");
       await editor.pressSequentially("First");
       await editor.press("Enter");
       await editor.press("Enter");
