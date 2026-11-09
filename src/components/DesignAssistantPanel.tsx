@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SERVICES } from "../services";
 import { useStore } from "../store";
 import { referencedCatalogDefinitions } from "../catalogDefinitions";
 import { buildDfdReviewContext } from "../dfdReviewContext";
 import { formatGuidanceReferences } from "../aiDesignGuidance";
+import { workItemFromFinding } from "../workItems";
+import { WORK_ITEM_TYPES, isWorkItemType } from "../../shared/adoContract";
 import { assertAiRequestBudget } from "../../shared/aiDesignGuidance";
 import {
   askDesignAssistant,
@@ -129,6 +131,7 @@ export function DesignAssistantPanel({
     setAssistantAnalysis,
   } = useStore();
   const { openInspector } = useUiShell();
+  const classificationId = useId();
   const simulation = useBreachSimulation();
   const [mode, setMode] = useState<AssistantMode>("analyze");
   const [question, setQuestion] = useState("");
@@ -276,10 +279,7 @@ export function DesignAssistantPanel({
   };
 
   const acceptAsWorkItem = (finding: AssistantFinding) => {
-    const item = createWorkItem();
-    updateWorkItem(item.id, {
-      description: `${finding.title}\n\n${finding.recommendation}${formatGuidanceReferences(finding.guidanceReferences)}`,
-    });
+    createWorkItem(workItemFromFinding(finding, assistantAnalysis));
     setAcceptedFindingIds((current) => new Set(current).add(finding.id));
     openInspector("work");
   };
@@ -656,7 +656,7 @@ export function DesignAssistantPanel({
           {findings.length > 0 && (
             <div className="ps-assistant-findings" aria-live="polite">
               <h3>AI findings <span>{findings.length}</span></h3>
-              {findings.map((finding) => {
+              {findings.map((finding, index) => {
                 const target = finding.references.find(referenceExists);
                 const selected = finding.id === selectedFindingId;
                 return (
@@ -679,6 +679,35 @@ export function DesignAssistantPanel({
                     <p>{finding.rationale}</p>
                     <strong>Recommended action</strong>
                     <p>{finding.recommendation}</p>
+                    <details className="ps-assistant-work-classification">
+                      <summary>Work item classification</summary>
+                      <fieldset disabled={busy || acceptedFindingIds.has(finding.id)}>
+                        <legend>Individual finding classification</legend>
+                        <div className="ps-work-field">
+                          <label htmlFor={`${classificationId}-type-${index}`}>Work item type</label>
+                          <select id={`${classificationId}-type-${index}`} value={finding.workItemType ?? ""}
+                            onChange={event => {
+                              const type = event.target.value;
+                              if (type === "" || isWorkItemType(type)) {
+                                setFindings(current => current.map(item => item.id === finding.id
+                                  ? { ...item, workItemType: type || undefined } : item));
+                              }
+                            }}>
+                            <option value="">Not set</option>
+                            {WORK_ITEM_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                          </select>
+                        </div>
+                        <div className="ps-work-field">
+                          <label htmlFor={`${classificationId}-weakness-${index}`}>Weakness Type</label>
+                          <input id={`${classificationId}-weakness-${index}`} type="text" value={finding.weaknessType ?? ""} placeholder="Optional (blank allowed)"
+                            onChange={event => {
+                              const weaknessType = event.target.value || undefined;
+                              setFindings(current => current.map(item => item.id === finding.id ? { ...item, weaknessType } : item));
+                            }} />
+                        </div>
+                        <p>These choices copy into the new Work item. Type and Severity are required for Bugs and Tasks; Weakness Type is optional and may be blank. You can finish classification in Work after creation.</p>
+                      </fieldset>
+                    </details>
                     {!target && <p className="ps-assistant-reference-unavailable">No available diagram reference for this finding.</p>}
                     <div className="ps-assistant-actions">
                       {target && (

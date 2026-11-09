@@ -8,8 +8,8 @@ import { LaunchError, checkNode, configuredValue, descendantPids, descendantsFro
 
 // Synthetic dependencies, mirroring the mocks in ai-launcher.test.mjs.
 function fakeDeps({ platform = "linux", ready = true, malformed = false, interactive = false, answers = ["2"],
-  hasAz = true, signedIn = true, func = "/synthetic/func", modules = true, busy = [], env = {} } = {}) {
-  const state = { lines: [], npm: [], preflights: 0, azCalls: 0, funcCalls: 0, probes: [] };
+  hasAz = true, signedIn = true, func = "/synthetic/func", modules = true, unhealthy = [], installExit = 0, busy = [], env = {} } = {}) {
+  const state = { lines: [], npm: [], dependencyChecks: [], preflights: 0, azCalls: 0, funcCalls: 0, probes: [] };
   const deps = {
     platform,
     env: { PATH: "/synthetic-cli:relative:", OPENAI_API_KEY: "PRIVATE_SYNTHETIC_SECRET", ...env },
@@ -17,6 +17,10 @@ function fakeDeps({ platform = "linux", ready = true, malformed = false, interac
     print: line => state.lines.push(line),
     hasCommand: name => name === "npm" || (name === "az" && hasAz),
     exists: relative => relative === "package.json" || modules,
+    dependenciesHealthy: relative => {
+      state.dependencyChecks.push(relative);
+      return !unhealthy.includes(relative);
+    },
     portFree: async port => !busy.includes(port),
     interactive: () => interactive,
     ask: async () => answers.shift() ?? "",
@@ -31,7 +35,10 @@ function fakeDeps({ platform = "linux", ready = true, malformed = false, interac
     configuredValue: settings => settings.includes("MODEL_DEPLOYMENT_NAME") ? "synthetic-model" : "https://synthetic.openai.azure.com",
     az: () => { state.azCalls++; return signedIn ? { exitCode: 0, output: "synthetic-identity" } : { exitCode: 1, output: "" }; },
     probeEndpoint: async uri => { state.probes.push(uri); return 200; },
-    npm: async (args, childEnv) => { state.npm.push({ args, env: childEnv }); return 0; },
+    npm: async (args, childEnv) => {
+      state.npm.push({ args, env: childEnv });
+      return args.includes("ci") ? installExit : 0;
+    },
   };
   return { deps, state, text: () => state.lines.join("\n") };
 }
@@ -53,6 +60,42 @@ test("launcher: plain mode installs once and starts Vite without AI settings", a
   assert.deepEqual(result.state.npm.map(call => call.args.join(" ")), ["ci", "run dev"]);
   assert.deepEqual(result.state.npm[1].env, {});
   assert.equal(result.state.preflights + result.state.azCalls + result.state.funcCalls, 0);
+});
+
+test("launcher: healthy direct dependencies are reused", async () => {
+  const result = await run([]);
+  assert.equal(result.status, 0, result.text());
+  assert.deepEqual(result.state.dependencyChecks, ["."]);
+  assert.deepEqual(result.state.npm.map(call => call.args), [["run", "dev"]]);
+});
+
+test("launcher: stale modules are restored before plain, Claude and Codex startup", async () => {
+  for (const argv of [[], ["--ai", "--provider", "claude"], ["--ai", "--provider", "codex"]]) {
+    const result = await run(argv, { unhealthy: ["."] });
+    assert.equal(result.status, 0, result.text());
+    assert.deepEqual(result.state.dependencyChecks, ["."]);
+    assert.deepEqual(result.state.npm[0].args, ["ci"]);
+    assert.match(result.text(), /app dependencies are missing or incompatible/);
+    assert.equal(result.state.npm.length, 2);
+  }
+});
+
+test("launcher: Azure checks and restores root and API direct dependencies independently", async () => {
+  const result = await run(["--ai", "--provider", "azure"], { unhealthy: [".", "api"] });
+  assert.equal(result.status, 0, result.text());
+  assert.deepEqual(result.state.dependencyChecks, [".", "api"]);
+  assert.deepEqual(result.state.npm.map(call => call.args),
+    [["ci"], ["--prefix", "api", "ci"], ["run", "dev:ai"]]);
+});
+
+test("launcher: failed dependency repair never starts a server", async () => {
+  for (const relative of [".", "api"]) {
+    const result = await run(["--ai", "--provider", "azure"], { unhealthy: [relative], installExit: 7 });
+    assert.equal(result.status, 1, result.text());
+    assert.match(result.text(), /dependencies failed \(npm ci exited with 7\)/);
+    assert.deepEqual(result.state.npm.map(call => call.args),
+      [relative === "." ? ["ci"] : ["--prefix", "api", "ci"]]);
+  }
 });
 
 test("launcher: Claude and Codex start the local bridge without Functions or API installation", async () => {

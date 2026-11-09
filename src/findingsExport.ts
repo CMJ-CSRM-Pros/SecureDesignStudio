@@ -3,6 +3,7 @@ import type { AssistantAnalysisSnapshot, AssistantFinding } from "./designAssist
 import { ISSUE_NOT_EVALUATED_LABELS, type PsDocument } from "./types";
 import { formatGuidanceReferences } from "./aiDesignGuidance";
 import type { ChangeItem } from "./diff";
+import { ADO_CSV_COLUMNS, type AdoWorkExport } from "./adoExport";
 
 export const FINDINGS_WORKBOOK_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const CELL_LIMIT = 32_767;
@@ -108,14 +109,15 @@ export function createFindingsWorkbook(
     },
     {
       name: "AI findings",
-      headers: ["Finding ID", "Severity", "Category", "Title", "Rationale", "Recommended action", "Accepted", "Analysis scenario", "References", "Guidance provenance"],
-      widths: [26, 13, 22, 42, 64, 64, 15, 32, 54, 64],
+      headers: ["Finding ID", "Severity", "Category", "Title", "Rationale", "Recommended action", "Accepted", "Analysis scenario", "References", "Guidance provenance", "Work Item Type", "Weakness Type"],
+      widths: [26, 13, 22, 42, 64, 64, 15, 32, 54, 64, 20, 55],
       rows: findings.map(finding => [
         finding.id, finding.severity, finding.category, finding.title, finding.rationale, finding.recommendation,
         acceptedIds.has(finding.id) ? "Yes" : "No",
         analysis ? `${analysis.scenarioName} (${analysis.scenarioId})` : "Not recorded",
         finding.references.map(reference => `${reference.kind}: ${reference.label} (${reference.id})`).join("\n"),
         formatGuidanceReferences(finding.guidanceReferences).trim(),
+        finding.workItemType ?? "", finding.weaknessType ?? "",
       ]),
     },
     {
@@ -173,8 +175,16 @@ export function createFindingsWorkbook(
   sheets.push(scenarioEdges);
   records("Data", doc.data, ["Data ID", "Name", "Classification ID", "Sample"],
     data => [data.id, data.name, data.classification, data.sample], [26, 40, 30, 70]);
-  records("Work", doc.workItems, ["Work item ID", "Description", "Link"],
-    item => [item.id, item.description, item.link], [26, 80, 60]);
+  records("Work", doc.workItems, [
+    "Work item ID", "Description", "Link", "Name", "Decision", "Severity", "Submission status",
+    "Operation ID", "Destination", "Attempted UTC", "ADO ID", "ADO URL", "Submission error", "Work Item Type", "Weakness Type",
+  ], item => [
+    item.id, item.description, item.link, item.title ?? "", item.decision ?? "pending", item.severity ?? "",
+    item.submission?.status ?? "", item.submission?.operationId ?? "", item.submission?.destinationKey ?? "",
+    timestamp(item.submission?.attemptedAt), item.submission?.adoId === undefined ? "" : String(item.submission.adoId),
+    item.submission?.url ?? "", item.submission?.error ?? "",
+    item.workItemType ?? "", item.weaknessType ?? "",
+  ], [26, 80, 60, 40, 18, 18, 22, 38, 60, 27, 18, 60, 80, 20, 55]);
   records("Comments", doc.comments, ["Comment ID", "Status", "Scenario ID", "Scenario name", "Target kind", "Target ID", "Target name", "Created UTC", "Comment text"],
     comment => [comment.id, comment.status, comment.scenarioId,
       doc.scenarios.find(scenario => scenario.id === comment.scenarioId)?.name ?? "(missing scenario)",
@@ -232,6 +242,36 @@ export function createFindingsWorkbook(
     }));
   }
   if (overflow.rows.length) sheets.push(overflow);
+  return createWorkbook(sheets);
+}
+
+export function createAdoWorkWorkbook(prepared: AdoWorkExport): Uint8Array {
+  const { table, configuration: config } = prepared;
+  if (table.rows.some(row => row.some(value => value.length > CELL_LIMIT))) {
+    throw new Error("An ADO import value exceeds Excel's 32,767-character cell limit. Use the ADO CSV export directly in Azure Boards; no import text was shortened or split.");
+  }
+  return createWorkbook([
+    { name: "ADO import", headers: [...table.headers], rows: table.rows,
+      widths: [15, 50, 45, 18, 60, 40, 45, 26, 22, 30, 40, 55, 40, 45, 100, 20] },
+    { name: "Import instructions", headers: ["Field", "Value"], widths: [32, 110], rows: [
+      ["Destination organization", config.organizationUrl],
+      ["Destination project", config.project],
+      ["Scope", "Accepted, unlinked work only. Pending, rejected, linked, submitted and uncertain records are excluded. Export does not create items or change SDS review/submission state."],
+      ["Import CSV", "Use Export ADO CSV for new items, then Azure Boards > Queries > Import work items. Review validation results before Save items. Import no more than 1,000 items at a time."],
+      ["CSV columns", ADO_CSV_COLUMNS.join(", ")],
+      ["Generated fields", "ID, Created Date and State are intentionally blank in this worksheet. The creation CSV omits them and Assigned To, following Microsoft's new-item import instructions."],
+      ["Assigned To", "Retained from the destination defaults for reference only. Apply assignment after creation. Security Reviewer is a separate configured identity; Azure Boards validates identity values."],
+      ["Description", "Plain-text finding content is HTML-escaped with line breaks for the ADO Description field. Do not copy item IDs, dates, status or narrative from an existing work item."],
+      ["Field rules", "Work Item Type (Bug or Task) and Severity are required on each Work item. Weakness Type is optional; absent or whitespace-only values leave its cell blank and are omitted from ADO requests. Risk Rating, Priority, Blocked and RootCause are omitted. Review Type may be blank. This template does not verify live project rules; unlisted destination defaults are not export columns."],
+      ["Excel", "This is a text-safe staging worksheet, not a connected legacy Azure DevOps Excel add-in workbook. Azure Boards imports the CSV, not this XLSX. The Office add-in is unsupported."],
+      ["Duplicates", "Offline imports are not recorded as successful SDS submissions. After saving in ADO, put each created tracker URL back on its SDS Work item before exporting or submitting again. Never import both copies of the same batch."],
+      ["CSV guidance", "https://learn.microsoft.com/en-us/azure/devops/boards/queries/import-work-items-from-csv?view=azure-devops"],
+      ["Excel guidance", "https://learn.microsoft.com/en-us/azure/devops/boards/backlogs/office/bulk-add-modify-work-items-excel?view=azure-devops"],
+    ] },
+  ]);
+}
+
+function createWorkbook(sheets: Sheet[]): Uint8Array {
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": strToU8(`${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
       + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'

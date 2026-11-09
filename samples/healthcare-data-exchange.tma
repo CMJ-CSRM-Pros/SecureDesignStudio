@@ -889,6 +889,8 @@
     "workItems": [
       {
         "id": "wi_reference_controls",
+        "title": "Verify reference controls",
+        "decision": "pending",
         "description": "Verify patient authorization bypass and wrong-order or replayed result controls with negative tests and deployment configuration; independently approve the stated retention/provider assumptions.",
         "link": ""
       }

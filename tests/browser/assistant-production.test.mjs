@@ -411,6 +411,96 @@ const PLANNED_NODE_TYPES = ["nt_browser", "PowerPages", "CopilotStudio", "Datave
 
 const scenario = page => page.getByRole("combobox", { name: "Scenario", exact: true });
 
+test("production: Create work item transfers full finding context and severity as one pending undoable snapshot", async () => {
+  const severities = ["critical", "high", "medium", "low"];
+  const input = fixture();
+  input.doc.nodeTypes[0].definition.aiDesignGuidance = {
+    content: "Synthetic guidance", sources: ["https://example.invalid/finding-guidance"],
+    revision: 3, updatedOn: "2026-10-08",
+  };
+  await run(async ({ page }) => {
+    const before = (await savedState(page)).doc;
+    await scenario(page).selectOption("s_archive");
+    for (const [index, title] of ["Node finding", "Flow finding", "Boundary finding", "Available reference finding"].entries()) {
+      if (index === 0) await page.setViewportSize({ width: 320, height: 720 });
+      await page.getByRole("tab", { name: /^Findings\b/ }).click();
+      const card = finding(page, title);
+      await card.getByText("Work item classification", { exact: true }).click();
+      const workItemType = index % 2 === 0 ? "Bug" : "Task";
+      const weaknessType = index === 1 ? "" : `Finding weakness ${index + 1}`;
+      await card.getByLabel("Work item type", { exact: true }).selectOption(workItemType);
+      await card.getByLabel("Weakness Type", { exact: true }).fill(weaknessType);
+      if (index === 0) {
+        for (const label of ["Work item type", "Weakness Type"]) {
+          const control = card.getByLabel(label, { exact: true });
+          await control.scrollIntoViewIfNeeded();
+          const bounds = await control.boundingBox();
+          assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 321, "Finding classification controls fit 320px");
+        }
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+      }
+      await card.getByRole("button", { name: "Create work item", exact: true }).click();
+      const work = page.locator("#ps-inspector-panel-work").getByRole("region", { name: `Work item ${index + 1}`, exact: true });
+      assert.equal(await work.getByLabel("Name", { exact: true }).inputValue(), title);
+      assert.equal(await work.getByLabel("Work item type", { exact: true }).inputValue(), workItemType);
+      assert.equal(await work.getByLabel("Weakness Type", { exact: true }).inputValue(), weaknessType);
+      assert.equal(await work.getByLabel("Severity", { exact: true }).inputValue(),
+        ["1 - Critical", "2 - High", "3 - Medium", "4 - Low"][index]);
+      assert.equal(await work.getByLabel("Submission decision").inputValue(), "pending");
+      assert.equal(await work.getByLabel("Link", { exact: true }).inputValue(), "");
+      const description = await work.getByLabel("Description", { exact: true }).inputValue();
+      const source = findings[index];
+      for (const value of [
+        source.title, source.id, source.category, source.rationale, source.recommendation, severities[index],
+        before.scenarios[0].id, before.scenarios[0].name,
+        ...source.references.flatMap(reference => [reference.kind, reference.label, reference.id]),
+      ]) assert.ok(description.includes(value), `Work description retains ${value}`);
+      if (index === 3) {
+        assert.match(description, /Missing node.*n_missing/);
+        assert.match(description, /revision 3/);
+        assert.match(description, /https:\/\/example.invalid\/finding-guidance/);
+        assert.match(description, /not deployment evidence/);
+      }
+      if (index === 0) await page.setViewportSize({ width: 1366, height: 900 });
+    }
+    const populated = (await savedState(page)).doc;
+    assert.equal(populated.workItems.length, before.workItems.length + 4);
+    const workbook = await readWorkbookDownload(page);
+    assert.deepEqual(workbook.Work.slice(1).map(row => row.slice(0, 7)),
+      populated.workItems.map(item => [
+        item.id, item.description, item.link, item.title, item.decision, item.severity, "",
+      ]), "XLSX retains the exact generated work drafts without a submission receipt");
+    for (const column of ["Work Item Type", "Weakness Type"]) {
+      const key = column === "Work Item Type" ? "workItemType" : "weaknessType";
+      assert.deepEqual(workbook.Work.slice(1).map(row => row[workbook.Work[0].indexOf(column)]),
+        populated.workItems.map(item => item[key] ?? ""));
+    }
+    await page.getByRole("button", { name: /^Undo/ }).click();
+    const undone = (await savedState(page)).doc;
+    assert.equal(undone.workItems.length, populated.workItems.length - 1, "Undo removes the entire populated draft");
+    await page.getByRole("button", { name: /^Redo/ }).click();
+    assert.deepEqual((await savedState(page)).doc, populated, "Redo restores the full snapshot");
+    await page.reload();
+    assert.deepEqual((await savedState(page)).doc, populated, "Autosave retains all copied finding data");
+    await page.getByRole("tab", { name: /^Work\b/ }).click();
+    const last = page.locator("#ps-inspector-panel-work").getByRole("region", { name: "Work item 4", exact: true });
+    await last.getByLabel("Description", { exact: true }).fill("User-owned work description");
+    await last.getByLabel("Work item type", { exact: true }).selectOption("Bug");
+    await last.getByLabel("Weakness Type", { exact: true }).fill("User-owned weakness");
+    await page.getByRole("tab", { name: /^Findings\b/ }).click();
+    await page.getByRole("button", { name: "Analyze model", exact: true }).click();
+    await until(() => page.locator(".ps-assistant-finding").count().then(count => count === findings.length), "analysis rerun");
+    assert.equal((await savedState(page)).doc.workItems[3].description, "User-owned work description");
+    assert.equal((await savedState(page)).doc.workItems[3].workItemType, "Bug");
+    assert.equal((await savedState(page)).doc.workItems[3].weaknessType, "User-owned weakness");
+  }, {
+    initial: input,
+    respond: ({ route }) => route.fulfill({ contentType: "application/json",
+      body: JSON.stringify({ answer: "Synthetic response only.", references: [api],
+        findings: findings.map((entry, index) => ({ ...entry, severity: severities[index % severities.length] })) }) }),
+  });
+});
+
 test("production: both AI contexts carry complete saved guidance and accepted findings retain unverified provenance", async () => {
   const publicCatalog = JSON.parse(await readFile(resolve(root, "src", "data", "microsoftCloudNodeTypes.json"), "utf8"));
   const coreGuidance = publicCatalog.filter(type => type.aiDesignGuidance);

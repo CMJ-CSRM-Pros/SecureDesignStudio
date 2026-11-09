@@ -60,6 +60,62 @@ a guessed second module instance.
 
 ## What is actually covered
 
+### Explicit localhost ADO connection
+
+`npm run test:ado:local` runs separately from the browser union because it owns
+strict port 5173. It starts only an owned Vite process in explicit `ado` mode
+with synthetic registration IDs, intercepts the MSAL module and ADO relay
+responses, and blocks non-local traffic. It verifies connection becomes
+available after saving a destination without user-entered registration fields,
+sign-in alone never submits work, accepted-only preflight/create is explicit,
+and results survive reload without repeated creation. It records a screenshot
+and JSON result in a new temporary directory printed by the runner.
+It does not perform Microsoft sign-in, consent, live ADO writes or human
+usability. The ordinary union still verifies offline-safe default local mode.
+Pure contracts cover mode selection, exact loopback origin/socket/host,
+request bounds, bearer-only relay, fixed outbound destination and unchanged
+deployed HTTPS/default-off restrictions.
+
+The ordinary browser union also checks credential-free **Export ADO CSV** and
+**Export ADO Excel template** from Work: exact approved headers, the documented
+new-item CSV subset, blank generated XLSX cells, per-item Bug/Task/weakness/severity,
+full escaped Description, missing-default errors, accepted-only filtering,
+no document/receipt mutation and linked-item replay prevention. The template's
+export controls are reachable at 320px. Pure `ado-export.test.mjs` contracts cover
+durable-journal guards, case-insensitive defaults, Unicode/quotes/newlines,
+formula-like CSV rejection, the 1,000-item boundary and unsplit Excel cell limits.
+No live Azure Boards import acceptance, identity resolution or project-rule
+validation is implied by these synthetic checks.
+The long-Work-list regression reproduces a clickable export with zero eligible
+items and verifies that its error is actually inside the viewport and focused,
+not merely present in the DOM. It covers both formats, 320px layout, popup
+ownership, exclusion counts, the Link explanation, numbered missing-field
+diagnostics, and exact single-row downloads after the author chooses Accept and
+fills the missing severity. Review, link and receipt safeguards remain intact.
+
+Work's single **ADO configuration (JSON)** editor is covered by full-object
+paste/save, defaults-only rejection, load-file/download/reload, legacy profile
+preservation, malformed stored-JSON repair, field-specific Area/Iteration
+mismatch errors, unsaved-draft action guards, tab persistence and 320px keyboard
+reachability. File load and download never implicitly change the saved destination.
+Pure JSON contracts cover optional-value clearing, ignored legacy registration
+IDs, UTF-8/BOM input and the input/formatted-size bound. The separate connected-local
+test also verifies an unsaved JSON edit cannot submit through the old connection.
+
+Per-item classification coverage includes mixed Bug/Task CSV and XLSX rows,
+required type/severity and optional blank Weakness Type for both types, dropped legacy global
+classification/retired defaults, and unchanged profile-vs-document ownership.
+The configured Assistant production case exercises classification on each
+finding, Create work item transfer, native/history/reload, reviewer edits and
+re-analysis without overwriting saved Work. Shared/API contracts verify per-item
+endpoint routing and missing-field rejection. No live process-field support
+or inference quality is implied.
+Blank-weakness contracts cover absent, empty and whitespace-only values for both
+types, no fallback to global defaults, blank CSV/XLSX cells and omission from
+preflight/create patches. The browser flow exports an accepted Task with blank
+weakness in docked/narrow/popup inspectors, and connected-local submission keeps
+that optional field absent from the request.
+
 ### Local AI provider selection
 
 `npm run test:ai:local` starts only an owned Vite process in explicit AI mode;

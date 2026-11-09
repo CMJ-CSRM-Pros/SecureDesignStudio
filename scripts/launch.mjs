@@ -325,6 +325,8 @@ export function defaultDeps() {
     print: line => process.stdout.write(`${line}\n`),
     hasCommand: name => findOnPath(name).found.length > 0,
     exists: relative => existsSync(path.join(root, relative)),
+    dependenciesHealthy: relative => runQuiet("npm",
+      [...(relative === "." ? [] : ["--prefix", relative]), "ls", "--depth=0", "--json"]).exitCode === 0,
     portFree,
     interactive: () => interactive(),
     ask: async question => {
@@ -393,8 +395,11 @@ async function assertPortFree(deps, port, purpose) {
 }
 
 async function installDependencies(deps, relative, label) {
-  if (deps.exists(relative === "." ? "node_modules" : path.join(relative, "node_modules"))) return;
-  deps.print(`Installing ${label} dependencies (first run only; this can take a few minutes)...`);
+  if (deps.exists(relative === "." ? "node_modules" : path.join(relative, "node_modules"))) {
+    if (deps.dependenciesHealthy(relative)) return;
+    deps.print(`${label} dependencies are missing or incompatible; restoring from package-lock.json.`);
+  }
+  deps.print(`Installing ${label} dependencies (this can take a few minutes)...`);
   const exitCode = await deps.npm(relative === "." ? ["ci"] : ["--prefix", relative, "ci"], {});
   if (exitCode !== 0) {
     throw new LaunchError([

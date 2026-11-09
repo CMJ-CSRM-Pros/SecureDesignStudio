@@ -116,7 +116,8 @@ Set-Location .\SecureDesignStudio
 ```
 
 The launcher checks Node.js/npm and port 5173, installs dependencies with
-`npm ci` when `node_modules` is absent, and starts the local server. The first
+`npm ci` when `node_modules` is absent or direct dependencies are missing or
+incompatible, and starts the local server. The first
 installation requires internet access and can take a few minutes. No Azure
 sign-in or AI setup is part of this path.
 
@@ -185,8 +186,8 @@ if organizational application controls block Node/npm themselves, ask your IT
 administrator rather than bypassing them.
 
 After an update that changes `package-lock.json`, stop your own server and run
-`npm.cmd ci` before restarting. The launcher skips dependency installation when
-`node_modules` already exists. See the
+`npm.cmd ci` before restarting to restore the exact locked versions. The launcher
+reuses healthy direct dependencies and repairs missing or incompatible ones. See the
 [safe update guidance](docs/user-guide.md#update-an-existing-clone-safely).
 
 ## Get started on macOS or Linux
@@ -201,7 +202,8 @@ folder:
 ```
 
 The launcher makes the same checks as the Windows launcher: Node version, a free
-port 5173, and `npm ci` on first run. It then serves the app at
+port 5173, and installed direct dependencies. It runs `npm ci` on first run or
+when dependencies are missing or incompatible, then serves the app at
 `http://localhost:5173/`. `npm run start` does the same from any shell,
 Windows included. The checks are in `scripts/launch.mjs`.
 

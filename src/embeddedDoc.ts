@@ -54,12 +54,16 @@ export function readEmbeddedDoc(): unknown | null {
   }
 }
 
-// Escape any `</script` sequences inside the JSON payload so the
-// containing `<script type="application/json">` block can't be terminated
-// early by user-supplied content (e.g. a node description containing
-// the literal string `</script>`).
+// Escape every `<` (and U+2028/U+2029) in the JSON payload as a JSON
+// unicode escape, so user-supplied content can neither close the containing
+// `<script type="application/json">` block early (`</script>`) nor push the
+// HTML tokenizer into its double-escaped state (`<!--<script>`), which would
+// keep the block from closing at all. JSON.parse restores the characters.
 function escapeForScriptBlock(json: string): string {
-  return json.replace(/<\/script/gi, (match) => match.replace("/", "\\/"));
+  return json
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 // Replace the LAST occurrence of `regex` in `haystack` with
