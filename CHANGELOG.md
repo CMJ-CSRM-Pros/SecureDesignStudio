@@ -39,6 +39,14 @@ already fixed on `main`: Vite 8.3.5 (#22) and `@azure/identity` 4.14.1 (#24).
   instead of emitting a standalone file without that CSP. The local Vite dev
   server is unchanged.
 
+### Accessibility
+
+- **File > New** no longer moves keyboard focus behind the first-run dialog.
+  It returned focus to the File menu button, which sits under the dialog's
+  overlay, so keyboard users had to tab back into the dialog. Focus now stays
+  on the dialog's **Title** field; a cancelled New still returns it to the
+  File menu.
+
 ### macOS and Linux support
 
 - `start-securedesignstudio.sh` and `start-securedesignstudio-with-ai.sh`

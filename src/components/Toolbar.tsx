@@ -800,7 +800,8 @@ export function Toolbar() {
     fileRef.current?.click();
   };
 
-  const onNew = () => {
+  // Returns whether a new document replaced the current one.
+  const onNew = (): boolean => {
     setOpenMenu(null);
     const hasContent =
       doc.nodes.length > 0 ||
@@ -816,10 +817,11 @@ export function Toolbar() {
           "You can use Undo (Ctrl+Z) to recover it."
       )
     ) {
-      return;
+      return false;
     }
     newDocument();
     setDocumentFileName(DEFAULT_FILE_NAME);
+    return true;
   };
 
   const onImportEndpointsClick = () => {
@@ -1631,7 +1633,10 @@ export function Toolbar() {
     let restoreFocus = true;
     switch (id) {
       case "file.new":
-        onNew();
+        // A new document has no scenarios, so the first-run dialog opens and
+        // takes focus; returning it to the File menu would put it behind the
+        // dialog's overlay.
+        if (onNew()) restoreFocus = false;
         break;
       case "file.open":
         restoreFocus = false;
